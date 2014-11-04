@@ -135,6 +135,23 @@ var Gizmo = new function() {
 
     this.hide = function() { this.group.removeChild(this.svg); }
     this.show = function() { this.group.appendChild(this.svg); }
+
+    this.find_all_duplicates = function() {
+	console.log("Searching for duplicates");
+	var ndup = 0;
+	for (var i=0; i<Gizmo.INSTANCE_LIST.length; i++) {
+	    var obj = Gizmo.INSTANCE_LIST[i];
+	    if (obj.find_duplicates) { 
+		var dup = obj.find_duplicates();
+		if (dup.length > 0) {
+		    console.log("I found "+dup.length+" duplicates for the "+obj.type+" at "+obj.toString());
+		    ndup++;
+		}
+	    }
+	}
+	console.log(ndup+" found.");
+    }
+
 }
 
 var Point = Gizmo.extend(function() {
@@ -271,7 +288,60 @@ var Line = LineOrCircle.extend(function() {
     }
 });
 
-var LineLineIntersection = Point.extend(function() {
+
+var ConstructedPoint = Point.extend(function() {
+
+    this.find_duplicates = function() {
+	// find number of control points and back up their coordinates
+	var cp = [];
+	for (var i=0; i<Gizmo.INSTANCE_LIST.length; i++) {
+	    var obj = Gizmo.INSTANCE_LIST[i];
+	    if (!obj.at) break;
+	    cp.push([obj.x, obj.y]);
+	}
+
+	// find all points that might match me. Note control points may also match!
+	var candidates = [];
+	for (var i=0; i<Gizmo.INSTANCE_LIST.length; i++) {
+	    var obj = Gizmo.INSTANCE_LIST[i];
+	    if (obj===this) continue; // obviously I match myself
+	    if (this.valid != obj.valid) continue;
+	    if (this.distance(obj) < SMALL) candidates.push(obj);
+	}
+
+	for (var test=0; test<5 && candidates.length>0; test++) {
+	    // randomize control points
+	    for (var i=0; i<cp.length; i++) {
+		var cpo = Gizmo.INSTANCE_LIST[i];
+		var dx = Math.random()*100-50, dy = Math.random()*100-50;
+		cpo.set_position(cp[i][0]+dx, cp[i][1]+dy);
+	    }
+	    Gizmo.update();
+
+	    // filter candidates
+	    var new_candidates = [];
+	    for (var i=0; i<candidates.length; i++) {
+		var obj = candidates[i];
+		if (this.valid==obj.valid && this.distance(obj)<SMALL) {
+		    new_candidates.push(obj);
+		}
+	    }
+	    candidates = new_candidates;
+	}
+
+	// repair control points
+	for (var i=0; i<cp.length; i++) {
+	    Gizmo.INSTANCE_LIST[i].set_position(cp[i][0], cp[i][1]);
+	}
+	Gizmo.update();
+	return candidates;
+    }
+
+
+});
+
+
+var LineLineIntersection = ConstructedPoint.extend(function() {
 
     this.type = "LineLineIntersection";
 
@@ -288,7 +358,7 @@ var LineLineIntersection = Point.extend(function() {
 	} else {
 	    this.valid = false;
 	}
-	test(this.x, this.y, this.valid, "lli");
+	//test(this.x, this.y, this.valid, "lli");
     }
 
 });
@@ -385,7 +455,7 @@ var CircleCircleIntersections = Gizmo.extend(function() {
 });
 
 
-var SingleCircleIntersection = Point.extend(function() {
+var SingleCircleIntersection = ConstructedPoint.extend(function() {
 
     this.type = "SingleCircleIntersection";
 
@@ -401,8 +471,10 @@ var SingleCircleIntersection = Point.extend(function() {
 
     this.recalculate = function() {
 	this.valid = this.parents[0].valid;
-	this.x = this.parents[0].x[this.which];
-	this.y = this.parents[0].y[this.which];
+	if (this.valid) {
+	    this.x = this.parents[0].x[this.which];
+	    this.y = this.parents[0].y[this.which];
+	}
     }
 
 });
@@ -536,6 +608,9 @@ function sandbox() {
 	    var p2 = ControlPoint.at(mx, my>YS/2 ? my - 0.1*YS : my + 0.1*YS, true);
 	    var c = Circle.create(p1, p2);
 	    c.add_intersections();
+	    break;
+	case 52: 
+	    Gizmo.find_all_duplicates();
 	    break;
 	}
     }
