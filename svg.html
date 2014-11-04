@@ -1,0 +1,616 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">
+<html>
+<head>
+<title>SVG test</title>
+</head>
+
+<body id = "body">
+
+<script>
+"use strict";
+
+// globals
+var XS = window.innerWidth, YS = window.innerHeight;
+var UNUSED_ID = 0;
+
+// create svg element
+var body = document.getElementById("body");
+var svg_namespace = "http://www.w3.org/2000/svg";
+var svg = document.createElementNS(svg_namespace, "svg");
+body.appendChild(svg);
+svg.setAttribute("width", XS);
+svg.setAttribute("height", YS);
+
+var SMALL = 0.00001;
+
+function test(x, y, v, name) {
+    if (v && Math.abs(x)>10000 || Math.abs(y)>10000) {
+	console.log(name+" at ("+x+","+y+") is valid but looks iffy");
+    }
+}
+
+var g_lines         = document.createElementNS(svg_namespace, "g");
+var g_highlighted   = document.createElementNS(svg_namespace, "g");
+var g_points        = document.createElementNS(svg_namespace, "g");
+var g_controlpoints = document.createElementNS(svg_namespace, "g");
+svg.appendChild(g_lines);
+svg.appendChild(g_highlighted);
+svg.appendChild(g_points);
+svg.appendChild(g_controlpoints);
+
+// converts a mouse event to screen coords
+function e2coord(e) {
+    e = e || window.event;
+    var docEl = document.documentElement;
+    var scrollLeft = docEl.scrollLeft || document.body.scrollLeft;
+    var scrollTop  = docEl.scrollTop || document.body.scrollTop;
+    var x = e.pageX || (e.clientX  + scrollLeft);
+    var y = e.pageY || (e.clientY  + scrollTop);
+    return [x,y];
+}
+
+var Gizmo = new function() {
+
+    this.INSTANCE_LIST = [];
+
+    this.valid = false;
+
+    // Conveniently construct a subclass
+    this.extend = function(constr) {
+	constr.prototype = this;
+	return new constr();
+    };
+
+    /* Instiantiates a class object, registers parents,
+       assigns an ID and stores it in the objects list.
+    */
+    this.create = function() {
+	var instance = this.extend(this.init);
+	instance.parents = Array.prototype.slice.call(arguments);
+	instance.recalculate();
+	Gizmo.INSTANCE_LIST.push(instance);
+	return instance;
+    }
+
+    this.trash = function() {
+	if (this.svg) { 
+	    this.hide();
+	    this.svg = null;
+	}
+    }
+
+    this.recalculate = function() {}
+    this.recalculate_graphics = function() {}
+   
+    this.update = function(show) {
+	if (show) console.log("*** UPDATING ***");
+	for (var i=0; i<Gizmo.INSTANCE_LIST.length; i++) {
+	    var instance = Gizmo.INSTANCE_LIST[i];
+	    if (show) console.log("The "+instance.type+" at index "+i+":");
+	    var old_valid = instance.valid;
+	    instance.valid = true;
+	    if (instance.parents) {
+		for (var j=0; j<instance.parents.length; j++) {
+		    var p = instance.parents[j];
+		    if (show) console.log("- parent: "+p.type+", validity is "+p.valid);
+		    if (!instance.parents[j].valid) { instance.valid = false; break; }
+		}
+	    }
+	    if (instance.valid) {
+		if (show) console.log("- recalculating");
+		instance.recalculate();
+	    }
+	    if (show) console.log("- Validity from "+old_valid+" to "+instance.valid);
+	    if (show && instance.valid && instance.x) {
+		console.log("- Point coordinates are ("+instance.x+","+instance.y+")");
+	    }
+	    // change visibility if validity changed
+	    if (instance.svg) {
+		if (instance.valid) {
+		    instance.recalculate_graphics();
+		    if (!old_valid) instance.show();
+		} else {
+		    if (old_valid) instance.hide();
+		}
+	    }
+	}
+    }
+
+    this.svg_create = function(group, name, attrib) {
+	this.group = group;
+	this.svg = document.createElementNS(svg_namespace, name);
+	group.appendChild(this.svg);
+	if (!attrib) attrib = {};
+	if (!("pointer-events" in attrib)) {
+	    attrib["pointer-events"] = "none";
+	}
+	this.svg_attrib(attrib);
+    }
+
+    this.svg_attrib = function(attrib) {
+	for (var key in attrib) {
+	    this.svg.setAttribute(key, attrib[key]);
+	}
+    }
+
+    this.hide = function() { this.group.removeChild(this.svg); }
+    this.show = function() { this.group.appendChild(this.svg); }
+}
+
+var Point = Gizmo.extend(function() {
+
+    this.distance = function(other) {
+	var dx = this.x - other.x, dy = this.y - other.y;
+	return Math.sqrt(dx*dx+dy*dy);
+    }
+
+    this.toString = function() { return "("+this.x+","+this.y+")"; }
+
+    this.recalculate_graphics = function() {
+	this.svg.setAttribute("cx", this.x);
+	this.svg.setAttribute("cy", this.y);
+    }
+});
+
+var ControlPoint = Point.extend(function() {
+
+    this.type = "ControlPoint";
+
+    this.at = function(x, y, snappable) {
+	var cp = this.extend(this.init);
+	cp.parents = [];
+	if (snappable) Gizmo.INSTANCE_LIST.push(cp);
+	else           Gizmo.INSTANCE_LIST.unshift(cp);
+	cp.set_position(x, y);
+	if (snappable) { 
+	    cp.snappable = true;
+	    cp.svg_attrib({"fill": "cyan"});
+	}
+	return cp;
+    }
+
+    this.init = function() {
+	this.svg_create(g_controlpoints, "circle", 
+			{"r": 10, "fill": "blue", "stroke": "black", "stroke-width":2,
+			"pointer-events": "all"});
+	
+	this.svg.onmousedown = function(me) {
+	    return function(e) {
+		var xy = e2coord(e);
+		Gizmo.DRAGGING = [me, me.x - xy[0], me.y - xy[1]];
+	    }
+	}(this);
+    }
+    
+    this.set_position = function(x,y) { 
+	this.x = x;
+	this.y = y; 
+    }
+
+});
+
+
+var LineOrCircle = Gizmo.extend(function() {
+    
+    this.add_intersections = function() {
+	var len = Gizmo.INSTANCE_LIST.length;
+	for (var i=0; i<len; i++) {
+	    var other = Gizmo.INSTANCE_LIST[i];
+	    if (other===this || !other.add_intersections) continue;
+	    if (this.is_line) {
+		if (other.is_line) {
+		    LineLineIntersection.create(this, other);
+		} else {
+		    var cli = CircleLineIntersections.create(other, this);
+		    SingleCircleIntersection.create(cli, 0);
+		    SingleCircleIntersection.create(cli, 1);
+		}
+	    } else {
+		var ci = other.is_line
+		    ? CircleLineIntersections.create(this, other)
+		    : CircleCircleIntersections.create(this, other);
+		SingleCircleIntersection.create(ci, 0);
+		SingleCircleIntersection.create(ci, 1);
+	    }
+	}
+    }
+
+});
+
+var Line = LineOrCircle.extend(function() {
+
+    this.type = "Line";
+
+    this.init = function() {
+	this.svg_create(g_lines, "line", 
+			{"fill": "none", "stroke": "orange", "stroke-width": 1});
+    }
+   
+    this.is_line = true;
+
+    this.toString = function() {
+	return this.parents[0].toString()+"-"+this.parents[1].toString(); 
+    }
+
+    this.compute_intersection_coords = function(x1,y1,x2,y2,x3,y3,x4,y4) {
+	var x12 = x1-x2, x34=x3-x4, y12=y1-y2, y34=y3-y4;
+	var N = x12*y34 - y12*x34;
+	if (Math.abs(N)<SMALL) return null;
+	var f1 = x1*y2-y1*x2, f2 = x3*y4-y3*x4;
+	return [(f1*x34 - x12*f2)/N, (f1*y34 - y12*f2)/N];
+    }
+
+    this.compute_intersection = function(line1, line2) {
+	return this.compute_intersection_coords(
+	    line1.parents[0].x, line1.parents[0].y,
+	    line1.parents[1].x, line1.parents[1].y,
+	    line2.parents[0].x, line2.parents[0].y,
+	    line2.parents[1].x, line2.parents[1].y);
+    }
+
+    this.recalculate_graphics = function() {
+	// extend the line to the borders of the display using compute_line_intersection
+	// (this could be optimized)
+	var x1 = this.parents[0].x, y1 = this.parents[0].y,
+	    x2 = this.parents[1].x, y2 = this.parents[1].y;
+	var xy_l = this.compute_intersection_coords(x1,y1,x2,y2,0, 0, 0,YS);
+	if (!xy_l || !isFinite(xy_l[1]) || xy_l[1]<0 || xy_l[1]>=YS) {
+	    var xy_t = this.compute_intersection_coords(x1,y1,x2,y2,0,0,XS,0);
+	    var xy_b = this.compute_intersection_coords(x1,y1,x2,y2,0,YS,XS,YS);
+	    this.svg.setAttribute("x1", xy_t[0]);
+	    this.svg.setAttribute("y1", 0);
+	    this.svg.setAttribute("x2", xy_b[0]);
+	    this.svg.setAttribute("y2", YS);
+	} else {
+	    var xy_r = this.compute_intersection_coords(x1,y1,x2,y2,XS,0,XS,YS);
+	    this.svg.setAttribute("x1", 0);
+	    this.svg.setAttribute("y1", xy_l[1]);
+	    this.svg.setAttribute("x2", XS);
+	    this.svg.setAttribute("y2", xy_r[1]);
+	}
+    }
+});
+
+var LineLineIntersection = Point.extend(function() {
+
+    this.type = "LineLineIntersection";
+
+    this.init = function() { 
+	this.svg_create(g_points, "circle", {"r": 5, "fill": "green"}); 
+    }
+
+    this.recalculate = function() {
+	var line1 = this.parents[0], line2 = this.parents[1];
+	var xy = Line.compute_intersection(line1, line2);
+	if (xy && isFinite(xy[0]) && isFinite(xy[1])) {
+	    this.x = xy[0];
+	    this.y = xy[1];
+	} else {
+	    this.valid = false;
+	}
+	test(this.x, this.y, this.valid, "lli");
+    }
+
+});
+
+
+var Circle = LineOrCircle.extend(function() {
+    
+    this.type = "Circle";
+
+    this.init = function() {
+	this.svg_create(g_lines, "circle", 
+			{"fill": "none", "stroke": "orange", "stroke-width": 1});
+    }
+
+    this.toString = function() { 
+	return "("+parents[0].x+","+parents[0].y+","+this.radius(); 
+    }
+
+    this.centre = function() { return this.parents[0]; }
+    this.radius2 = function() { 
+	var c = this.parents[0], b = this.parents[1];
+	var dx = c.x-b.x, dy = c.y-b.y;
+	return dx*dx+dy*dy;
+    }
+    this.radius = function() { 
+	var r2 = this.radius2();
+	return Math.sqrt(this.radius2()); 
+    }
+   
+    this.recalculate_graphics = function() {
+	var cx = this.parents[0].x, cy = this.parents[0].y;
+	var bx = this.parents[1].x, by = this.parents[1].y;
+	var r = Math.sqrt((cx-bx)*(cx-bx)+(cy-by)*(cy-by));
+	this.svg.setAttribute("cx", cx);
+	this.svg.setAttribute("cy", cy);
+	this.svg.setAttribute("r", r);
+    }
+});
+
+var CircleLineIntersections = Gizmo.extend(function() {
+
+    this.type = "CircleLineIntersections";
+
+    this.init = function() {}
+
+    this.recalculate = function() {
+	var circle = this.parents[0], line = this.parents[1];
+	var cx = circle.centre().x, cy = circle.centre().y, 
+	    r2 = circle.radius2();
+	var x1 = line.parents[0].x - cx, y1 = line.parents[0].y - cy;
+	var x2 = line.parents[1].x - cx, y2 = line.parents[1].y - cy;
+	var dx = x2-x1, dy = y2-y1;
+	var dr2 = dx*dx+dy*dy;
+	var D = x1*y2-x2*y1;
+	var R = r2*dr2 - D*D;
+	if (R<=SMALL || dr2<=SMALL) { this.valid = false; return; }
+	var sqrtR = Math.sqrt(R)/dr2;
+	D = D/dr2;
+	this.x = [cx+D*dy+dx*sqrtR, cx+D*dy-dx*sqrtR];
+	this.y = [cy-D*dx+dy*sqrtR, cy-D*dx-dy*sqrtR];
+	if (!(isFinite(this.x[0]) && isFinite(this.y[0]) &&
+	      isFinite(this.x[1]) && isFinite(this.y[1]))) this.valid = false;
+	// test(this.x[0], this.y[0], this.valid, "cli0");
+	// test(this.x[1], this.y[1], this.valid, "cli1");
+    }
+});
+
+var CircleCircleIntersections = Gizmo.extend(function() {
+
+    this.type = "CircleCircleIntersections";
+
+    this.init = function() {}
+
+    this.recalculate = function() {
+	var centre1 = this.parents[0].centre(), centre2 = this.parents[1].centre();
+	var x1 = centre1.x, y1 = centre1.y;
+	var x2 = centre2.x, y2 = centre2.y;
+	var r1 = this.parents[0].radius(), r2 = this.parents[1].radius();
+	var dx = x2-x1, dy = y2-y1;
+	var d2 = dx*dx+dy*dy;
+	var D = ((r1+r2)*(r1+r2)/d2-1) * (1-(r1-r2)*(r1-r2)/d2);
+	if (D<=0) { this.valid = false; return; }
+	var K = 0.25*Math.sqrt(D);
+	var dr2 = 0.5*(r1*r1-r2*r2)/d2;
+	var xs = 0.5*(x1+x2)+dx*dr2, xt =  2*dy*K;
+	var ys = 0.5*(y1+y2)+dy*dr2, yt = -2*dx*K;
+	this.x = [xs+xt, xs-xt];
+	this.y = [ys+yt, ys-yt];
+	if (!(isFinite(xs) && isFinite(xt) && isFinite(ys) && isFinite(yt))) 
+	    this.valid = false;
+	// test(this.x[0], this.y[0], this.valid, "cci0");
+	// test(this.x[1], this.y[1], this.valid, "cci1");
+    }
+});
+
+
+var SingleCircleIntersection = Point.extend(function() {
+
+    this.type = "SingleCircleIntersection";
+
+    this.init = function() { 
+	this.svg_create(g_points, "circle", {"r": 5, "fill": "green"}); 
+    }
+
+    this.create = function(point_collection, which) {
+	var instance = Gizmo.create.call(this, point_collection);
+	instance.which = which;
+	return instance;
+    }
+
+    this.recalculate = function() {
+	this.valid = this.parents[0].valid;
+	this.x = this.parents[0].x[this.which];
+	this.y = this.parents[0].y[this.which];
+    }
+
+});
+
+function bisect(p1, p2, p3, l1, l2) {
+    var c = Circle.create(p2,p1);
+    var cli1 = CircleLineIntersections.create(c,l1);
+    var cli2 = CircleLineIntersections.create(c,l2);
+    var ip1 = SingleCircleIntersection.create(cli1,0);
+    var ip2 = SingleCircleIntersection.create(cli2,0);
+    var c1 = Circle.create(ip1, ip2);
+    var c2 = Circle.create(ip2, ip1);
+    var cci = CircleCircleIntersections.create(c1, c2);
+    return Line.create(SingleCircleIntersection.create(cci,0),
+		       SingleCircleIntersection.create(cci,1));
+}
+
+// ingeschreven cirkel
+function demo2() {
+    var p1 = ControlPoint.create(); p1.set_position(200,200);
+    var p2 = ControlPoint.create(); p2.set_position(600,200);
+    var p3 = ControlPoint.create(); p3.set_position(400,500);
+
+    // maak de lijnen
+    var triangle_style = {"stroke": "green", "stroke-width": 2};
+    var l12 = Line.create(p1, p2); l12.svg_attrib(triangle_style);
+    var l13 = Line.create(p1, p3); l13.svg_attrib(triangle_style);
+    var l23 = Line.create(p3, p2); l23.svg_attrib(triangle_style);
+
+    // bereken snijpunt van de bisectrices
+    var l1 = bisect(p1, p2, p3, l12, l23);
+    var l2 = bisect(p3, p1, p2, l13, l12);
+    var centre = LineLineIntersection.create(l1, l2);
+   
+    // laat loodlijn neer uit centre op (p1,p3)
+    
+    var c = Circle.create(centre, p1);
+    var cci = CircleLineIntersections.create(c, l13);
+    var cci1 = SingleCircleIntersection.create(cci, 0);
+    var cci2 = SingleCircleIntersection.create(cci, 1);
+
+    var c1 = Circle.create(cci1, cci2);
+    var c2 = Circle.create(cci2, cci1);
+    var cci_ll = CircleCircleIntersections.create(c1, c2);
+    var p1_ll = SingleCircleIntersection.create(cci_ll, 0);
+    var p2_ll = SingleCircleIntersection.create(cci_ll, 1);
+    var point = LineLineIntersection.create(l13, Line.create(p1_ll, p2_ll));
+    var result = Circle.create(centre, point); 
+    result.svg_attrib({"stroke": "red",  "stroke-width": 2});
+
+    Gizmo.update();
+    requestAnimationFrame(redrawer);
+    
+    function redrawer() {
+	Gizmo.update();
+	requestAnimationFrame(redrawer);
+    }
+    
+
+    function wobble() {
+	var time = Date.now();
+	var t = time/1000;
+	p1.set_position(200+40*Math.cos(2*t), 200+40*Math.sin(3*t));
+	p2.set_position(600+40*Math.cos(3*t), 200+40*Math.sin(5*t));
+	p3.set_position(400+40*Math.cos(5*t), 500+40*Math.sin(2*t));
+	p1.update(time); p2.update(time); p3.update(time);
+	requestAnimationFrame(wobble);
+    }
+}
+
+function perpendicular_bisector(p1, p2) {
+    var c1 = Circle.create(p1, p2);
+    var c2 = Circle.create(p2, p1);
+    var cci = CircleCircleIntersections.create(c1, c2);
+    return Line.create(SingleCircleIntersection.create(cci, 0),
+		    SingleCircleIntersection.create(cci, 1));
+}
+
+// omgeschreven cirkel
+function demo3() {
+    var p1 = ControlPoint.create(); p1.set_position(200,200);
+    var p2 = ControlPoint.create(); p2.set_position(600,200);
+    var p3 = ControlPoint.create(); p3.set_position(400,500);
+
+    // maak de lijnen
+    var triangle_style = {"stroke": "green", "stroke-width": 2};
+    var l12 = Line.create(p1, p2); l12.svg_attrib(triangle_style);
+    var l13 = Line.create(p1, p3); l13.svg_attrib(triangle_style);
+    var l23 = Line.create(p3, p2); l23.svg_attrib(triangle_style);
+
+    var l1 = perpendicular_bisector(p1, p2);
+    var l2 = perpendicular_bisector(p1, p3);
+    var centre = LineLineIntersection.create(l1, l2);
+    var result = Circle.create(centre, p1);
+    result.svg_attrib({"stroke": "red", "stroke-width": 2});
+
+    var time = Date.now();
+    p1.update(time);
+    p2.update(time);
+    p3.update(time);
+
+    requestAnimationFrame(wobble);
+
+    function wobble() {
+	var time = Date.now();
+	var t = time/1000;
+	p1.set_position(200+40*Math.cos(2*t), 200+40*Math.sin(3*t));
+	p2.set_position(600+40*Math.cos(3*t), 200+40*Math.sin(5*t));
+	p3.set_position(400+40*Math.cos(5*t), 500+40*Math.sin(2*t));
+	p1.update(time); p2.update(time); p3.update(time);
+	requestAnimationFrame(wobble);
+    }
+}
+
+function sandbox() {
+
+    var SHOW_NEXT = false;
+
+    window.onkeypress = function(e) {
+	var mx = Gizmo.MOUSE[0], my = Gizmo.MOUSE[1];
+	switch (e.keyCode) {
+	case 48: ControlPoint.at(mx, my, false); break;
+	case 49:
+	    var p1 = ControlPoint.at(Math.max(50,mx-0.1*XS),     my, true);
+	    var p2 = ControlPoint.at(Math.min(XS-50, mx+0.1*XS), my, true);
+	    var l = Line.create(p1, p2);
+	    l.add_intersections();
+	    break;
+	case 50:
+	    var p1 = ControlPoint.at(mx, my, true);
+	    var p2 = ControlPoint.at(mx, my>YS/2 ? my - 0.1*YS : my + 0.1*YS, true);
+	    var c = Circle.create(p1, p2);
+	    c.add_intersections();
+	    break;
+	}
+    }
+
+    window.onmousemove = function(e) {
+	Gizmo.MOUSE = e2coord(e);
+	if (!Gizmo.DRAGGING) return;
+	var obj = Gizmo.DRAGGING[0], x0 = Gizmo.DRAGGING[1], y0 = Gizmo.DRAGGING[2];
+	obj.set_position(x0+Gizmo.MOUSE[0], y0+Gizmo.MOUSE[1]);
+    }
+
+    /* Bugs and things to think about:
+       - currently, can only snap to points that are not built on top of a snappable.
+         however, the difference with normal points is not visible in the UI
+       - two points of a line/circle can be snapped to the same point
+    */
+    window.onmouseup = function(e) {
+	if (Gizmo.DRAGGING) {
+	    var obj = Gizmo.DRAGGING[0];
+	    delete Gizmo.DRAGGING;
+	    if (obj.snappable) {
+		// look for points close enough to this one
+		var closest_obj, closest_dist=-1;
+		var i;
+		for (i=0; i<Gizmo.INSTANCE_LIST.length; i++) {
+		    var dst = Gizmo.INSTANCE_LIST[i];
+		    if (dst.snappable) break;
+		    if (!dst.distance) continue; // not a point
+		    var d = obj.distance(dst);
+		    if (closest_dist==-1 || d<closest_dist) {
+			closest_dist = d;
+			closest_obj = dst;
+		    }
+		}
+		if (closest_dist!=-1 && closest_dist<=10) {
+		    // found snap target, now find obj
+		    for (; i < Gizmo.INSTANCE_LIST.length; i++) {
+			if (Gizmo.INSTANCE_LIST[i] === obj) break;
+		    }
+		    if (i == Gizmo.INSTANCE_LIST.length) {
+			console.error("Cannot find snappable in instance list");
+			return;
+		    }
+		    // object found, now delete it and redirect all parent links to it
+		    obj.trash();
+		    Gizmo.INSTANCE_LIST.splice(i, 1);
+		    for (; i < Gizmo.INSTANCE_LIST.length; i++) {
+			var ch = Gizmo.INSTANCE_LIST[i];
+			if (ch.parents) { 
+			    for (var j=0; j<ch.parents.length; j++) {
+				if (ch.parents[j]===obj) ch.parents[j] = closest_obj;
+			    }
+			}
+		    }
+		}
+	    }
+	}
+	// SHOW_NEXT = true;
+    }
+
+    requestAnimationFrame(redrawer);
+    
+    function redrawer() {
+	Gizmo.update(SHOW_NEXT);
+	SHOW_NEXT = false;
+	requestAnimationFrame(redrawer);
+    }
+}
+
+sandbox();
+
+// demo2();
+
+
+</script>
+
+</body>
+</html>
