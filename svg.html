@@ -49,9 +49,89 @@ function e2coord(e) {
     return [x,y];
 }
 
-var Gizmo = new function() {
 
-    this.INSTANCE_LIST = [];
+// ------------------------------- Constructions ---------------------------------------
+
+function Construction() {
+    this.gizmos = [];
+}
+
+Construction.prototype.add = function() {
+    for (var i=0; i<arguments.length; i++) {
+	this.gizmos.push(arguments[i]);
+    }
+}
+
+Construction.prototype.unshift = function(gizmo) { 
+    this.gizmos.unshift(gizmo); 
+}
+
+Construction.prototype.update = function() {
+    for (var i=0; i<this.gizmos.length; i++) {
+	var gizmo = this.gizmos[i];
+	gizmo.recalculate_check_valid();
+    }
+}
+
+Construction.prototype.find_all_duplicates = function() {
+    console.log("Searching for duplicates");
+    var ndup = 0;
+    for (var i=0; i<this.gizmos.length; i++) {
+	var gizmo = this.gizmos[i];
+	if (gizmo.find_duplicates) { 
+	    var dup = gizmo.find_duplicates();
+	    if (dup.length > 0) {
+		console.log("I found "+dup.length+" duplicates for the "+
+			    gizmo.type+" at "+obj.toString());
+		ndup++;
+	    }
+	}
+    }
+    console.log(ndup+" found.");
+}
+
+Construction.prototype.find_closest_point = function(point) {
+    var closest_obj, closest_dist=-1;
+    var i;
+    for (i=0; i<this.gizmos.length; i++) {
+	var gizmo = this.gizmos[i];
+	if (!gizmo.distance) continue; // not a point
+	var d = point.distance(gizmo);
+	if (closest_dist==-1 || d<closest_dist) {
+	    closest_dist = d;
+	    closest_obj = gizmo;
+	}
+    }
+    return [closest_obj, closest_dist];
+}
+
+// all objects with src as parent are redirected to dst
+Construction.prototype.redirect = function(src, dst) {
+    // found snap target, now find obj
+    var i;
+    for (i=0; i < this.gizmos.length; i++) {
+	if (this.gizmos[i] === src) break;
+    }
+    if (i == this.gizmos.length) {
+	console.error("Cannot find snappable in instance list");
+	return;
+    }
+    // object found, now delete it and redirect all parent links to it
+    src.trash();
+    this.gizmos.splice(i, 1);
+    for (; i < this.gizmos.length; i++) {
+	var child = this.gizmos[i];
+	if (child.parents) { 
+	    for (var j=0; j<child.parents.length; j++) {
+		if (child.parents[j]===src) child.parents[j] = dst;
+	    }
+	}
+    }
+}
+
+// ----------------------------------- Gizmos ---------------------------------------
+
+var Gizmo = new function() {
 
     this.valid = false;
 
@@ -67,8 +147,7 @@ var Gizmo = new function() {
     this.create = function() {
 	var instance = this.extend(this.init);
 	instance.parents = Array.prototype.slice.call(arguments);
-	instance.recalculate();
-	Gizmo.INSTANCE_LIST.push(instance);
+	instance.recalculate_check_valid();
 	return instance;
     }
 
@@ -81,41 +160,28 @@ var Gizmo = new function() {
 
     this.recalculate = function() {}
     this.recalculate_graphics = function() {}
-   
-    this.update = function(show) {
-	if (show) console.log("*** UPDATING ***");
-	for (var i=0; i<Gizmo.INSTANCE_LIST.length; i++) {
-	    var instance = Gizmo.INSTANCE_LIST[i];
-	    if (show) console.log("The "+instance.type+" at index "+i+":");
-	    var old_valid = instance.valid;
-	    instance.valid = true;
-	    if (instance.parents) {
-		for (var j=0; j<instance.parents.length; j++) {
-		    var p = instance.parents[j];
-		    if (show) console.log("- parent: "+p.type+", validity is "+p.valid);
-		    if (!instance.parents[j].valid) { instance.valid = false; break; }
-		}
-	    }
-	    if (instance.valid) {
-		if (show) console.log("- recalculating");
-		instance.recalculate();
-	    }
-	    if (show) console.log("- Validity from "+old_valid+" to "+instance.valid);
-	    if (show && instance.valid && instance.x) {
-		console.log("- Point coordinates are ("+instance.x+","+instance.y+")");
-	    }
-	    // change visibility if validity changed
-	    if (instance.svg) {
-		if (instance.valid) {
-		    instance.recalculate_graphics();
-		    if (!old_valid) instance.show();
-		} else {
-		    if (old_valid) instance.hide();
-		}
+    this.recalculate_check_valid = function() {
+	var v = true;
+	if (this.parents) {
+	    for (var i=0; i<this.parents.length; i++) {
+		if (!this.parents[i].valid) { v = false; break; }
 	    }
 	}
-    }
+	var old_valid = this.valid;
+	this.valid = v;
+	if (v) this.recalculate();
+	// change visibility if validity changed
+	if (this.svg) {
+	    if (v) {
+		this.recalculate_graphics();
+		if (!old_valid) this.show();
+	    } else {
+		if (old_valid) this.hide();
+	    }
+	}
 
+    }
+   
     this.svg_create = function(group, name, attrib) {
 	this.group = group;
 	this.svg = document.createElementNS(svg_namespace, name);
@@ -135,22 +201,6 @@ var Gizmo = new function() {
 
     this.hide = function() { this.group.removeChild(this.svg); }
     this.show = function() { this.group.appendChild(this.svg); }
-
-    this.find_all_duplicates = function() {
-	console.log("Searching for duplicates");
-	var ndup = 0;
-	for (var i=0; i<Gizmo.INSTANCE_LIST.length; i++) {
-	    var obj = Gizmo.INSTANCE_LIST[i];
-	    if (obj.find_duplicates) { 
-		var dup = obj.find_duplicates();
-		if (dup.length > 0) {
-		    console.log("I found "+dup.length+" duplicates for the "+obj.type+" at "+obj.toString());
-		    ndup++;
-		}
-	    }
-	}
-	console.log(ndup+" found.");
-    }
 
 }
 
@@ -172,17 +222,14 @@ var Point = Gizmo.extend(function() {
 var ControlPoint = Point.extend(function() {
 
     this.type = "ControlPoint";
+    this.valid = true;
 
-    this.at = function(x, y, snappable) {
+    this.at = function(x, y, mousedown) {
 	var cp = this.extend(this.init);
 	cp.parents = [];
-	if (snappable) Gizmo.INSTANCE_LIST.push(cp);
-	else           Gizmo.INSTANCE_LIST.unshift(cp);
 	cp.set_position(x, y);
-	if (snappable) { 
-	    cp.snappable = true;
-	    cp.svg_attrib({"fill": "cyan"});
-	}
+	cp.recalculate_graphics();
+	cp.svg.onmousedown = function(e) { mousedown(cp, e); };
 	return cp;
     }
 
@@ -190,13 +237,6 @@ var ControlPoint = Point.extend(function() {
 	this.svg_create(g_controlpoints, "circle", 
 			{"r": 10, "fill": "blue", "stroke": "black", "stroke-width":2,
 			"pointer-events": "all"});
-	
-	this.svg.onmousedown = function(me) {
-	    return function(e) {
-		var xy = e2coord(e);
-		Gizmo.DRAGGING = [me, me.x - xy[0], me.y - xy[1]];
-	    }
-	}(this);
     }
     
     this.set_position = function(x,y) { 
@@ -479,147 +519,72 @@ var SingleCircleIntersection = ConstructedPoint.extend(function() {
 
 });
 
-function bisect(p1, p2, p3, l1, l2) {
-    var c = Circle.create(p2,p1);
-    var cli1 = CircleLineIntersections.create(c,l1);
-    var cli2 = CircleLineIntersections.create(c,l2);
-    var ip1 = SingleCircleIntersection.create(cli1,0);
-    var ip2 = SingleCircleIntersection.create(cli2,0);
-    var c1 = Circle.create(ip1, ip2);
-    var c2 = Circle.create(ip2, ip1);
-    var cci = CircleCircleIntersections.create(c1, c2);
-    return Line.create(SingleCircleIntersection.create(cci,0),
-		       SingleCircleIntersection.create(cci,1));
-}
 
-// ingeschreven cirkel
-function demo2() {
-    var p1 = ControlPoint.create(); p1.set_position(200,200);
-    var p2 = ControlPoint.create(); p2.set_position(600,200);
-    var p3 = ControlPoint.create(); p3.set_position(400,500);
-
-    // maak de lijnen
-    var triangle_style = {"stroke": "green", "stroke-width": 2};
-    var l12 = Line.create(p1, p2); l12.svg_attrib(triangle_style);
-    var l13 = Line.create(p1, p3); l13.svg_attrib(triangle_style);
-    var l23 = Line.create(p3, p2); l23.svg_attrib(triangle_style);
-
-    // bereken snijpunt van de bisectrices
-    var l1 = bisect(p1, p2, p3, l12, l23);
-    var l2 = bisect(p3, p1, p2, l13, l12);
-    var centre = LineLineIntersection.create(l1, l2);
-   
-    // laat loodlijn neer uit centre op (p1,p3)
-    
-    var c = Circle.create(centre, p1);
-    var cci = CircleLineIntersections.create(c, l13);
-    var cci1 = SingleCircleIntersection.create(cci, 0);
-    var cci2 = SingleCircleIntersection.create(cci, 1);
-
-    var c1 = Circle.create(cci1, cci2);
-    var c2 = Circle.create(cci2, cci1);
-    var cci_ll = CircleCircleIntersections.create(c1, c2);
-    var p1_ll = SingleCircleIntersection.create(cci_ll, 0);
-    var p2_ll = SingleCircleIntersection.create(cci_ll, 1);
-    var point = LineLineIntersection.create(l13, Line.create(p1_ll, p2_ll));
-    var result = Circle.create(centre, point); 
-    result.svg_attrib({"stroke": "red",  "stroke-width": 2});
-
-    Gizmo.update();
-    requestAnimationFrame(redrawer);
-    
-    function redrawer() {
-	Gizmo.update();
-	requestAnimationFrame(redrawer);
-    }
-    
-
-    function wobble() {
-	var time = Date.now();
-	var t = time/1000;
-	p1.set_position(200+40*Math.cos(2*t), 200+40*Math.sin(3*t));
-	p2.set_position(600+40*Math.cos(3*t), 200+40*Math.sin(5*t));
-	p3.set_position(400+40*Math.cos(5*t), 500+40*Math.sin(2*t));
-	p1.update(time); p2.update(time); p3.update(time);
-	requestAnimationFrame(wobble);
-    }
-}
-
-function perpendicular_bisector(p1, p2) {
-    var c1 = Circle.create(p1, p2);
-    var c2 = Circle.create(p2, p1);
-    var cci = CircleCircleIntersections.create(c1, c2);
-    return Line.create(SingleCircleIntersection.create(cci, 0),
-		    SingleCircleIntersection.create(cci, 1));
-}
-
-// omgeschreven cirkel
-function demo3() {
-    var p1 = ControlPoint.create(); p1.set_position(200,200);
-    var p2 = ControlPoint.create(); p2.set_position(600,200);
-    var p3 = ControlPoint.create(); p3.set_position(400,500);
-
-    // maak de lijnen
-    var triangle_style = {"stroke": "green", "stroke-width": 2};
-    var l12 = Line.create(p1, p2); l12.svg_attrib(triangle_style);
-    var l13 = Line.create(p1, p3); l13.svg_attrib(triangle_style);
-    var l23 = Line.create(p3, p2); l23.svg_attrib(triangle_style);
-
-    var l1 = perpendicular_bisector(p1, p2);
-    var l2 = perpendicular_bisector(p1, p3);
-    var centre = LineLineIntersection.create(l1, l2);
-    var result = Circle.create(centre, p1);
-    result.svg_attrib({"stroke": "red", "stroke-width": 2});
-
-    var time = Date.now();
-    p1.update(time);
-    p2.update(time);
-    p3.update(time);
-
-    requestAnimationFrame(wobble);
-
-    function wobble() {
-	var time = Date.now();
-	var t = time/1000;
-	p1.set_position(200+40*Math.cos(2*t), 200+40*Math.sin(3*t));
-	p2.set_position(600+40*Math.cos(3*t), 200+40*Math.sin(5*t));
-	p3.set_position(400+40*Math.cos(5*t), 500+40*Math.sin(2*t));
-	p1.update(time); p2.update(time); p3.update(time);
-	requestAnimationFrame(wobble);
-    }
-}
+// ------------------------------------ Main program -----------------------------------
 
 function sandbox() {
 
-    var SHOW_NEXT = false;
+    var C = new Construction();
+    var Tools = [];
+    var MOUSE, DRAGGING;
+
+
+    function mousedown(tool_ix) {
+	return function(point, event) {
+	    var xy = e2coord(event);
+	    DRAGGING = [point, point.x - xy[0], point.y - xy[1], tool_ix];
+	}
+    }
+	
 
     window.onkeypress = function(e) {
-	var mx = Gizmo.MOUSE[0], my = Gizmo.MOUSE[1];
+	var mx = MOUSE[0], my = MOUSE[1];
+	var nt = Tools.length;
 	switch (e.keyCode) {
-	case 48: ControlPoint.at(mx, my, false); break;
+	case 48: 
+	    var p = ControlPoint.at(mx, my, mousedown(-1)); 
+	    C.unshift(p); 
+	    break;
 	case 49:
-	    var p1 = ControlPoint.at(Math.max(50,mx-0.1*XS),     my, true);
-	    var p2 = ControlPoint.at(Math.min(XS-50, mx+0.1*XS), my, true);
-	    var l = Line.create(p1, p2);
-	    l.add_intersections();
+	    var p1 = ControlPoint.at(Math.max(50,mx-0.1*XS),     my, mousedown(nt));
+	    var p2 = ControlPoint.at(Math.min(XS-50, mx+0.1*XS), my, mousedown(nt));
+	    var l  = Line.create(p1, p2);
+	    p1.svg_attrib({"fill": "cyan"});
+	    p2.svg_attrib({"fill": "cyan"});
+	    var c_tmp = new Construction();
+	    c_tmp.add(p1, p2, l);
+	    Tools.push(c_tmp);
 	    break;
 	case 50:
-	    var p1 = ControlPoint.at(mx, my, true);
-	    var p2 = ControlPoint.at(mx, my>YS/2 ? my - 0.1*YS : my + 0.1*YS, true);
+	    var p1 = ControlPoint.at(mx, my, mousedown(nt));
+	    var p2 = ControlPoint.at(mx, my>YS/2 ? my - 0.1*YS : my + 0.1*YS, mousedown(nt));
 	    var c = Circle.create(p1, p2);
-	    c.add_intersections();
+	    p1.svg_attrib({"fill": "cyan"});
+	    p2.svg_attrib({"fill": "cyan"});
+	    var c_tmp = new Construction();
+	    c_tmp.add(p1, p2, c);
+	    Tools.push(c_tmp);
 	    break;
 	case 52: 
-	    Gizmo.find_all_duplicates();
+	    C.find_all_duplicates();
 	    break;
 	}
     }
 
     window.onmousemove = function(e) {
-	Gizmo.MOUSE = e2coord(e);
-	if (!Gizmo.DRAGGING) return;
-	var obj = Gizmo.DRAGGING[0], x0 = Gizmo.DRAGGING[1], y0 = Gizmo.DRAGGING[2];
-	obj.set_position(x0+Gizmo.MOUSE[0], y0+Gizmo.MOUSE[1]);
+	MOUSE = e2coord(e);
+	if (!DRAGGING) return;
+	var obj = DRAGGING[0], x0 = DRAGGING[1], y0 = DRAGGING[2];
+	obj.set_position(x0+MOUSE[0], y0+MOUSE[1]);
+	if (DRAGGING[3]==-1) {
+	    // update everything
+	    C.update();
+	    for (var i=0; i<Tools.length; i++)  {
+		Tools[i].update();
+	    }
+	} else {
+	    Tools[DRAGGING[3]].update();
+	}
     }
 
     /* Bugs and things to think about:
@@ -628,55 +593,17 @@ function sandbox() {
        - two points of a line/circle can be snapped to the same point
     */
     window.onmouseup = function(e) {
-	if (Gizmo.DRAGGING) {
-	    var obj = Gizmo.DRAGGING[0];
-	    delete Gizmo.DRAGGING;
-	    if (obj.snappable) {
-		// look for points close enough to this one
-		var closest_obj, closest_dist=-1;
-		var i;
-		for (i=0; i<Gizmo.INSTANCE_LIST.length; i++) {
-		    var dst = Gizmo.INSTANCE_LIST[i];
-		    if (dst.snappable) break;
-		    if (!dst.distance) continue; // not a point
-		    var d = obj.distance(dst);
-		    if (closest_dist==-1 || d<closest_dist) {
-			closest_dist = d;
-			closest_obj = dst;
-		    }
-		}
-		if (closest_dist!=-1 && closest_dist<=10) {
-		    // found snap target, now find obj
-		    for (; i < Gizmo.INSTANCE_LIST.length; i++) {
-			if (Gizmo.INSTANCE_LIST[i] === obj) break;
-		    }
-		    if (i == Gizmo.INSTANCE_LIST.length) {
-			console.error("Cannot find snappable in instance list");
-			return;
-		    }
-		    // object found, now delete it and redirect all parent links to it
-		    obj.trash();
-		    Gizmo.INSTANCE_LIST.splice(i, 1);
-		    for (; i < Gizmo.INSTANCE_LIST.length; i++) {
-			var ch = Gizmo.INSTANCE_LIST[i];
-			if (ch.parents) { 
-			    for (var j=0; j<ch.parents.length; j++) {
-				if (ch.parents[j]===obj) ch.parents[j] = closest_obj;
-			    }
-			}
-		    }
+	if (DRAGGING) {
+	    var obj = DRAGGING[0], tool_ix = DRAGGING[3];
+	    DRAGGING = null;
+	    if (tool_ix!=-1) {
+		var closest = C.find_closest_point(obj);
+		if (closest[1]!=-1 && closest[1]<=10) {
+		    Tools[tool_ix].redirect(obj, closest[0]);
+		    Tools[tool_ix].update(); // redraw after snapping
 		}
 	    }
 	}
-	// SHOW_NEXT = true;
-    }
-
-    requestAnimationFrame(redrawer);
-    
-    function redrawer() {
-	Gizmo.update(SHOW_NEXT);
-	SHOW_NEXT = false;
-	requestAnimationFrame(redrawer);
     }
 }
 
