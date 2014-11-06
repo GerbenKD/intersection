@@ -101,23 +101,23 @@ Construction.prototype.find_closest_point = function(point) {
     return [closest_obj, closest_dist];
 }
 
+Construction.prototype.trash = function(src) {
+    for (var i=0; i<this.gizmos.length; i++) {
+	if (src===this.gizmos[i]) {
+	    this.gizmos.splice(i, 1);
+	    break;
+	}
+    }
+    src.trash();
+}
+
+
 // all objects with src as parent are redirected to dst
 Construction.prototype.redirect = function(src, dst) {
-    // found snap target, now find obj
-    var i;
-    for (i=0; i < this.gizmos.length; i++) {
-	if (this.gizmos[i] === src) break;
-    }
-    if (i == this.gizmos.length) {
-	console.error("Cannot find snappable in instance list");
-	return;
-    }
-    // object found, now delete it and redirect all parent links to dst
-    src.trash();
-    this.gizmos.splice(i, 1);
-    for (; i < this.gizmos.length; i++) {
-	var child = this.gizmos[i];
-	if (child.parents) { 
+    this.trash(src);
+    for (var id in src.children) {
+	var child = src.children[id];
+	if (child.parents) {
 	    for (var j=0; j<child.parents.length; j++) {
 		if (child.parents[j]===src) child.parents[j] = dst;
 	    }
@@ -209,18 +209,28 @@ var Gizmo = new function() {
 
     this.valid = false;
 
-    // Conveniently construct a subclass
-    this.extend = function(constr) {
-	constr.prototype = this;
-	return new constr();
-    };
+    // Conveniently construct a subclass. All members are given an id.
+    this.extend = function() {
+	var id = 0;
+	return function(constr) {
+	    constr.prototype = this;
+	    var instance = new constr();
+	    instance.id = id++;
+	    return instance;
+	}
+    }();
 
     /* Instiantiates a class object, registers parents,
        assigns an ID and stores it in the objects list.
     */
     this.create = function() {
 	var instance = this.extend(this.init);
+	instance.children = {};
 	instance.parents = Array.prototype.slice.call(arguments);
+	for (var i=0; i<arguments.length; i++) {
+	    var parent = arguments[i];
+	    parent.children[instance.id]=instance;
+	}
 	instance.recalculate_check_valid();
 	return instance;
     }
@@ -302,6 +312,7 @@ var ControlPoint = Point.extend(function() {
 
     this.at = function(x, y, mousedown) {
 	var cp = this.extend(this.init);
+	cp.children = {};
 	cp.parents = [];
 	cp.set_position(x, y);
 	cp.recalculate_graphics();
