@@ -119,25 +119,102 @@ var Construction = new function() {
 	return n;
     }
 
-    this.find_all_duplicates = function() {
+    this.find_all_duplicates = function(dst) {
 	console.log("Searching for duplicates");
-	var ndup = 0;
-	for (var i=0; i<this.gizmos.length; i++) {
-	    var gizmo = this.gizmos[i];
-	    if (gizmo.find_duplicates) { 
-		var dup = gizmo.find_duplicates();
-		if (dup.length > 0) {
-		    console.log("I found "+dup.length+" duplicates for the "+
-				gizmo.type+" at "+obj.toString());
-		    ndup++;
+	
+	var res = scan_points();
+	var points = res[0], targets = res[1], controls = res[2];
+	var candidates = initialize_candidates(points, targets);
+	test_candidates(controls, candidates);
+	for (var id in candidates) {
+	    var targets = candidates[id][1];
+	    if (targets.length>1) console.error("It appears there are duplicate points in dst");
+	    candidates[id][1] = candidates[id][1][0];
+	}
+	return candidates;
+
+	// initialize points, targets and controls arrays
+	function scan_points() {
+	    var points = [], targets = [], controls = [];
+	    for (var i=0; i<this.gizmos.length; i++) {
+		var gizmo = this.gizmos[i];
+		if (gizmo.is_point && gizmo.valid) points.push(gizmo);
+	    }
+	    
+	    for (var i=0; i<dst.gizmos.length; i++) {
+		var gizmo = dst.gizmos[i];
+		if (gizmo.is_point && gizmo.valid) targets.push(gizmo);
+		if (gizmo.set_position) controls.push(gizmo);
+	    }
+	    console.log("There are "+targets.length+" targets and "+controls.length+" control points");
+	    return [points, targets, controls];
+	}
+
+	// reorders the points and targets arrays
+	// returns a mapping src_id -> [src, [dst...]]
+	function initialize_candidates(points, targets) {
+	    function by_coord(p1, p2) { return p1.x-p2.x; }
+	    points.sort(by_coord);
+	    targets.sort(by_coord);
+	    var candidates = {};
+	    var j=0;
+	    for (var i=0; i<points.length; i++) {
+		var pt_i = points[i];
+		for (; j<targets.length; j++) {
+		    if (pt_i.x-targets[j].x < SMALL) break;
+		}
+		for (var k=j; k<targets.length; k++) {
+		    var pt_k = targets[k];
+		    if (pt_k.x - pt_i.x >= SMALL) break;
+		    if (pt_i.distance(pt_j) < SMALL) {
+			var id = pt_i.id;
+			if (!candidates[id]) candidates[id] = [pt_i, []];
+			candidates[id].push(pt_k);
+		    }
+		}
+	    }
+	    return candidates;
+	}
+
+	function test_candidates(controls, candidates, constr1, constr2) {
+	    var op = []; // original positions of the control points
+
+	    for (var i=0; i<controls.length; i++) {
+		op.push([controls[i].x, controls[i].y]);
+	    }
+	    
+	    for (var test=0; test<5; test++) {
+
+		// randomize control points and recalculate structure
+		for (var i=0; i<cp.length; i++) {
+		    var dx = Math.random()*100-50, dy = Math.random()*100-50;
+		    controls[i].set_position(op[i][0]+dx, op[i][1]+dy);
+		}
+		constr1.update(); constr2.update();
+
+		// filter candidates
+		for (var id in candidates) {
+		    var src = candidates[id][0], targets = candidates[id][1];
+		    var new_targets = [];
+		    for (var i=0; i<targets.length; i++) {
+			var tgt = targets[i];
+			if (tgt.valid && tgt.distance(src)<SMALL) {
+			    new_targets.push(tgt);
+			}
+		    }
+		    if (new_targets.length>0) {
+			candidates[id][1] = new_targets;
+		    } else {
+			delete candidates[id];
+		    }
 		}
 	    }
 	}
-	console.log(ndup+" found.");
     }
 
     this.inject = function(dst) {
 	// For the time being, just copies stuff
+	this.find_all_duplicates(dst); // for testing
 	dst.add.apply(dst, this.gizmos);
     }
 
@@ -623,9 +700,6 @@ function sandbox() {
 	    p2.svg_attrib({"fill": "cyan"});
 	    c_tmp.add(p1, p2, c);
 	    Tools.push(c_tmp);
-	    break;
-	case 52: 
-	    C.find_all_duplicates();
 	    break;
 	}
     }
