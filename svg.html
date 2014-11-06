@@ -148,8 +148,10 @@ Construction.prototype.create_intersections = function(other) {
 	else if (gizmo.is_circle) circles.push(gizmo);
     }
 
-    function addci(ci) { 
-	this.add(ci, SingleCircleIntersection.create(ci, 0), SingleCircleIntersection(ci, 1)); 
+    function addci(construction, ci) { 
+	construction.add(ci,
+			 SingleCircleIntersection.create(ci, 0), 
+			 SingleCircleIntersection.create(ci, 1)); 
     }
 
     for (var i=0; i<this.gizmos.length; i++) {
@@ -161,14 +163,14 @@ Construction.prototype.create_intersections = function(other) {
 		this.add(LineLineIntersection.create(gizmo,lines[j]));
 	    }
 	    for (var j=0; j<circles.length; j++) {
-		addci(CircleLineIntersections.create(circles[j], gizmo));
+		addci(this, CircleLineIntersections.create(circles[j], gizmo));
 	    }
 	} else if (gizmo.is_circle) {
 	    for (var j=0; j<lines.length; j++) {
-		addci(CircleLineIntersections.create(gizmo,lines[j]));
+		addci(this, CircleLineIntersections.create(gizmo, lines[j]));
 	    }
 	    for (var j=0; j<circles.length; j++) {
-		addci(CircleCircleIntersections.create(circles[j], gizmo))
+		addci(this, CircleCircleIntersections.create(circles[j], gizmo))
 	    }
 	}
     }
@@ -253,11 +255,11 @@ var Gizmo = new function() {
 	}
 
     }
-   
+
+    // Start out hidden. Show upon recalculate_check_valid
     this.svg_create = function(group, name, attrib) {
 	this.group = group;
 	this.svg = document.createElementNS(svg_namespace, name);
-	group.appendChild(this.svg);
 	if (!attrib) attrib = {};
 	if (!("pointer-events" in attrib)) {
 	    attrib["pointer-events"] = "none";
@@ -311,6 +313,7 @@ var ControlPoint = Point.extend(function() {
 	this.svg_create(g_controlpoints, "circle", 
 			{"r": 10, "fill": "blue", "stroke": "black", "stroke-width":2,
 			"pointer-events": "all"});
+	this.show();
     }
     
     this.set_position = function(x,y) { 
