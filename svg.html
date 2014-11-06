@@ -52,135 +52,135 @@ function e2coord(e) {
 
 // ------------------------------- Constructions ---------------------------------------
 
-function Construction() {
-    this.gizmos = [];
-}
+var Construction = new function() {
 
-Construction.prototype.add = function() {
-    for (var i=0; i<arguments.length; i++) {
-	this.gizmos.push(arguments[i]);
+    this.create = function() {
+	function constructor() { this.gizmos = []; }
+	constructor.prototype = this;
+	return new constructor();
     }
-}
 
-Construction.prototype.update = function() {
-    for (var i=0; i<this.gizmos.length; i++) {
-	var gizmo = this.gizmos[i];
-	gizmo.recalculate_check_valid();
+    this.add = function() {
+	for (var i=0; i<arguments.length; i++) {
+	    this.gizmos.push(arguments[i]);
+	}
     }
-}
 
-Construction.prototype.find_all_duplicates = function() {
-    console.log("Searching for duplicates");
-    var ndup = 0;
-    for (var i=0; i<this.gizmos.length; i++) {
-	var gizmo = this.gizmos[i];
-	if (gizmo.find_duplicates) { 
-	    var dup = gizmo.find_duplicates();
-	    if (dup.length > 0) {
-		console.log("I found "+dup.length+" duplicates for the "+
-			    gizmo.type+" at "+obj.toString());
-		ndup++;
+    this.update = function() {
+	for (var i=0; i<this.gizmos.length; i++) {
+	    var gizmo = this.gizmos[i];
+	    gizmo.recalculate_check_valid();
+	}
+    }
+
+    this.find_closest_point = function(point) {
+	var closest_obj, closest_dist=-1;
+	var i;
+	for (i=0; i<this.gizmos.length; i++) {
+	    var gizmo = this.gizmos[i];
+	    if (!gizmo.distance) continue; // not a point
+	    var d = point.distance(gizmo);
+	    if (closest_dist==-1 || d<closest_dist) {
+		closest_dist = d;
+		closest_obj = gizmo;
+	    }
+	}
+	return [closest_obj, closest_dist];
+    }
+
+    this.trash = function(src) {
+	for (var i=0; i<this.gizmos.length; i++) {
+	    if (src===this.gizmos[i]) {
+		this.gizmos.splice(i, 1);
+		break;
+	    }
+	}
+	src.trash();
+    }
+
+    // all objects with src as parent are redirected to dst
+    this.redirect = function(src, dst) {
+	this.trash(src);
+	for (var id in src.children) {
+	    var child = src.children[id];
+	    if (child.parents) {
+		for (var j=0; j<child.parents.length; j++) {
+		    if (child.parents[j]===src) child.parents[j] = dst;
+		}
 	    }
 	}
     }
-    console.log(ndup+" found.");
-}
 
-Construction.prototype.find_closest_point = function(point) {
-    var closest_obj, closest_dist=-1;
-    var i;
-    for (i=0; i<this.gizmos.length; i++) {
-	var gizmo = this.gizmos[i];
-	if (!gizmo.distance) continue; // not a point
-	var d = point.distance(gizmo);
-	if (closest_dist==-1 || d<closest_dist) {
-	    closest_dist = d;
-	    closest_obj = gizmo;
+    this.num_control_points = function() {
+	var n = 0;
+	for (var i=0; i<this.gizmos.length; i++) {
+	    if (this.gizmos[i].set_position) n++;
 	}
+	return n;
     }
-    return [closest_obj, closest_dist];
-}
 
-Construction.prototype.trash = function(src) {
-    for (var i=0; i<this.gizmos.length; i++) {
-	if (src===this.gizmos[i]) {
-	    this.gizmos.splice(i, 1);
-	    break;
-	}
-    }
-    src.trash();
-}
-
-
-// all objects with src as parent are redirected to dst
-Construction.prototype.redirect = function(src, dst) {
-    this.trash(src);
-    for (var id in src.children) {
-	var child = src.children[id];
-	if (child.parents) {
-	    for (var j=0; j<child.parents.length; j++) {
-		if (child.parents[j]===src) child.parents[j] = dst;
+    this.find_all_duplicates = function() {
+	console.log("Searching for duplicates");
+	var ndup = 0;
+	for (var i=0; i<this.gizmos.length; i++) {
+	    var gizmo = this.gizmos[i];
+	    if (gizmo.find_duplicates) { 
+		var dup = gizmo.find_duplicates();
+		if (dup.length > 0) {
+		    console.log("I found "+dup.length+" duplicates for the "+
+				gizmo.type+" at "+obj.toString());
+		    ndup++;
+		}
 	    }
 	}
-    }
-}
-
-Construction.prototype.num_control_points = function() {
-    var n = 0;
-    for (var i=0; i<this.gizmos.length; i++) {
-	if (this.gizmos[i].set_position) n++;
-    }
-    return n;
-}
-
-// Update find_all_duplicates
-
-Construction.prototype.inject = function(dst) {
-    // For the time being, just copies stuff
-    dst.add.apply(dst, this.gizmos);
-}
-
-Construction.prototype.create_intersections = function(other) {
-    var lines = [], circles = [];
-    for (var i=0; i<other.gizmos.length; i++) {
-	var gizmo = other.gizmos[i];
-	if      (gizmo.is_line)   lines.push(gizmo);
-	else if (gizmo.is_circle) circles.push(gizmo);
+	console.log(ndup+" found.");
     }
 
-    function addci(construction, ci) { 
-	construction.add(ci,
-			 SingleCircleIntersection.create(ci, 0), 
-			 SingleCircleIntersection.create(ci, 1)); 
+    this.inject = function(dst) {
+	// For the time being, just copies stuff
+	dst.add.apply(dst, this.gizmos);
     }
 
-    for (var i=0; i<this.gizmos.length; i++) {
-	var gizmo = this.gizmos[i];
+    this.create_intersections = function(other) {
+	var lines = [], circles = [];
+	for (var i=0; i<other.gizmos.length; i++) {
+	    var gizmo = other.gizmos[i];
+	    if      (gizmo.is_line)   lines.push(gizmo);
+	    else if (gizmo.is_circle) circles.push(gizmo);
+	}
 
-	// create all intersections with lines in other
-	if (gizmo.is_line) {
-	    for (var j=0; j<lines.length; j++) {
-		this.add(LineLineIntersection.create(gizmo,lines[j]));
-	    }
-	    for (var j=0; j<circles.length; j++) {
-		addci(this, CircleLineIntersections.create(circles[j], gizmo));
-	    }
-	} else if (gizmo.is_circle) {
-	    for (var j=0; j<lines.length; j++) {
-		addci(this, CircleLineIntersections.create(gizmo, lines[j]));
-	    }
-	    for (var j=0; j<circles.length; j++) {
-		addci(this, CircleCircleIntersections.create(circles[j], gizmo))
+	function addci(construction, ci) { 
+	    construction.add(ci,
+			     SingleCircleIntersection.create(ci, 0), 
+			     SingleCircleIntersection.create(ci, 1)); 
+	}
+
+	for (var i=0; i<this.gizmos.length; i++) {
+	    var gizmo = this.gizmos[i];
+
+	    // create all intersections with lines in other
+	    if (gizmo.is_line) {
+		for (var j=0; j<lines.length; j++) {
+		    this.add(LineLineIntersection.create(gizmo,lines[j]));
+		}
+		for (var j=0; j<circles.length; j++) {
+		    addci(this, CircleLineIntersections.create(circles[j], gizmo));
+		}
+	    } else if (gizmo.is_circle) {
+		for (var j=0; j<lines.length; j++) {
+		    addci(this, CircleLineIntersections.create(gizmo, lines[j]));
+		}
+		for (var j=0; j<circles.length; j++) {
+		    addci(this, CircleCircleIntersections.create(circles[j], gizmo))
+		}
 	    }
 	}
     }
 }
 
 /*
-
   tool injection design:
 
-   - Probably we need to give all gizmos an integer id and use a dictionary
    - tool control points are redirected to points in C by the user
    - create all intersections and add them to the tool
    - find equivalent point sets between C and tool. Points in both C and 
@@ -190,18 +190,9 @@ Construction.prototype.create_intersections = function(other) {
    - redirect all points in the mapping
    - the tool now contains remaining unique points and all lines and circles, and
      circleinteractions objects. The non-points might be in C already. 
-   - When non-points are redirected, would want to unify them with existing children
-     of their new parents. But we don't know these children! Fast solutions:
-     (a) Maintain children of all gizmos. Disadvantage: need to update all the time.
-         When deleting a gizmo, don't want to have to search through its parents' child
-         list. Could use map, but those are even more heavy-weight! 
-	 Advantages: fast, may come in handy for other operations.
-     (b) Create a gizmo->children map on the fly while looking for the equivalent point
-         sets. Advantages: it is less memory intensive, easier when deleting stuff,
-	 and it probably does not dominate the run time anyway.
-     I lean towards option (b) for the time being...
+   - When non-points are redirected, unify them with existing children
+     of their new parents.
 */
-
 
 // ----------------------------------- Gizmos ---------------------------------------
 
@@ -586,7 +577,7 @@ var SingleCircleIntersection = ConstructedPoint.extend(function() {
 
 function sandbox() {
 
-    var C = new Construction();
+    var C = Construction.create();
     var Tools = [];
     var MOUSE, DRAGGING;
 
@@ -613,7 +604,7 @@ function sandbox() {
 	    C.add(p); 
 	    break;
 	case 49:
-	    var c_tmp = new Construction();
+	    var c_tmp = Construction.create();
 	    var p1 = ControlPoint.at(Math.max(50,mx-0.1*XS),     my, mousedown(c_tmp));
 	    var p2 = ControlPoint.at(Math.min(XS-50, mx+0.1*XS), my, mousedown(c_tmp));
 	    var l  = Line.create(p1, p2);
@@ -623,7 +614,7 @@ function sandbox() {
 	    Tools.push(c_tmp);
 	    break;
 	case 50:
-	    var c_tmp = new Construction();
+	    var c_tmp = Construction.create();
 	    var p1 = ControlPoint.at(mx, my, mousedown(c_tmp));
 	    var p2 = ControlPoint.at(mx, my>YS/2 ? my - 0.1*YS : my + 0.1*YS, 
 				     mousedown(c_tmp));
