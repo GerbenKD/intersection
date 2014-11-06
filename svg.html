@@ -62,10 +62,6 @@ Construction.prototype.add = function() {
     }
 }
 
-Construction.prototype.unshift = function(gizmo) { 
-    this.gizmos.unshift(gizmo); 
-}
-
 Construction.prototype.update = function() {
     for (var i=0; i<this.gizmos.length; i++) {
 	var gizmo = this.gizmos[i];
@@ -116,7 +112,7 @@ Construction.prototype.redirect = function(src, dst) {
 	console.error("Cannot find snappable in instance list");
 	return;
     }
-    // object found, now delete it and redirect all parent links to it
+    // object found, now delete it and redirect all parent links to dst
     src.trash();
     this.gizmos.splice(i, 1);
     for (; i < this.gizmos.length; i++) {
@@ -128,6 +124,82 @@ Construction.prototype.redirect = function(src, dst) {
 	}
     }
 }
+
+Construction.prototype.num_control_points = function() {
+    var n = 0;
+    for (var i=0; i<this.gizmos.length; i++) {
+	if (this.gizmos[i].set_position) n++;
+    }
+    return n;
+}
+
+// Update find_all_duplicates
+
+Construction.prototype.inject = function(dst) {
+    // For the time being, just copies stuff
+    dst.add.apply(dst, this.gizmos);
+}
+
+Construction.prototype.create_intersections = function(other) {
+    var lines = [], circles = [];
+    for (var i=0; i<other.gizmos.length; i++) {
+	var gizmo = other.gizmos[i];
+	if      (gizmo.is_line)   lines.push(gizmo);
+	else if (gizmo.is_circle) circles.push(gizmo);
+    }
+
+    function addci(ci) { 
+	this.add(ci, SingleCircleIntersection.create(ci, 0), SingleCircleIntersection(ci, 1)); 
+    }
+
+    for (var i=0; i<this.gizmos.length; i++) {
+	var gizmo = this.gizmos[i];
+
+	// create all intersections with lines in other
+	if (gizmo.is_line) {
+	    for (var j=0; j<lines.length; j++) {
+		this.add(LineLineIntersection.create(gizmo,lines[j]));
+	    }
+	    for (var j=0; j<circles.length; j++) {
+		addci(CircleLineIntersections.create(circles[j], gizmo));
+	    }
+	} else if (gizmo.is_circle) {
+	    for (var j=0; j<lines.length; j++) {
+		addci(CircleLineIntersections.create(gizmo,lines[j]));
+	    }
+	    for (var j=0; j<circles.length; j++) {
+		addci(CircleCircleIntersections.create(circles[j], gizmo))
+	    }
+	}
+    }
+}
+
+/*
+
+  tool injection design:
+
+   - Probably we need to give all gizmos an integer id and use a dictionary
+   - tool control points are redirected to points in C by the user
+   - create all intersections and add them to the tool
+   - find equivalent point sets between C and tool. Points in both C and 
+     tool are assumed unique, but depending on how the tool's control points are attached
+     multiple tool points can now become equivalent. The equivalent point sets can 
+     be represented as a mapping Tool point => C point
+   - redirect all points in the mapping
+   - the tool now contains remaining unique points and all lines and circles, and
+     circleinteractions objects. The non-points might be in C already. 
+   - When non-points are redirected, would want to unify them with existing children
+     of their new parents. But we don't know these children! Fast solutions:
+     (a) Maintain children of all gizmos. Disadvantage: need to update all the time.
+         When deleting a gizmo, don't want to have to search through its parents' child
+         list. Could use map, but those are even more heavy-weight! 
+	 Advantages: fast, may come in handy for other operations.
+     (b) Create a gizmo->children map on the fly while looking for the equivalent point
+         sets. Advantages: it is less memory intensive, easier when deleting stuff,
+	 and it probably does not dominate the run time anyway.
+     I lean towards option (b) for the time being...
+*/
+
 
 // ----------------------------------- Gizmos ---------------------------------------
 
@@ -172,7 +244,7 @@ var Gizmo = new function() {
 	if (v) this.recalculate();
 	// change visibility if validity changed
 	if (this.svg) {
-	    if (v) {
+	    if (this.valid) {
 		this.recalculate_graphics();
 		if (!old_valid) this.show();
 	    } else {
@@ -205,6 +277,8 @@ var Gizmo = new function() {
 }
 
 var Point = Gizmo.extend(function() {
+
+    this.is_point = true;
 
     this.distance = function(other) {
 	var dx = this.x - other.x, dy = this.y - other.y;
@@ -246,44 +320,15 @@ var ControlPoint = Point.extend(function() {
 
 });
 
-
-var LineOrCircle = Gizmo.extend(function() {
-    
-    this.add_intersections = function() {
-	var len = Gizmo.INSTANCE_LIST.length;
-	for (var i=0; i<len; i++) {
-	    var other = Gizmo.INSTANCE_LIST[i];
-	    if (other===this || !other.add_intersections) continue;
-	    if (this.is_line) {
-		if (other.is_line) {
-		    LineLineIntersection.create(this, other);
-		} else {
-		    var cli = CircleLineIntersections.create(other, this);
-		    SingleCircleIntersection.create(cli, 0);
-		    SingleCircleIntersection.create(cli, 1);
-		}
-	    } else {
-		var ci = other.is_line
-		    ? CircleLineIntersections.create(this, other)
-		    : CircleCircleIntersections.create(this, other);
-		SingleCircleIntersection.create(ci, 0);
-		SingleCircleIntersection.create(ci, 1);
-	    }
-	}
-    }
-
-});
-
-var Line = LineOrCircle.extend(function() {
+var Line = Gizmo.extend(function() {
 
     this.type = "Line";
+    this.is_line = true;
 
     this.init = function() {
 	this.svg_create(g_lines, "line", 
 			{"fill": "none", "stroke": "orange", "stroke-width": 1});
     }
-   
-    this.is_line = true;
 
     this.toString = function() {
 	return this.parents[0].toString()+"-"+this.parents[1].toString(); 
@@ -404,9 +449,10 @@ var LineLineIntersection = ConstructedPoint.extend(function() {
 });
 
 
-var Circle = LineOrCircle.extend(function() {
+var Circle = Gizmo.extend(function() {
     
     this.type = "Circle";
+    this.is_circle = true;
 
     this.init = function() {
 	this.svg_create(g_lines, "circle", 
@@ -414,7 +460,7 @@ var Circle = LineOrCircle.extend(function() {
     }
 
     this.toString = function() { 
-	return "("+parents[0].x+","+parents[0].y+","+this.radius(); 
+	return "("+this.parents[0].x+","+this.parents[0].y+","+this.radius()+")";
     }
 
     this.centre = function() { return this.parents[0]; }
@@ -504,8 +550,10 @@ var SingleCircleIntersection = ConstructedPoint.extend(function() {
     }
 
     this.create = function(point_collection, which) {
-	var instance = Gizmo.create.call(this, point_collection);
+	var instance = this.extend(this.init);
+	instance.parents = [point_collection];
 	instance.which = which;
+	instance.recalculate_check_valid();
 	return instance;
     }
 
@@ -528,40 +576,46 @@ function sandbox() {
     var Tools = [];
     var MOUSE, DRAGGING;
 
-
-    function mousedown(tool_ix) {
-	return function(point, event) {
-	    var xy = e2coord(event);
-	    DRAGGING = [point, point.x - xy[0], point.y - xy[1], tool_ix];
+    function update_all() {
+	C.update();
+	for (var i=0; i<Tools.length; i++) {
+	    Tools[i].update();
 	}
     }
-	
+
+
+    function mousedown(tool) {
+	return function(point, event) {
+	    var xy = e2coord(event);
+	    DRAGGING = [point, point.x - xy[0], point.y - xy[1], tool];
+	}
+    }	
 
     window.onkeypress = function(e) {
 	var mx = MOUSE[0], my = MOUSE[1];
-	var nt = Tools.length;
 	switch (e.keyCode) {
 	case 48: 
-	    var p = ControlPoint.at(mx, my, mousedown(-1)); 
-	    C.unshift(p); 
+	    var p = ControlPoint.at(mx, my, mousedown(null)); 
+	    C.add(p); 
 	    break;
 	case 49:
-	    var p1 = ControlPoint.at(Math.max(50,mx-0.1*XS),     my, mousedown(nt));
-	    var p2 = ControlPoint.at(Math.min(XS-50, mx+0.1*XS), my, mousedown(nt));
+	    var c_tmp = new Construction();
+	    var p1 = ControlPoint.at(Math.max(50,mx-0.1*XS),     my, mousedown(c_tmp));
+	    var p2 = ControlPoint.at(Math.min(XS-50, mx+0.1*XS), my, mousedown(c_tmp));
 	    var l  = Line.create(p1, p2);
 	    p1.svg_attrib({"fill": "cyan"});
 	    p2.svg_attrib({"fill": "cyan"});
-	    var c_tmp = new Construction();
 	    c_tmp.add(p1, p2, l);
 	    Tools.push(c_tmp);
 	    break;
 	case 50:
-	    var p1 = ControlPoint.at(mx, my, mousedown(nt));
-	    var p2 = ControlPoint.at(mx, my>YS/2 ? my - 0.1*YS : my + 0.1*YS, mousedown(nt));
+	    var c_tmp = new Construction();
+	    var p1 = ControlPoint.at(mx, my, mousedown(c_tmp));
+	    var p2 = ControlPoint.at(mx, my>YS/2 ? my - 0.1*YS : my + 0.1*YS, 
+				     mousedown(c_tmp));
 	    var c = Circle.create(p1, p2);
 	    p1.svg_attrib({"fill": "cyan"});
 	    p2.svg_attrib({"fill": "cyan"});
-	    var c_tmp = new Construction();
 	    c_tmp.add(p1, p2, c);
 	    Tools.push(c_tmp);
 	    break;
@@ -576,14 +630,11 @@ function sandbox() {
 	if (!DRAGGING) return;
 	var obj = DRAGGING[0], x0 = DRAGGING[1], y0 = DRAGGING[2];
 	obj.set_position(x0+MOUSE[0], y0+MOUSE[1]);
-	if (DRAGGING[3]==-1) {
-	    // update everything
-	    C.update();
-	    for (var i=0; i<Tools.length; i++)  {
-		Tools[i].update();
-	    }
+	var tool = DRAGGING[3];
+	if (tool==null) {
+	    update_all();
 	} else {
-	    Tools[DRAGGING[3]].update();
+	    tool.update();
 	}
     }
 
@@ -594,13 +645,22 @@ function sandbox() {
     */
     window.onmouseup = function(e) {
 	if (DRAGGING) {
-	    var obj = DRAGGING[0], tool_ix = DRAGGING[3];
+	    var obj = DRAGGING[0], tool = DRAGGING[3];
 	    DRAGGING = null;
-	    if (tool_ix!=-1) {
+	    if (tool!=null) {
 		var closest = C.find_closest_point(obj);
 		if (closest[1]!=-1 && closest[1]<=10) {
-		    Tools[tool_ix].redirect(obj, closest[0]);
-		    Tools[tool_ix].update(); // redraw after snapping
+		    tool.redirect(obj, closest[0]);
+		    if (tool.num_control_points()==0) {
+			tool.create_intersections(C);
+			tool.inject(C);
+			for (var i=0; i<Tools.length; i++) {
+			    if (Tools[i]===tool) { Tools.splice(i, 1); break; }
+			}
+			C.update();
+		    } else {
+			tool.update(); // redraw after snapping
+		    }
 		}
 	    }
 	}
