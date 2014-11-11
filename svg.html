@@ -463,6 +463,20 @@ var Line = Gizmo.extend(function() {
     }
 
     this.recalculate_graphics = function() {
+	// this implementation simply extends the line beyond the screen rectangle
+	var x1 = this.parents[0].x, y1 = this.parents[0].y,
+	    x2 = this.parents[1].x, y2 = this.parents[1].y;
+	var dx = x2-x1, dy = y2-y1;
+	var extend = XS*Math.abs(dy) < YS*Math.abs(dx) ? XS/dx : YS/dy;
+	this.svg.setAttribute("x1", x1-extend*dx);
+	this.svg.setAttribute("y1", y1-extend*dy);
+	this.svg.setAttribute("x2", x1+extend*dx);
+	this.svg.setAttribute("y2", y1+extend*dy);
+    }
+
+
+    /*
+    this.recalculate_graphics = function() {
 	// extend the line to the borders of the display using compute_line_intersection
 	// (this could be optimized)
 	var x1 = this.parents[0].x, y1 = this.parents[0].y,
@@ -483,6 +497,7 @@ var Line = Gizmo.extend(function() {
 	    this.svg.setAttribute("y2", xy_r[1]);
 	}
     }
+    */
 });
 
 
