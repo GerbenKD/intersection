@@ -23,19 +23,14 @@ svg.setAttribute("height", YS);
 
 var SMALL = 0.00001;
 
-function test(x, y, v, name) {
-    if (v && Math.abs(x)>10000 || Math.abs(y)>10000) {
-	console.log(name+" at ("+x+","+y+") is valid but looks iffy");
-    }
-}
 
 var g_lines         = document.createElementNS(svg_namespace, "g");
-var g_highlighted   = document.createElementNS(svg_namespace, "g");
 var g_points        = document.createElementNS(svg_namespace, "g");
+var g_highlighted   = document.createElementNS(svg_namespace, "g");
 var g_controlpoints = document.createElementNS(svg_namespace, "g");
 svg.appendChild(g_lines);
-svg.appendChild(g_highlighted);
 svg.appendChild(g_points);
+svg.appendChild(g_highlighted);
 svg.appendChild(g_controlpoints);
 
 // converts a mouse event to screen coords
@@ -120,12 +115,13 @@ var Construction = new function() {
     }
 
     this.find_all_duplicates = function(dst) {
+	return;
 	console.log("Searching for duplicates");
 	
-	var res = scan_points();
+	var res = scan_points(this.gizmos);
 	var points = res[0], targets = res[1], controls = res[2];
 	var candidates = initialize_candidates(points, targets);
-	test_candidates(controls, candidates);
+	test_candidates(controls, candidates, dst, this);
 	for (var id in candidates) {
 	    var targets = candidates[id][1];
 	    if (targets.length>1) console.error("It appears there are duplicate points in dst");
@@ -134,10 +130,10 @@ var Construction = new function() {
 	return candidates;
 
 	// initialize points, targets and controls arrays
-	function scan_points() {
+	function scan_points(gizmos) {
 	    var points = [], targets = [], controls = [];
-	    for (var i=0; i<this.gizmos.length; i++) {
-		var gizmo = this.gizmos[i];
+	    for (var i=0; i<gizmos.length; i++) {
+		var gizmo = gizmos[i];
 		if (gizmo.is_point && gizmo.valid) points.push(gizmo);
 	    }
 	    
@@ -153,6 +149,7 @@ var Construction = new function() {
 	// reorders the points and targets arrays
 	// returns a mapping src_id -> [src, [dst...]]
 	function initialize_candidates(points, targets) {
+	    console.log("initializing candidates");
 	    function by_coord(p1, p2) { return p1.x-p2.x; }
 	    points.sort(by_coord);
 	    targets.sort(by_coord);
@@ -166,12 +163,17 @@ var Construction = new function() {
 		for (var k=j; k<targets.length; k++) {
 		    var pt_k = targets[k];
 		    if (pt_k.x - pt_i.x >= SMALL) break;
-		    if (pt_i.distance(pt_j) < SMALL) {
+		    if (pt_i.distance(pt_k) < SMALL) {
 			var id = pt_i.id;
 			if (!candidates[id]) candidates[id] = [pt_i, []];
 			candidates[id].push(pt_k);
 		    }
 		}
+	    }
+	    // report results for debugging, TODO disable this
+	    for (var id in candidates) {
+		var src = candidates[id][0];
+		console.log("There is a "+src.toString()+"(id="+id+") with "+candidates[id][1].length+" candidates.");
 	    }
 	    return candidates;
 	}
@@ -186,7 +188,7 @@ var Construction = new function() {
 	    for (var test=0; test<5; test++) {
 
 		// randomize control points and recalculate structure
-		for (var i=0; i<cp.length; i++) {
+		for (var i=0; i<op.length; i++) {
 		    var dx = Math.random()*100-50, dy = Math.random()*100-50;
 		    controls[i].set_position(op[i][0]+dx, op[i][1]+dy);
 		}
@@ -209,6 +211,12 @@ var Construction = new function() {
 		    }
 		}
 	    }
+
+	    // restore original positions
+	    for (var i=0; i<op.length; i++) {
+		controls[i].set_position(op[i][0], op[i][1]);
+	    }
+	    constr1.update(); constr2.update();
 	}
     }
 
@@ -248,11 +256,22 @@ var Construction = new function() {
 		    addci(this, CircleLineIntersections.create(gizmo, lines[j]));
 		}
 		for (var j=0; j<circles.length; j++) {
-		    addci(this, CircleCircleIntersections.create(circles[j], gizmo))
+		    var cci = CircleCircleIntersections.create(circles[j], gizmo);
+		    this.add(cci, 
+			     SingleCircleIntersectionH.create(cci,0),
+			     SingleCircleIntersectionH.create(cci,1));
 		}
 	    }
 	}
     }
+
+    this.report = function() { 
+	for (var i=0; i<this.gizmos.length; i++) {
+	    var gizmo = this.gizmos[i];
+	    console.log("\n\n"+gizmo.toString());
+	}
+    }
+
 }
 
 /*
@@ -354,6 +373,17 @@ var Gizmo = new function() {
     this.hide = function() { this.group.removeChild(this.svg); }
     this.show = function() { this.group.appendChild(this.svg); }
 
+    this.toString = function(indent) {
+	var spc = "";
+	if (!indent) indent=0;
+	for (var i=0; i<indent; i++) { spc+=" "; }
+	var r = spc + this.type+"["+this.id+"/"+(this.valid?"+":"-")+"]:\n";
+	for (var i=0; i<this.parents.length; i++) {
+	    r += this.parents[i].toString(indent+2);
+	}
+	return r;
+    }
+
 }
 
 var Point = Gizmo.extend(function() {
@@ -364,8 +394,6 @@ var Point = Gizmo.extend(function() {
 	var dx = this.x - other.x, dy = this.y - other.y;
 	return Math.sqrt(dx*dx+dy*dy);
     }
-
-    this.toString = function() { return "("+this.x+","+this.y+")"; }
 
     this.recalculate_graphics = function() {
 	this.svg.setAttribute("cx", this.x);
@@ -394,10 +422,16 @@ var ControlPoint = Point.extend(function() {
 			"pointer-events": "all"});
 	this.show();
     }
-    
+
     this.set_position = function(x,y) { 
 	this.x = x;
 	this.y = y; 
+    }
+
+    this.toString = function(indent) {
+	var spc = "";
+	if (indent) for (var i=0; i<indent; i++) { spc+=" "; }
+	return spc+this.type+"["+this.id+"]("+this.x+","+this.y+")\n"; 
     }
 
 });
@@ -410,10 +444,6 @@ var Line = Gizmo.extend(function() {
     this.init = function() {
 	this.svg_create(g_lines, "line", 
 			{"fill": "none", "stroke": "orange", "stroke-width": 1});
-    }
-
-    this.toString = function() {
-	return this.parents[0].toString()+"-"+this.parents[1].toString(); 
     }
 
     this.compute_intersection_coords = function(x1,y1,x2,y2,x3,y3,x4,y4) {
@@ -525,7 +555,6 @@ var LineLineIntersection = ConstructedPoint.extend(function() {
 	} else {
 	    this.valid = false;
 	}
-	//test(this.x, this.y, this.valid, "lli");
     }
 
 });
@@ -539,10 +568,6 @@ var Circle = Gizmo.extend(function() {
     this.init = function() {
 	this.svg_create(g_lines, "circle", 
 			{"fill": "none", "stroke": "orange", "stroke-width": 1});
-    }
-
-    this.toString = function() { 
-	return "("+this.parents[0].x+","+this.parents[0].y+","+this.radius()+")";
     }
 
     this.centre = function() { return this.parents[0]; }
@@ -589,8 +614,6 @@ var CircleLineIntersections = Gizmo.extend(function() {
 	this.y = [cy-D*dx+dy*sqrtR, cy-D*dx-dy*sqrtR];
 	if (!(isFinite(this.x[0]) && isFinite(this.y[0]) &&
 	      isFinite(this.x[1]) && isFinite(this.y[1]))) this.valid = false;
-	// test(this.x[0], this.y[0], this.valid, "cli0");
-	// test(this.x[1], this.y[1], this.valid, "cli1");
     }
 });
 
@@ -602,6 +625,7 @@ var CircleCircleIntersections = Gizmo.extend(function() {
 
     this.recalculate = function() {
 	var centre1 = this.parents[0].centre(), centre2 = this.parents[1].centre();
+	var b1 = this.parents[0].parents[1];
 	var x1 = centre1.x, y1 = centre1.y;
 	var x2 = centre2.x, y2 = centre2.y;
 	var r1 = this.parents[0].radius(), r2 = this.parents[1].radius();
@@ -613,12 +637,16 @@ var CircleCircleIntersections = Gizmo.extend(function() {
 	var dr2 = 0.5*(r1*r1-r2*r2)/d2;
 	var xs = 0.5*(x1+x2)+dx*dr2, xt =  2*dy*K;
 	var ys = 0.5*(y1+y2)+dy*dr2, yt = -2*dx*K;
+
+	// get a consistent ordering of the two intersection points
+	if (xt*(b1.x-x1) + yt*(b1.y-y1) > 0) {
+	    xt = -xt; yt = -yt;
+	}
+	
 	this.x = [xs+xt, xs-xt];
 	this.y = [ys+yt, ys-yt];
 	if (!(isFinite(xs) && isFinite(xt) && isFinite(ys) && isFinite(yt))) 
 	    this.valid = false;
-	// test(this.x[0], this.y[0], this.valid, "cci0");
-	// test(this.x[1], this.y[1], this.valid, "cci1");
     }
 });
 
@@ -636,6 +664,7 @@ var SingleCircleIntersection = ConstructedPoint.extend(function() {
 	instance.parents = [point_collection];
 	instance.which = which;
 	instance.recalculate_check_valid();
+	if (which) instance.svg_attrib({"fill":"red"}); // TODO for debugging
 	return instance;
     }
 
@@ -647,6 +676,12 @@ var SingleCircleIntersection = ConstructedPoint.extend(function() {
 	}
     }
 
+});
+
+var SingleCircleIntersectionH = SingleCircleIntersection.extend(function() {
+    this.init = function() { 
+	this.svg_create(g_highlighted, "circle", {"r": 5, "fill": "green"}); 
+    }
 });
 
 
@@ -700,6 +735,9 @@ function sandbox() {
 	    p2.svg_attrib({"fill": "cyan"});
 	    c_tmp.add(p1, p2, c);
 	    Tools.push(c_tmp);
+	    break;
+	case 52:
+	    C.report();
 	    break;
 	}
     }
