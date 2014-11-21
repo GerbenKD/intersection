@@ -1,4 +1,4 @@
 intersection
 ============
 
-Circles and Lines
+Having fun with Circles and Lines!
