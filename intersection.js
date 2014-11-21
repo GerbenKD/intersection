@@ -712,7 +712,9 @@ function sandbox() {
 
     window.onkeypress = function(e) {
 	var mx = MOUSE[0], my = MOUSE[1];
-	switch (e.keyCode) {
+	var key = e.keyCode || e.charCode;
+	
+	switch (key) {
 	case 48: 
 	    var p = ControlPoint.at(mx, my, mousedown(null)); 
 	    C.add(p); 
@@ -741,6 +743,9 @@ function sandbox() {
 	case 52:
 	    C.report();
 	    break;
+	default:
+		console.log("Unrecognised keycode: "+key);
+		break;
 	}
     }
 
@@ -786,6 +791,7 @@ function sandbox() {
     }
 }
 
+console.log("Hello World!");
 sandbox();
 
 // demo2();
