@@ -41,7 +41,7 @@ function e2coord(e) {
 var Construction = new function() {
 
 	this.empty = function() { return this.gizmos.length==0; }
-	
+
 	this.create = function() {
 		function constructor() { this.gizmos = []; }
 		constructor.prototype = this;
@@ -96,7 +96,7 @@ var Construction = new function() {
 		}
 		gizmo.trash();
 	}
-	
+
 	this.remove_deleted_gizmos = function() {
 		var j=0;
 		for (var i=0; i<this.gizmos.length; i++) {
@@ -104,12 +104,13 @@ var Construction = new function() {
 		}
 		while (this.gizmos.length > j) this.gizmos.pop();
 	}
-	
+
 	// all objects with src as parent are redirected to dst
 	this.redirect = function(src, dst) {
 		this.trash(src);
 		for (var id in src.children) {
 			var child = src.children[id];
+			dst.children[id] = child;
 			if (child.parents) {
 				for (var j=0; j<child.parents.length; j++) {
 					if (child.parents[j]===src) child.parents[j] = dst;
@@ -411,8 +412,7 @@ var Gizmo = new function() {
 		}
 		delete this.id;
 		this.trash();
-		
-		
+
 		for (var id in this.children) {
 			this.children[id].destroy();
 		}
@@ -422,18 +422,20 @@ var Gizmo = new function() {
 		}
 	}
 
-	// destroy me if I have no remaining children, and if I'm destroyed, check if my parents have more children
+	// destroy me if I have no remaining children and if I have more than 1 parent, and if I'm destroyed, check if my parents have more children
 	this.destroy_upstream = function() {
-		if (Object.keys(this.children) == 0) {
-			for (var i=0; i<this.parents.length; i++) {
-				this.parents[i].destroy_upstream();
+		if (this.type != "ControlPoint") {
+			if (Object.keys(this.children) == 0 && this.parents.length < 1) {				
+				for (var i=0; i<this.parents.length; i++) {
+					this.parents[i].destroy_upstream();
+				}
+				delete this.id;
+				this.trash();
 			}
-			delete this.id;
-			this.trash();
 		}
 	}
-	
-	
+
+
 }
 
 var Point = Gizmo.extend(function() {
@@ -760,6 +762,7 @@ var SingleCircleIntersection = IntersectionPoint.extend(function() {
 
 	this.create = function(point_collection, which) {
 		var instance = this.extend(this.init);
+		instance.children = {};
 		instance.parents = [point_collection];
 		instance.which = which;
 		instance.recalculate_check_valid();
@@ -804,7 +807,7 @@ function sandbox() {
 	function find_closest_object(mx, my, classes) {
 		var best_obj = C.find_closest_object(mx, my, classes);
 		best_obj[2] = C;
-		
+
 		for (var i = 0; i < Tools.length; i++) {
 			var res = Tools[i].find_closest_object(mx, my, classes);
 			if (res[1] < best_obj[1]) {
@@ -812,7 +815,7 @@ function sandbox() {
 				best_obj[2] = Tools[i];
 			}
 		}
-		
+
 		return best_obj;
 	}
 
@@ -900,8 +903,8 @@ function sandbox() {
 			DRAGGING = [gizmo, gizmo.x - xy[0], gizmo.y - xy[1], tool];
 		}
 	}
-	
-	
+
+
 	window.onmousemove = function(e) {
 		MOUSE = e2coord(e);
 
@@ -915,14 +918,14 @@ function sandbox() {
 				};
 			} else {
 				classes = {	"ControlPoint": 20,
-							"ToolControlPoint": 20 
+						"ToolControlPoint": 20 
 				};
 			}
 		} else if (DRAGGING[3]) {
 			// We're dragging a ToolControlPoint, highlight snap targets
 			classes = { "ControlPoint": 20,	
-						"LineLineIntersection": 20,
-						"SingleCircleIntersection": 20
+					"LineLineIntersection": 20,
+					"SingleCircleIntersection": 20
 			};
 		}
 
