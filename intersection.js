@@ -40,6 +40,8 @@ function e2coord(e) {
 
 var Construction = new function() {
 
+	this.empty = function() { return this.gizmos.length==0; }
+	
 	this.create = function() {
 		function constructor() { this.gizmos = []; }
 		constructor.prototype = this;
@@ -88,16 +90,21 @@ var Construction = new function() {
 		return [closest_obj, closest_dist];
 	}
 
-	this.trash = function(src) {
+	this.trash = function(gizmo) {
 		for (var i=0; i<this.gizmos.length; i++) {
-			if (src===this.gizmos[i]) {
-				this.gizmos.splice(i, 1);
-				break;
-			}
+			if (gizmo === this.gizmos[i]) { this.gizmos.splice(i,1); break; }
 		}
-		src.trash();
+		gizmo.trash();
 	}
-
+	
+	this.remove_deleted_gizmos = function() {
+		var j=0;
+		for (var i=0; i<this.gizmos.length; i++) {
+			if (this.gizmos[i].id) this.gizmos[j++] = this.gizmos[i];
+		}
+		while (this.gizmos.length > j) this.gizmos.pop();
+	}
+	
 	// all objects with src as parent are redirected to dst
 	this.redirect = function(src, dst) {
 		this.trash(src);
@@ -397,6 +404,36 @@ var Gizmo = new function() {
 		return r;
 	}
 
+	// I'll kill you, kill your children and if your parents have no other children, they're dead too
+	this.destroy = function() {	
+		for (var i=0; i<this.parents.length; i++) {
+			delete this.parents[i].children[this.id];
+		}
+		delete this.id;
+		this.trash();
+		
+		
+		for (var id in this.children) {
+			this.children[id].destroy();
+		}
+		// this.children should now be empty
+		for (var i=0; i<this.parents.length; i++) {
+			this.parents[i].destroy_upstream();
+		}
+	}
+
+	// destroy me if I have no remaining children, and if I'm destroyed, check if my parents have more children
+	this.destroy_upstream = function() {
+		if (Object.keys(this.children) == 0) {
+			for (var i=0; i<this.parents.length; i++) {
+				this.parents[i].destroy_upstream();
+			}
+			delete this.id;
+			this.trash();
+		}
+	}
+	
+	
 }
 
 var Point = Gizmo.extend(function() {
@@ -427,13 +464,12 @@ var ControlPoint = Point.extend(function() {
 	this.type = "ControlPoint";
 	this.valid = true;
 
-	this.at = function(x, y, mousedown) {
+	this.at = function(x, y) {
 		var cp = this.extend(this.init);
 		cp.children = {};
 		cp.parents = [];
 		cp.set_position(x, y);
 		cp.recalculate_graphics();
-		cp.svg.onmousedown = function(e) { mousedown(cp, e); };
 		return cp;
 	}
 
@@ -755,7 +791,7 @@ function sandbox() {
 
 	var C = Construction.create();
 	var Tools = [];
-	var MOUSE = null, DRAGGING = null, HIGHLIGHTED = null;
+	var MOUSE = null, DRAGGING = null, HIGHLIGHTED = null, DELETE_MODE = false;
 
 	function update_all() {
 		C.update();
@@ -765,22 +801,18 @@ function sandbox() {
 	}
 
 
-	function mousedown(tool) {
-		return function(point, event) {
-			var xy = e2coord(event);
-			DRAGGING = [point, point.x - xy[0], point.y - xy[1], tool];
-		}
-	}	
-
 	function find_closest_object(mx, my, classes) {
 		var best_obj = C.find_closest_object(mx, my, classes);
-
+		best_obj[2] = C;
+		
 		for (var i = 0; i < Tools.length; i++) {
 			var res = Tools[i].find_closest_object(mx, my, classes);
 			if (res[1] < best_obj[1]) {
 				best_obj = res;
+				best_obj[2] = Tools[i];
 			}
 		}
+		
 		return best_obj;
 	}
 
@@ -803,17 +835,26 @@ function sandbox() {
 		var key = e.keyCode || e.charCode;
 
 		switch (key) {
-		case 13:
-			delete_object(mx, my);
+		case 46:
+			if (DRAGGING) break;
+			DELETE_MODE = !DELETE_MODE;
+			var body = document.getElementById("body");
+			if (DELETE_MODE) {
+				body.classList.add("delete_mode");
+			} else {
+				body.classList.remove("delete_mode");
+			}
 			break;
 		case 48: 
-			var p = ControlPoint.at(mx, my, mousedown(null)); 
+			if (DELETE_MODE) break;
+			var p = ControlPoint.at(mx, my); 
 			C.add(p); 
 			break;
 		case 49:
+			if (DELETE_MODE) break;
 			var c_tmp = Construction.create();
-			var p1 = ToolControlPoint.at(Math.max(50,mx-0.1*XS),     my, mousedown(c_tmp));
-			var p2 = ToolControlPoint.at(Math.min(XS-50, mx+0.1*XS), my, mousedown(c_tmp));
+			var p1 = ToolControlPoint.at(Math.max(50,mx-0.1*XS),     my);
+			var p2 = ToolControlPoint.at(Math.min(XS-50, mx+0.1*XS), my);
 			var l  = Line.create(p1, p2);
 			p1.svg_attrib({"fill": "cyan"});
 			p2.svg_attrib({"fill": "cyan"});
@@ -821,10 +862,10 @@ function sandbox() {
 			Tools.push(c_tmp);
 			break;
 		case 50:
+			if (DELETE_MODE) break;
 			var c_tmp = Construction.create();
-			var p1 = ToolControlPoint.at(mx, my, mousedown(c_tmp));
-			var p2 = ToolControlPoint.at(mx, my>YS/2 ? my - 0.1*YS : my + 0.1*YS, 
-					mousedown(c_tmp));
+			var p1 = ToolControlPoint.at(mx, my);
+			var p2 = ToolControlPoint.at(mx, my>YS/2 ? my - 0.1*YS : my + 0.1*YS);
 			var c = Circle.create(p1, p2);
 			p1.svg_attrib({"fill": "cyan"});
 			p2.svg_attrib({"fill": "cyan"});
@@ -840,6 +881,27 @@ function sandbox() {
 		}
 	}
 
+	window.onmousedown = function(e) {
+		if (!HIGHLIGHTED) return;
+		var xy = e2coord(e);
+		var gizmo = HIGHLIGHTED.gizmo, tool = HIGHLIGHTED.tool;
+		if (DELETE_MODE) {
+			gizmo.destroy();
+			C.remove_deleted_gizmos();
+			var j=0;
+			for (var i=0; i<Tools.length; i++) {
+				var tl = Tools[i];
+				tl.remove_deleted_gizmos();
+				if (!tl.empty()) { Tools[j] = Tools[i]; j++; } 
+			}
+			while (Tools.length > j) { Tools.pop(); }
+		} else {
+			// gizmo must be a ControlPoint or a ToolControlPoint
+			DRAGGING = [gizmo, gizmo.x - xy[0], gizmo.y - xy[1], tool];
+		}
+	}
+	
+	
 	window.onmousemove = function(e) {
 		MOUSE = e2coord(e);
 
@@ -871,10 +933,10 @@ function sandbox() {
 				var hl = best_obj[1]<=0, sw = HIGHLIGHTED !== best_obj[0];
 				if (HIGHLIGHTED) {
 					// check if old highlight should be removed
-					if (!hl || sw) HIGHLIGHTED.highlight(false);
+					if (!hl || sw) HIGHLIGHTED.gizmo.highlight(false);
 				}
 				if (hl && sw) best_obj[0].highlight(true);
-				HIGHLIGHTED = hl ? best_obj[0] : null;
+				HIGHLIGHTED = hl ? { "gizmo" : best_obj[0], "tool" : best_obj[2] } : null;
 			}
 		}
 
@@ -882,7 +944,7 @@ function sandbox() {
 			var obj = DRAGGING[0], x0 = DRAGGING[1], y0 = DRAGGING[2];
 			obj.set_position(x0+MOUSE[0], y0+MOUSE[1]);
 			var tool = DRAGGING[3];
-			if (tool==null) {
+			if (tool === C) {
 				update_all();
 			} else {
 				tool.update();
@@ -899,20 +961,18 @@ function sandbox() {
 		if (DRAGGING) {
 			var obj = DRAGGING[0], tool = DRAGGING[3];
 			DRAGGING = null;
-			if (tool!=null) {
-				var closest = C.find_closest_point(obj);
-				if (closest[1]!=-1 && closest[1]<=10) {
-					tool.redirect(obj, closest[0]);
-					if (tool.num_control_points()==0) {
-						tool.create_intersections(C);
-						tool.inject(C);
-						for (var i=0; i<Tools.length; i++) {
-							if (Tools[i]===tool) { Tools.splice(i, 1); break; }
-						}
-						C.update();
-					} else {
-						tool.update(); // redraw after snapping
+			if (tool!==C && HIGHLIGHTED) {
+				// Snap this ToolControlPoint to HIGHLIGHTED.gizmo
+				tool.redirect(obj, HIGHLIGHTED.gizmo);
+				if (tool.num_control_points()==0) {
+					tool.create_intersections(C);
+					tool.inject(C);
+					for (var i=0; i<Tools.length; i++) {
+						if (Tools[i]===tool) { Tools.splice(i, 1); break; }
 					}
+					C.update();
+				} else {
+					tool.update(); // redraw after snapping
 				}
 			}
 		}

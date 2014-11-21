@@ -1,5 +1,5 @@
 body.delete_mode {
-	background-color: red;
+	background-color: #808080;
 }
 
 .line,.circle {
@@ -28,7 +28,6 @@ body.delete_mode {
 
 .controlpoint.highlighted, .toolcontrolpoint.highlighted {
 	stroke-width: 5;
-	pointer-events: all;
 }
 
 
