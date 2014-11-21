@@ -463,43 +463,39 @@ var Line = Gizmo.extend(function() {
     }
 
     this.recalculate_graphics = function() {
-	// this implementation simply extends the line beyond the screen rectangle
-	var x1 = this.parents[0].x, y1 = this.parents[0].y,
-	    x2 = this.parents[1].x, y2 = this.parents[1].y;
-	var dx = x2-x1, dy = y2-y1;
-	var extend = XS*Math.abs(dy) < YS*Math.abs(dx) ? XS/dx : YS/dy;
-	this.svg.setAttribute("x1", x1-extend*dx);
-	this.svg.setAttribute("y1", y1-extend*dy);
-	this.svg.setAttribute("x2", x1+extend*dx);
-	this.svg.setAttribute("y2", y1+extend*dy);
-    }
+	var exit1 = extend(this.parents[0], this.parents[1]);
+	var exit2 = extend(this.parents[1], this.parents[0]);
 
-
-    /*
-    this.recalculate_graphics = function() {
-	// extend the line to the borders of the display using compute_line_intersection
-	// (this could be optimized)
-	var x1 = this.parents[0].x, y1 = this.parents[0].y,
-	    x2 = this.parents[1].x, y2 = this.parents[1].y;
-	var xy_l = this.compute_intersection_coords(x1,y1,x2,y2,0, 0, 0,YS);
-	if (!xy_l || !isFinite(xy_l[1]) || xy_l[1]<0 || xy_l[1]>=YS) {
-	    var xy_t = this.compute_intersection_coords(x1,y1,x2,y2,0,0,XS,0);
-	    var xy_b = this.compute_intersection_coords(x1,y1,x2,y2,0,YS,XS,YS);
-	    this.svg.setAttribute("x1", xy_t[0]);
-	    this.svg.setAttribute("y1", 0);
-	    this.svg.setAttribute("x2", xy_b[0]);
-	    this.svg.setAttribute("y2", YS);
-	} else {
-	    var xy_r = this.compute_intersection_coords(x1,y1,x2,y2,XS,0,XS,YS);
-	    this.svg.setAttribute("x1", 0);
-	    this.svg.setAttribute("y1", xy_l[1]);
-	    this.svg.setAttribute("x2", XS);
-	    this.svg.setAttribute("y2", xy_r[1]);
+	if (exit1!=null && exit2 != null) {
+	    this.svg.setAttribute("x1", exit1[0]);
+	    this.svg.setAttribute("y1", exit1[1]);
+	    this.svg.setAttribute("x2", exit2[0]);
+	    this.svg.setAttribute("y2", exit2[1]);
 	}
-    }
-    */
-});
 
+	// If the exits are undefined we can only hope that the old line runs
+	// more or less in the right direction, or that the defining points are
+	// moved to another position quickly! Also, avoid lines with 
+	// parents[0]=parents[1].
+
+	// extends the vector v1 -> v2 to the edge of the screen
+	function extend(v1, v2, v) {
+	    var x = v1.x, dx = v2.x-v1.x, y = v1.y, dy = v2.y-v1.y;
+	    if (dx!=0) {
+		var ix = dx>0 ? XS : 0;
+		var iy = y + (ix-x)/dx * dy;
+		if (iy>=0 && iy<=YS) return [ix, iy];
+	    }
+	    if (dy!=0) {
+		var iy = dy>0 ? YS : 0;
+		var ix = x+(iy-y)/dy * dx
+		if (ix>=0 && ix<=XS) return [ix, iy];
+	    }
+	    return null;
+	}
+
+    }
+});
 
 var ConstructedPoint = Point.extend(function() {
 
@@ -654,7 +650,7 @@ var CircleCircleIntersections = Gizmo.extend(function() {
 	var ys = 0.5*(y1+y2)+dy*dr2, yt = -2*dx*K;
 
 	// get a consistent ordering of the two intersection points
-	if (xt*(b1.x-x1) + yt*(b1.y-y1) > 0) {
+	if (xt*(b1.x-x1) + yt*(b1.y-y1) > SMALL) {
 	    xt = -xt; yt = -yt;
 	}
 	
