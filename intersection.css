@@ -1,0 +1,44 @@
+body.delete_mode {
+	background-color: red;
+}
+
+.line,.circle {
+	fill: none;
+	stroke: orange; 
+	stroke-width: 1;
+}
+
+.line.highlighted, .circle.highlighted {
+	stroke-width: 5;
+}
+
+
+.controlpoint,.toolcontrolpoint {
+	stroke: black;
+	stroke-width: 2;
+}
+
+.controlpoint {
+	fill: blue;
+}
+
+.toolcontrolpoint {
+	fill: cyan;
+}
+
+.controlpoint.highlighted, .toolcontrolpoint.highlighted {
+	stroke-width: 5;
+	pointer-events: all;
+}
+
+
+
+.intersectionpoint {
+	stroke: black;
+	stroke-width: 1;
+	fill: green;
+}
+
+.intersectionpoint.highlighted {
+	stroke-width: 3;
+}
