@@ -1,21 +1,30 @@
+body {
+    border: none;
+    margin: 0px 0px 0px 0px;
+}
+
 body.delete_mode {
 	background-color: #808080;
+}
+
+body.inspect_mode {
+    background-color: #ffe0c0;
 }
 
 .line,.circle {
 	fill: none;
 	stroke: orange; 
-	stroke-width: 1;
+	stroke-width: 1px;
 }
 
 .line.highlighted, .circle.highlighted {
-	stroke-width: 5;
+	stroke-width: 5px;
 }
 
 
 .controlpoint,.toolcontrolpoint {
 	stroke: black;
-	stroke-width: 2;
+	stroke-width: 2px;
 }
 
 .controlpoint {
@@ -27,14 +36,14 @@ body.delete_mode {
 }
 
 .controlpoint.highlighted, .toolcontrolpoint.highlighted {
-	stroke-width: 5;
+	stroke-width: 5px;
 }
 
 
 
 .intersectionpoint {
 	stroke: black;
-	stroke-width: 1;
+	stroke-width: 1px;
 	fill: green;
 }
 

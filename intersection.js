@@ -91,32 +91,34 @@ var Construction = new function() {
 	}
 
 	this.trash = function(gizmo) {
-		for (var i=0; i<this.gizmos.length; i++) {
-			if (gizmo === this.gizmos[i]) { this.gizmos.splice(i,1); break; }
-		}
-		gizmo.trash();
+	    for (var i=0; i<this.gizmos.length; i++) {
+		if (gizmo === this.gizmos[i]) { this.gizmos.splice(i,1); break; }
+	    }
+	    gizmo.remove_svg();
 	}
 
 	this.remove_deleted_gizmos = function() {
-		var j=0;
-		for (var i=0; i<this.gizmos.length; i++) {
-			if (this.gizmos[i].id) this.gizmos[j++] = this.gizmos[i];
-		}
-		while (this.gizmos.length > j) this.gizmos.pop();
+	    var j=0;
+	    for (var i=0; i<this.gizmos.length; i++) {
+		var gizmo = this.gizmos[i];
+		if (gizmo.id != -1) this.gizmos[j++] = gizmo;
+	    }
+	    while (this.gizmos.length > j) this.gizmos.pop();
 	}
-
-	// all objects with src as parent are redirected to dst
-	this.redirect = function(src, dst) {
-		this.trash(src);
-		for (var id in src.children) {
-			var child = src.children[id];
-			dst.children[id] = child;
-			if (child.parents) {
-				for (var j=0; j<child.parents.length; j++) {
-					if (child.parents[j]===src) child.parents[j] = dst;
-				}
-			}
+    
+        // all objects with src as parent are redirected to dst
+        this.redirect = function(src, dst) {
+	    for (var i=0; i<this.gizmos.length; i++) {
+		if (src === this.gizmos[i]) { this.gizmos.splice(i,1); break; }
+	    }
+	    src.remove_svg();
+	    for (var id in src.children) {
+		var child = src.children[id];
+		dst.children[id] = child;
+		for (var j=0; j<child.parents.length; j++) {
+		    if (child.parents[j]===src) child.parents[j] = dst;
 		}
+	    }
 	}
 
 	this.num_control_points = function() {
@@ -335,20 +337,17 @@ var Gizmo = new function() {
 		return instance;
 	}
 
-	this.trash = function() {
-		if (this.svg) { 
-			this.hide();
-			this.svg = null;
-		}
+	this.remove_svg = function() {
+	    if (this.svg) { 
+		this.hide();
+		delete this.svg;
+	    }
 	}
 
 	this.highlight = function(state) {
 		if (this.svg) {
-			if (state) { // on
-				this.svg.classList.add("highlighted");
-			} else { // off
-				this.svg.classList.remove("highlighted");		
-			}
+		    if (state) this.svg.classList.add("highlighted");
+		    else       this.svg.classList.remove("highlighted");		
 		}
 	}
 
@@ -406,36 +405,32 @@ var Gizmo = new function() {
 	}
 
 	// I'll kill you, kill your children and if your parents have no other children, they're dead too
-	this.destroy = function() {	
-		for (var i=0; i<this.parents.length; i++) {
-			delete this.parents[i].children[this.id];
-		}
-		delete this.id;
-		this.trash();
-
-		for (var id in this.children) {
-			this.children[id].destroy();
-		}
-		// this.children should now be empty
-		for (var i=0; i<this.parents.length; i++) {
-			this.parents[i].destroy_upstream();
-		}
+	this.destroy = function() {
+	    var c = []; // this.children should not be modified while iterating over it. So buffer it
+	    for (var id in this.children) {
+		c.push(this.children[id]);
+	    }
+	    for (var i=0; i<c.length; i++) {
+		c[i].destroy();
+	    }
+	    this.children = {};
+	    this.destroy_upstream();
 	}
 
-	// destroy me if I have no remaining children and if I have more than 1 parent, and if I'm destroyed, check if my parents have more children
+	// destroy me if I have no remaining children, 
+        // and if I'm destroyed, check if my parents have more children
 	this.destroy_upstream = function() {
-		if (this.type != "ControlPoint") {
-			if (Object.keys(this.children) == 0 && this.parents.length < 1) {				
-				for (var i=0; i<this.parents.length; i++) {
-					this.parents[i].destroy_upstream();
-				}
-				delete this.id;
-				this.trash();
-			}
+	    if (this.id!=-1 && Object.keys(this.children) == 0) {	
+		this.remove_svg();
+		var p = this.parents;
+		this.id = -1;
+		delete this.parents;
+		for (var i=0; i<p.length; i++) {
+		    delete p[i].children[this.id];
+		    if (p[i].type != "ControlPoint") p[i].destroy_upstream();
 		}
+	    }
 	}
-
-
 }
 
 var Point = Gizmo.extend(function() {
@@ -529,12 +524,12 @@ var Line = Gizmo.extend(function() {
 		if (b_len < SMALL) return null;
 		var b_hat_x = bx / b_len, b_hat_y = by / b_len;
 		var a_scalar = ax * b_hat_x + ay * b_hat_y;
-		return [x1 + b_hat_x * a_scalar, y1 + b_hat_y * a_scalar];
+	    return [x1 + b_hat_x * a_scalar, y1 + b_hat_y * a_scalar];
 	} 
 
 	this.distance_to_coords = function(x,y) {
-		var p = this.project_coords(x,y);
-		return p ? Point.distance(p[0], p[1], x, y) : Infinity;
+	    var p = this.project_coords(x,y);
+	    return p ? Point.distance(p[0], p[1], x, y) : Infinity;
 	}
 
 	this.compute_intersection = function(line1, line2) {
@@ -765,8 +760,8 @@ var SingleCircleIntersection = IntersectionPoint.extend(function() {
 		instance.children = {};
 		instance.parents = [point_collection];
 		instance.which = which;
+	    point_collection.children[instance.id] = instance;
 		instance.recalculate_check_valid();
-		if (which) instance.svg_attrib({"fill":"red"}); // TODO for debugging
 		return instance;
 	}
 
@@ -794,7 +789,7 @@ function sandbox() {
 
 	var C = Construction.create();
 	var Tools = [];
-	var MOUSE = null, DRAGGING = null, HIGHLIGHTED = null, DELETE_MODE = false;
+	var MOUSE = null, DRAGGING = null, HIGHLIGHTED = null, MODE = 0;
 
 	function update_all() {
 		C.update();
@@ -838,23 +833,22 @@ function sandbox() {
 		var key = e.keyCode || e.charCode;
 
 		switch (key) {
-		case 46:
+		case 8: case 46:
 			if (DRAGGING) break;
-			DELETE_MODE = !DELETE_MODE;
 			var body = document.getElementById("body");
-			if (DELETE_MODE) {
-				body.classList.add("delete_mode");
-			} else {
-				body.classList.remove("delete_mode");
-			}
+		        if (MODE==1) body.classList.remove("delete_mode");
+		        if (MODE==2) body.classList.remove("inspect_mode");
+		        MODE = (MODE+1)%3;
+			if (MODE==1) body.classList.add("delete_mode");
+		        if (MODE==2) body.classList.add("inspect_mode");
 			break;
 		case 48: 
-			if (DELETE_MODE) break;
+			if (MODE!=0) break;
 			var p = ControlPoint.at(mx, my); 
 			C.add(p); 
 			break;
 		case 49:
-			if (DELETE_MODE) break;
+			if (MODE!=0) break;
 			var c_tmp = Construction.create();
 			var p1 = ToolControlPoint.at(Math.max(50,mx-0.1*XS),     my);
 			var p2 = ToolControlPoint.at(Math.min(XS-50, mx+0.1*XS), my);
@@ -865,7 +859,7 @@ function sandbox() {
 			Tools.push(c_tmp);
 			break;
 		case 50:
-			if (DELETE_MODE) break;
+			if (MODE!=0) break;
 			var c_tmp = Construction.create();
 			var p1 = ToolControlPoint.at(mx, my);
 			var p2 = ToolControlPoint.at(mx, my>YS/2 ? my - 0.1*YS : my + 0.1*YS);
@@ -874,9 +868,6 @@ function sandbox() {
 			p2.svg_attrib({"fill": "cyan"});
 			c_tmp.add(p1, p2, c);
 			Tools.push(c_tmp);
-			break;
-		case 52:
-			C.report();
 			break;
 		default:
 			console.log("Unrecognised keycode: "+key);
@@ -888,19 +879,27 @@ function sandbox() {
 		if (!HIGHLIGHTED) return;
 		var xy = e2coord(e);
 		var gizmo = HIGHLIGHTED.gizmo, tool = HIGHLIGHTED.tool;
-		if (DELETE_MODE) {
-			gizmo.destroy();
-			C.remove_deleted_gizmos();
-			var j=0;
-			for (var i=0; i<Tools.length; i++) {
-				var tl = Tools[i];
-				tl.remove_deleted_gizmos();
-				if (!tl.empty()) { Tools[j] = Tools[i]; j++; } 
-			}
-			while (Tools.length > j) { Tools.pop(); }
-		} else {
-			// gizmo must be a ControlPoint or a ToolControlPoint
-			DRAGGING = [gizmo, gizmo.x - xy[0], gizmo.y - xy[1], tool];
+	        switch(MODE) {
+		case 0:
+		    // gizmo must be a ControlPoint or a ToolControlPoint
+		    gizmo.highlight(false);
+		    HIGHLIGHTED = null;
+		    DRAGGING = [gizmo, gizmo.x - xy[0], gizmo.y - xy[1], tool];
+		    break;
+		case 1:
+		    gizmo.destroy();
+		    C.remove_deleted_gizmos();
+		    var j=0;
+		    for (var i=0; i<Tools.length; i++) {
+			var tl = Tools[i];
+			tl.remove_deleted_gizmos();
+			if (!tl.empty()) Tools[j++] = Tools[i]; 
+		    }
+		    while (Tools.length > j) { Tools.pop(); }
+		    break;
+		case 2:
+		    console.log(gizmo.toString());
+		    break;
 		}
 	}
 
@@ -910,17 +909,32 @@ function sandbox() {
 
 		var classes = null;
 		if (!DRAGGING) {
-			if (DELETE_MODE) {
-				classes = { "ControlPoint": 20,
-						"ToolControlPoint": 20,
-						"Line": 10,
-						"Circle": 10
-				};
-			} else {
-				classes = {	"ControlPoint": 20,
-						"ToolControlPoint": 20 
-				};
-			}
+		    switch (MODE) {
+		    case 0:
+			classes = {
+			    "ControlPoint": 20,
+			    "ToolControlPoint": 20 
+			};
+			break;
+		    case 1:
+			classes = { 
+			    "ControlPoint": 20,
+			    "ToolControlPoint": 20,
+			    "Line": 10,
+			    "Circle": 10
+			};
+			break;
+		    case 2:
+			classes = {
+			    "ControlPoint": 20,
+			    "ToolControlPoint": 20,
+			    "IntersectionPoint": 20,
+			    "LineLineIntersection": 20,
+			    "SingleCircleIntersection": 20,
+			    "Line": 10,
+			    "Circle": 10
+			};
+		    }
 		} else if (DRAGGING[3]) {
 			// We're dragging a ToolControlPoint, highlight snap targets
 			classes = { "ControlPoint": 20,	
@@ -930,8 +944,7 @@ function sandbox() {
 		}
 
 		if (classes) {
-			var best_obj = find_closest_object(MOUSE[0], MOUSE[1], classes);
-
+		    var best_obj = find_closest_object(MOUSE[0], MOUSE[1], classes);
 			if (best_obj[0]) {
 				var hl = best_obj[1]<=0, sw = HIGHLIGHTED !== best_obj[0];
 				if (HIGHLIGHTED) {
