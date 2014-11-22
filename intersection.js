@@ -410,24 +410,24 @@ var Gizmo = new function() {
 	    for (var id in this.children) {
 		c.push(this.children[id]);
 	    }
-	    for (var i=0; i<c.length; i++) {
-		c[i].destroy();
+	    if (c.length>0) {
+		this.children = {};
+		for (var i=0; i<c.length; i++) { c[i].destroy(); }
+	    } else { 
+		this.destroy_upstream();
 	    }
-	    this.children = {};
-	    this.destroy_upstream();
 	}
 
 	// destroy me if I have no remaining children, 
         // and if I'm destroyed, check if my parents have more children
 	this.destroy_upstream = function() {
-	    if (this.id!=-1 && Object.keys(this.children) == 0) {	
-		this.remove_svg();
-		var p = this.parents;
-		this.id = -1;
-		delete this.parents;
-		for (var i=0; i<p.length; i++) {
-		    delete p[i].children[this.id];
-		    if (p[i].type != "ControlPoint") p[i].destroy_upstream();
+	    this.remove_svg();
+	    var id = this.id;      this.id = -1;
+	    var p  = this.parents; this.parents = [];
+	    for (var i=0; i<p.length; i++) {
+		delete p[i].children[id];
+		if (Object.keys(p[i].children) == 0 && p[i].type != "ControlPoint") {
+		    p[i].destroy_upstream();
 		}
 	    }
 	}
