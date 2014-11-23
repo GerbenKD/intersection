@@ -1,7 +1,6 @@
 "use strict";
 
 function main() {
-
     var C = Construction.create();
     var Tools = [];
     var MOUSE = null, DRAGGING = null, HIGHLIGHTED = null, MODE = 0;

@@ -4,11 +4,39 @@ var Gizmo = new function() {
 
     this.valid = false;
 
+    var classes = {}; // maps classes to classnames
+
+    this.get_class_mask = function(classnames) {
+	var mask = 0;
+	for (var i=0; i<classnames.length; i++) { mask |= classes[classnames[i]]; }
+	return mask;
+    }
+
+    this.is_a = function(classname) {
+	return this.class_mask & classes[classname];
+    }
+
+    this.is_among_mask = function(mask) {
+	return this.class_mask & mask;
+    }
+
+    this.is_among = function(classnames) {
+	return this.is_among_mask(Gizmo.get_class_mask(classnames));
+    }
+
     // Conveniently construct a subclass. All members are given an id.
-    this.extend = function(constr) {
-	constr.prototype = this;
-	return new constr();
-    };
+    this.extend = function() { 
+	var class_bit = 1;
+	return function(classname, constr) {
+	    constr.prototype = this;
+	    var derived = new constr();
+	    derived.class_mask = this.class_mask | class_bit;
+	    derived.type = classname;
+	    classes[classname] = class_bit;
+	    class_bit += class_bit;
+	    return derived;
+	}
+    }();
 
     /* Call with an object containing any extra fields the instance should have.
        This object should at least contain a 'parents' field. It creates the following automatically:
@@ -107,7 +135,7 @@ var Gizmo = new function() {
 	    this.children = {};
 	    for (var i=0; i<c.length; i++) { c[i].destroy(); }
 	}
-	if (c.length==0 || this.type == "ControlPoint" || this.type == "ToolControlPoint") {
+	if (c.length==0 || this.is_among(["ControlPoint", "ToolControlPoint"])) {
 	    this.destroy_upstream();
 	}
     }
@@ -120,16 +148,14 @@ var Gizmo = new function() {
 	var p  = this.parents; this.parents = [];
 	for (var i=0; i<p.length; i++) {
 	    delete p[i].children[id];
-	    if (Object.keys(p[i].children) == 0 && p[i].type != "ControlPoint") {
+	    if (Object.keys(p[i].children) == 0 && !p[i].is_a("ControlPoint")) {
 		p[i].destroy_upstream();
 	    }
 	}
     }
 }
 
-var Point = Gizmo.extend(function() {
-
-    this.is_point = true;
+var Point = Gizmo.extend("Point", function() {
 
     this.distance = function(x1,y1,x2,y2) { 
 	var dx = x1-x2, dy = y1-y2;
@@ -149,9 +175,8 @@ var Point = Gizmo.extend(function() {
     }
 });
 
-var ControlPoint = Point.extend(function() {
+var ControlPoint = Point.extend("ControlPoint", function() {
 
-    this.type = "ControlPoint";
     this.valid = true;
 
     this.init = function() {
@@ -173,8 +198,7 @@ var ControlPoint = Point.extend(function() {
 
 });
 
-var ToolControlPoint = ControlPoint.extend(function() {
-    this.type = "ToolControlPoint";
+var ToolControlPoint = ControlPoint.extend("ToolControlPoint", function() {
     this.init = function() {
 	this.svg_create(Graphics.G_POINTS, "circle", "toolcontrolpoint");
 	this.svg_attrib({"r": "10"});
@@ -182,10 +206,7 @@ var ToolControlPoint = ControlPoint.extend(function() {
     }
 });
 
-var Line = Gizmo.extend(function() {
-
-    this.type = "Line";
-    this.is_line = true;
+var Line = Gizmo.extend("Line", function() {
 
     this.init = function() {
 	this.svg_create(Graphics.G_LINES, "line", "line");
@@ -257,9 +278,7 @@ var Line = Gizmo.extend(function() {
     }
 });
 
-var IntersectionPoint = Point.extend(function() {
-
-    this.type = "IntersectionPoint";
+var IntersectionPoint = Point.extend("IntersectionPoint", function() {
 
     this.find_duplicates = function() {
 	// find number of control points and back up their coordinates
@@ -311,9 +330,7 @@ var IntersectionPoint = Point.extend(function() {
 });
 
 
-var LineLineIntersection = IntersectionPoint.extend(function() {
-
-    this.type = "LineLineIntersection";
+var LineLineIntersection = IntersectionPoint.extend("LineLineIntersection", function() {
 
     this.init = function() { 
 	this.svg_create(Graphics.G_POINTS, "circle", "intersectionpoint");
@@ -334,10 +351,7 @@ var LineLineIntersection = IntersectionPoint.extend(function() {
 });
 
 
-var Circle = Gizmo.extend(function() {
-
-    this.type = "Circle";
-    this.is_circle = true;
+var Circle = Gizmo.extend("Circle", function() {
 
     this.init = function() {
 	this.svg_create(Graphics.G_LINES, "circle", "circle");
@@ -366,9 +380,7 @@ var Circle = Gizmo.extend(function() {
     }
 });
 
-var CircleLineIntersections = Gizmo.extend(function() {
-
-    this.type = "CircleLineIntersections";
+var CircleLineIntersections = Gizmo.extend("CircleLineIntersections", function() {
 
     this.init = function() {}
 
@@ -392,9 +404,7 @@ var CircleLineIntersections = Gizmo.extend(function() {
     }
 });
 
-var CircleCircleIntersections = Gizmo.extend(function() {
-
-    this.type = "CircleCircleIntersections";
+var CircleCircleIntersections = Gizmo.extend("CircleCircleIntersections", function() {
 
     this.init = function() {}
 
@@ -426,9 +436,7 @@ var CircleCircleIntersections = Gizmo.extend(function() {
 });
 
 
-var SingleCircleIntersection = IntersectionPoint.extend(function() {
-
-    this.type = "SingleCircleIntersection";
+var SingleCircleIntersection = IntersectionPoint.extend("SingleCircleIntersection", function() {
 
     this.init = function() { 
 	this.svg_create(Graphics.G_POINTS, "circle", "intersectionpoint");

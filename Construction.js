@@ -33,15 +33,15 @@ var Construction = new function() {
      * The associated value determines the slack, which is subtracted from the distance to get control over
      * the priority.
      */
-    this.find_closest_object = function(mx, my, classes) {
+    this.find_closest_object = function(mx, my, class_map) {
 	var closest_obj = null, closest_dist=Infinity;
 	for (var i=0; i<this.gizmos.length; i++) {
 	    var gizmo = this.gizmos[i];
-	    if (!gizmo.valid || !gizmo.svg) continue; // this guy is not on the screen
+	    if (!gizmo.valid || !gizmo.svg) continue;
 	    var slack = 0;
-	    if (classes) {
-		if (!(gizmo.type in classes)) continue;
-		slack = classes[gizmo.type];
+	    if (class_map) {
+		if (!(gizmo.type in class_map)) continue;
+		slack = class_map[gizmo.type];
 	    }
 	    var d = gizmo.distance_to_coords(mx, my)-slack;
 	    if (d<closest_dist) {
@@ -207,8 +207,8 @@ var Construction = new function() {
 	var lines = [], circles = [];
 	for (var i=0; i<other.gizmos.length; i++) {
 	    var gizmo = other.gizmos[i];
-	    if      (gizmo.is_line)   lines.push(gizmo);
-	    else if (gizmo.is_circle) circles.push(gizmo);
+	    if      (gizmo.is_a("Line"))   lines.push(gizmo);
+	    else if (gizmo.is_a("Circle")) circles.push(gizmo);
 	}
 
 	function addci(construction, ci) { 
@@ -221,14 +221,14 @@ var Construction = new function() {
 	    var gizmo = this.gizmos[i];
 
 	    // create all intersections with lines in other
-	    if (gizmo.is_line) {
+	    if (gizmo.is_a("Line")) {
 		for (var j=0; j<lines.length; j++) {
 		    this.add(LineLineIntersection.create({"parents": [gizmo,lines[j]]}));
 		}
 		for (var j=0; j<circles.length; j++) {
 		    addci(this, CircleLineIntersections.create({"parents": [circles[j], gizmo]}));
 		}
-	    } else if (gizmo.is_circle) {
+	    } else if (gizmo.is_a("Circle")) {
 		for (var j=0; j<lines.length; j++) {
 		    addci(this, CircleLineIntersections.create({"parents": [gizmo, lines[j]]}));
 		}
