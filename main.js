@@ -90,6 +90,7 @@ function main() {
 	    console.log("Unrecognised keycode: "+key);
 	    break;
 	}
+	highlight();
     }
 
     window.onmousedown = function(e) {
@@ -118,12 +119,10 @@ function main() {
 	    console.log(gizmo.toString());
 	    break;
 	}
+	highlight();
     }
 
-
-    window.onmousemove = function(e) {
-	MOUSE = Graphics.e2coord(e);
-
+    function highlight() {
 	var classes = null;
 	if (!DRAGGING) {
 	    switch (MODE) {
@@ -152,14 +151,13 @@ function main() {
 		    "Circle": 10
 		};
 	    }
-	} else if (DRAGGING[3]) {
+	} else if (DRAGGING[0].is_a("ToolControlPoint")) {
 	    // We're dragging a ToolControlPoint, highlight snap targets
 	    classes = { "ControlPoint": 20,	
 			"LineLineIntersection": 20,
 			"SingleCircleIntersection": 20
 		      };
 	}
-
 	if (classes) {
 	    var best_obj = find_closest_object(MOUSE[0], MOUSE[1], classes);
 	    if (best_obj[0]) {
@@ -172,7 +170,11 @@ function main() {
 		HIGHLIGHTED = hl ? { "gizmo" : best_obj[0], "tool" : best_obj[2] } : null;
 	    }
 	}
+    }
 
+    window.onmousemove = function(e) {
+	MOUSE = Graphics.e2coord(e);
+	highlight();
 	if (DRAGGING) {
 	    var obj = DRAGGING[0], x0 = DRAGGING[1], y0 = DRAGGING[2];
 	    obj.set_position(x0+MOUSE[0], y0+MOUSE[1]);
@@ -206,6 +208,7 @@ function main() {
 		    tool.update(); // redraw after snapping
 		}
 	    }
+	    highlight();
 	}
     }
 }
