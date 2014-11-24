@@ -153,7 +153,7 @@ var Gizmo = new function() {
 	    }
 	}
     }
-}
+};
 
 var Point = Gizmo.extend("Point", function() {
 

@@ -42,6 +42,14 @@ function main() {
 	console.log(best_obj[0].toString());
     }
 
+    function load() {
+    }
+
+    function save() {
+	var str = C.stringify();
+	console.log(str);
+    }
+
     window.onkeypress = function(e) {
 	var mx = MOUSE[0], my = MOUSE[1];
 	var key = e.keyCode || e.charCode;
@@ -85,6 +93,12 @@ function main() {
 	    break;
 	case 100:
 	    if (MODE==0) undo(false);
+	    break;
+	case 108: 
+	    if (MODE==0) load();
+	    break;
+	case 115:
+	    if (MODE==0) save(); 
 	    break;
 	default:
 	    console.log("Unrecognised keycode: "+key);

@@ -249,6 +249,61 @@ var Construction = new function() {
 	}
     }
 
+    this.stringify = function() {
+	// copy all fields in case a construction is ever given more fields than just the gizmos array
+	var c = {};
+	for (var key in this) {
+	    if (this.hasOwnProperty(key)) c[key] = this[key]; 
+	}
+	// indirectify all gizmos
+	c.gizmos = [];
+	for (var i=0; i<this.gizmos.length; i++) {
+	    // replace all parents/children by id arrays
+	    var gizmo = this.gizmos[i];
+	    var igizmo = {};
+	    for (var key in gizmo) {
+		if (gizmo.hasOwnProperty(key)) igizmo[key] = gizmo[key]; 
+	    }
+	    var p = [];
+	    for (var j=0; j<gizmo.parents.length; j++) {
+		p.push(gizmo.parents[j].id);
+	    }
+	    igizmo.parents = p;
+	    igizmo.children = Object.keys(gizmo.children);
+	    c.gizmos.push(igizmo);
+	}
+	return JSON.stringify(c);
+    }
+
+    this.unpack = function(json) {
+	var c = JSON.parse(json);
+	// create id->object map for all gizmos
+	var map = {};
+	for (var i=0; i<indirect.gizmos.length; i++) {
+	    var igizmo = c.gizmos[i];
+	    var gizmo = Object.create(window[igizmo.type]);
+	    for (var key in igizmo) {
+		if (igizmo.hasOwnProperty(key)) gizmo[key] = igizmo[key]; 
+	    }
+	    map[gizmo.id] = gizmo;
+	    c.gizmos[i] = gizmo;
+	}
+	// deref child/parent links for all gizmos
+	for (var i=0; i<c.gizmos.length; i++) {
+	    var gizmo = c.gizmos[i];
+	    for (var j=0; j<gizmo.parents.length; j++) {
+		gizmo.parents[j] = map[gizmo.parents[j]];
+	    }
+	    var children = {};
+	    for (var j=0; j<gizmo.children.length; j++) {
+		children[gizmo.children[j]] = map[gizmo.children[j]];
+	    }
+	    gizmo.children = children;
+	}
+	return c;
+    }
+
+
 }
 
 /*
