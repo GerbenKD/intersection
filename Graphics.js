@@ -6,13 +6,19 @@ var Graphics = new function() {
     this.YS              = window.innerHeight;
     this.SVG_NS = "http://www.w3.org/2000/svg";
 
+
+    this.groups = function() {
+	var g = {};
+	for (var i=0; i<arguments.length; i++) {
+	    var name = arguments[i];
+	    g[name] = document.getElementById(name);
+	}
+	return g;
+    }("lines", "points", "highlighted", "controlpoints");
+
     // html elements
     this.BODY            = document.getElementById("body");
     this.SVG             = document.getElementById("svg");
-    this.G_LINES         = document.getElementById("lines");
-    this.G_POINTS        = document.getElementById("points");
-    this.G_HIGHLIGHTED   = document.getElementById("highlighted");
-    this.G_CONTROLPOINTS = document.getElementById("controlpoints");
 
     this.SVG.setAttribute("width",  this.XS);
     this.SVG.setAttribute("height", this.YS);
@@ -34,8 +40,8 @@ var Graphics = new function() {
 	}
     }
 
-    this.hide = function(group, elt) { group.removeChild(elt); }
-    this.show = function(group, elt) { group.appendChild(elt); }
+    this.hide = function(group, elt) { this.groups[group].removeChild(elt); }
+    this.show = function(group, elt) { this.groups[group].appendChild(elt); }
 
      //converts a mouse event to screen coords
     this.e2coord = function(e) {

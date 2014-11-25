@@ -43,11 +43,11 @@ function main() {
     }
 
     function load() {
+	C.unpack(localStorage.testsave);
     }
 
     function save() {
-	var str = C.stringify();
-	console.log(str);
+	localStorage.testsave = C.stringify();
     }
 
     window.onkeypress = function(e) {

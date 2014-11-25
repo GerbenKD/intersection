@@ -18,8 +18,7 @@ var Construction = new function() {
 
     this.update = function() {
 	for (var i=0; i<this.gizmos.length; i++) {
-	    var gizmo = this.gizmos[i];
-	    gizmo.recalculate_check_valid();
+	    this.gizmos[i].recalculate_check_valid();
 	}
     }
 
@@ -249,61 +248,68 @@ var Construction = new function() {
 	}
     }
 
+    /* This function modifies all gizmos in this construction so they can be JSON.stringified appropriately.
+       The following fields are changed to allow this:
+       - parents: replaced by an array of parent ids
+       - children: replaced by an array of children ids
+       - svg: removed (reconstructed upon unpacking if the gizmo has a group field)
+       - valid: removed (recalculated upon unpacking)
+       - type: lifted to instance in order to be able to reconstruct prototype
+    */
     this.stringify = function() {
-	// copy all fields in case a construction is ever given more fields than just the gizmos array
-	var c = {};
-	for (var key in this) {
-	    if (this.hasOwnProperty(key)) c[key] = this[key]; 
-	}
 	// indirectify all gizmos
-	c.gizmos = [];
+	var held_back = { "children": true, "parents": true, "svg": true, "valid": true };
+	var a = [];
 	for (var i=0; i<this.gizmos.length; i++) {
 	    // replace all parents/children by id arrays
 	    var gizmo = this.gizmos[i];
 	    var igizmo = {};
 	    for (var key in gizmo) {
-		if (gizmo.hasOwnProperty(key)) igizmo[key] = gizmo[key]; 
+		if ((key=="type" || gizmo.hasOwnProperty(key)) && !held_back[key]) igizmo[key] = gizmo[key]; 
 	    }
 	    var p = [];
 	    for (var j=0; j<gizmo.parents.length; j++) {
 		p.push(gizmo.parents[j].id);
 	    }
 	    igizmo.parents = p;
-	    igizmo.children = Object.keys(gizmo.children);
-	    c.gizmos.push(igizmo);
+	    igizmo.children = Object.keys(gizmo.children).map(function(s){return s|0;});
+	    a.push(igizmo);
 	}
-	return JSON.stringify(c);
+	return JSON.stringify(a);
     }
 
+    // Unpack the json string and add to this construction.
     this.unpack = function(json) {
-	var c = JSON.parse(json);
-	// create id->object map for all gizmos
-	var map = {};
-	for (var i=0; i<indirect.gizmos.length; i++) {
-	    var igizmo = c.gizmos[i];
-	    var gizmo = Object.create(window[igizmo.type]);
+	var a = JSON.parse(json);
+	var first_new = this.gizmos.length;
+	// create old_id -> object map for all gizmos
+	var map = {}; // map old id to new gizmo
+	var held_back = { "type": true, "id": true }; 
+	for (var i=0; i<a.length; i++) {
+	    var igizmo = a[i];
+	    var gizmo = window[igizmo.type].instantiate({}); // note gizmo has a new id
 	    for (var key in igizmo) {
-		if (igizmo.hasOwnProperty(key)) gizmo[key] = igizmo[key]; 
+		if (igizmo.hasOwnProperty(key) && !held_back[key]) gizmo[key] = igizmo[key]; 
 	    }
-	    map[gizmo.id] = gizmo;
-	    c.gizmos[i] = gizmo;
+	    map[igizmo.id] = gizmo;
+	    this.gizmos.push(gizmo);
 	}
-	// deref child/parent links for all gizmos
-	for (var i=0; i<c.gizmos.length; i++) {
-	    var gizmo = c.gizmos[i];
+	// deref child/parent links for all new gizmos
+	for (var i=first_new; i<this.gizmos.length; i++) {
+	    var gizmo = this.gizmos[i];
 	    for (var j=0; j<gizmo.parents.length; j++) {
 		gizmo.parents[j] = map[gizmo.parents[j]];
 	    }
 	    var children = {};
 	    for (var j=0; j<gizmo.children.length; j++) {
-		children[gizmo.children[j]] = map[gizmo.children[j]];
+		var ch = map[gizmo.children[j]];
+		children[ch.id] = ch;
 	    }
 	    gizmo.children = children;
 	}
-	return c;
+
+	this.update();
     }
-
-
 }
 
 /*

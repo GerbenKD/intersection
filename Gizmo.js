@@ -2,8 +2,6 @@
 
 var Gizmo = new function() {
 
-    this.valid = false;
-
     var classes = {}; // maps classes to classnames
 
     this.get_class_mask = function(classnames) {
@@ -43,15 +41,14 @@ var Gizmo = new function() {
        - id
        - parents = [] (unless supplied)
        - children = {}
-       It also adds itself as a child to all parents, and recalculates its position.
+       It also adds itself as a child to all parents.
     */
-    this.create = function() {
+    this.instantiate = function() {
 	var id = 0;
 	return function(initial) {
-	    this.init.prototype = this;
-	    var instance = new this.init();
+	    var instance = Object.create(this);
 	    for (var key in initial) {
-		instance[key] = initial[key];
+		if (initial.hasOwnProperty(key)) instance[key] = initial[key];
 	    }
 	    if (!("parents" in instance)) instance.parents = [];
 	    instance.id = id++;
@@ -60,10 +57,15 @@ var Gizmo = new function() {
 		var parent = instance.parents[i];
 		parent.children[instance.id]=instance;
 	    }
-	    instance.recalculate_check_valid();
 	    return instance;
 	}
     }();
+
+    this.create = function(initial) {
+	var instance = this.instantiate(initial);
+	instance.recalculate_check_valid();
+	return instance;
+    }
 
     this.remove_svg = function() {
 	if (this.svg) { 
@@ -73,10 +75,9 @@ var Gizmo = new function() {
     }
 
     this.highlight = function(state) {
-	if (this.svg) {
-	    if (state) Graphics.add_class(this.svg, "highlighted");
-	    else       Graphics.remove_class(this.svg, "highlighted");		
-	}
+	if (!this.svg) this.init_graphics();
+	if (state) Graphics.add_class(this.svg, "highlighted");
+	else       Graphics.remove_class(this.svg, "highlighted");		
     }
 
     this.recalculate = function() {}
@@ -88,31 +89,34 @@ var Gizmo = new function() {
 		if (!this.parents[i].valid) { v = false; break; }
 	    }
 	}
-	var old_valid = this.valid;
+	var old_valid = this.valid || false;
 	this.valid = v;
 	if (v) this.recalculate();
 	// change visibility if validity changed
-	if (this.svg) {
+	if (this.init_graphics) {
 	    if (this.valid) {
+		if (!this.svg) this.init_graphics();
 		this.recalculate_graphics();
 		if (!old_valid) this.show();
 	    } else {
 		if (old_valid) this.hide();
 	    }
 	}
-
     }
 
     //	Start out hidden. Show upon recalculate_check_valid
-    this.svg_create = function(group, name, clazz) {
-	this.group = group;
+    this.svg_create = function(name, clazz) {
 	this.svg = Graphics.svg_create(name, clazz);
     }
 
     this.svg_attrib = function(attrib) { Graphics.svg_attrib(this.svg, attrib); }
 
     this.hide = function() { Graphics.hide(this.group, this.svg); }
-    this.show = function() { Graphics.show(this.group, this.svg); }
+
+    this.show = function() {
+	if (!this.svg) this.init_graphics();
+	Graphics.show(this.group, this.svg); 
+    }
 
     this.toString = function(indent) {
 	var spc = "";
@@ -157,6 +161,8 @@ var Gizmo = new function() {
 
 var Point = Gizmo.extend("Point", function() {
 
+    this.group = "points";
+
     this.distance = function(x1,y1,x2,y2) { 
 	var dx = x1-x2, dy = y1-y2;
 	return Math.sqrt(dx*dx+dy*dy);
@@ -177,12 +183,9 @@ var Point = Gizmo.extend("Point", function() {
 
 var ControlPoint = Point.extend("ControlPoint", function() {
 
-    this.valid = true;
-
-    this.init = function() {
-	this.svg_create(Graphics.G_POINTS, "circle", "controlpoint");
+    this.init_graphics = function() {
+	this.svg_create("circle", "controlpoint");
 	this.svg_attrib({"r": "10"});
-	this.show();
     }
 
     this.set_position = function(x,y) { 
@@ -199,17 +202,17 @@ var ControlPoint = Point.extend("ControlPoint", function() {
 });
 
 var ToolControlPoint = ControlPoint.extend("ToolControlPoint", function() {
-    this.init = function() {
-	this.svg_create(Graphics.G_POINTS, "circle", "toolcontrolpoint");
+    this.init_graphics = function() {
+	this.svg_create("circle", "toolcontrolpoint");
 	this.svg_attrib({"r": "10"});
-	this.show();
     }
 });
 
 var Line = Gizmo.extend("Line", function() {
 
-    this.init = function() {
-	this.svg_create(Graphics.G_LINES, "line", "line");
+    this.init_graphics = function() {
+	this.group = "lines";
+	this.svg_create("line", "line");
     }
 
     this.compute_intersection_coords = function(x1,y1,x2,y2,x3,y3,x4,y4) {
@@ -332,8 +335,8 @@ var IntersectionPoint = Point.extend("IntersectionPoint", function() {
 
 var LineLineIntersection = IntersectionPoint.extend("LineLineIntersection", function() {
 
-    this.init = function() { 
-	this.svg_create(Graphics.G_POINTS, "circle", "intersectionpoint");
+    this.init_graphics = function() { 
+	this.svg_create("circle", "intersectionpoint");
 	this.svg_attrib({"r": "5"});
     }
 
@@ -353,8 +356,9 @@ var LineLineIntersection = IntersectionPoint.extend("LineLineIntersection", func
 
 var Circle = Gizmo.extend("Circle", function() {
 
-    this.init = function() {
-	this.svg_create(Graphics.G_LINES, "circle", "circle");
+    this.init_graphics = function() {
+	this.group = "lines";
+	this.svg_create("circle", "circle");
     }
 
     this.centre = function() { return this.parents[0]; }
@@ -382,8 +386,6 @@ var Circle = Gizmo.extend("Circle", function() {
 
 var CircleLineIntersections = Gizmo.extend("CircleLineIntersections", function() {
 
-    this.init = function() {}
-
     this.recalculate = function() {
 	var circle = this.parents[0], line = this.parents[1];
 	var cx = circle.centre().x, cy = circle.centre().y, 
@@ -405,8 +407,6 @@ var CircleLineIntersections = Gizmo.extend("CircleLineIntersections", function()
 });
 
 var CircleCircleIntersections = Gizmo.extend("CircleCircleIntersections", function() {
-
-    this.init = function() {}
 
     this.recalculate = function() {
 	var centre1 = this.parents[0].centre(), centre2 = this.parents[1].centre();
@@ -438,8 +438,8 @@ var CircleCircleIntersections = Gizmo.extend("CircleCircleIntersections", functi
 
 var SingleCircleIntersection = IntersectionPoint.extend("SingleCircleIntersection", function() {
 
-    this.init = function() { 
-	this.svg_create(Graphics.G_POINTS, "circle", "intersectionpoint");
+    this.init_graphics = function() { 
+	this.svg_create("circle", "intersectionpoint");
 	this.svg_attrib({"r": "5"});
     }
 
