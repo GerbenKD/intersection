@@ -3,8 +3,10 @@
 function main() {
     var C = Construction.create();
     var Tools = [];
-    var MOUSE = null, DRAGGING = null, HIGHLIGHTED = null, MODE = 0;
+    var MOUSE = null, DRAGGING = null, HIGHLIGHTED = null;
 
+    Graphics.BODY.oncontextmenu = function() { return false; } // disable right click menu
+    
     function update_all() {
 	C.update();
 	for (var i=0; i<Tools.length; i++) {
@@ -12,13 +14,32 @@ function main() {
 	}
     }
 
+    // convenience class that extracts the edit mode from an event
+    var mode = function() {
+	var prev_mode = null;
+	return function(e) {
+	    var m = e.ctrlKey
+		? (e.shiftKey ? "inspect" : "delete") 
+		: (e.shiftKey ? "hide"    : "normal");
+	    if (m!=prev_mode) {
+		if (prev_mode!=null) {
+		    if (prev_mode!="normal") Graphics.remove_class(Graphics.BODY, prev_mode+"_mode");
+		}
+		Graphics.add_class(Graphics.BODY, m+"_mode");
+		if (m=="hide")              { C.hint_hidden(true); }
+		else if (prev_mode=="hide") { C.hint_hidden(false); }
+		prev_mode = m;
+	    }
+	    return m;
+	}
+    }();
 
-    function find_closest_object(mx, my, classes) {
-	var best_obj = C.find_closest_object(mx, my, classes);
+    function find_closest_object(mx, my, classes, include_hidden) {
+	var best_obj = C.find_closest_object(mx, my, classes, include_hidden);
 	best_obj[2] = C;
 
 	for (var i = 0; i < Tools.length; i++) {
-	    var res = Tools[i].find_closest_object(mx, my, classes);
+	    var res = Tools[i].find_closest_object(mx, my, classes, include_hidden);
 	    if (res[1] < best_obj[1]) {
 		best_obj = res;
 		best_obj[2] = Tools[i];
@@ -42,35 +63,32 @@ function main() {
 	console.log(best_obj[0].toString());
     }
 
-    function load() {
-	C.unpack(localStorage.testsave);
+    function load(load_buffer) {
+	console.log("Loading buffer "+load_buffer);
+	C.unpack(localStorage["buffer_"+load_buffer]);
     }
 
-    function save() {
-	localStorage.testsave = C.stringify();
+    function save(save_buffer) {
+	console.log("Saving to buffer "+save_buffer);
+	localStorage["buffer_"+save_buffer] = C.stringify();
     }
 
     window.onkeypress = function(e) {
 	var mx = MOUSE[0], my = MOUSE[1];
 	var key = e.keyCode || e.charCode;
 
+	var chr = String.fromCharCode(key);
+	var load_buffer = "qwertyuiop".indexOf(chr);
+	if (load_buffer>=0) { load(load_buffer); return; }
+	var save_buffer = "QWERTYUIOP".indexOf(chr);
+	if (save_buffer>=0) { save(save_buffer); return; }
+
 	switch (key) {
-	case 8: case 46:
-	    if (DRAGGING) break;
-	    var body = document.getElementById("body");
-	    if (MODE==1) body.classList.remove("delete_mode");
-	    if (MODE==2) body.classList.remove("inspect_mode");
-	    MODE = (MODE+1)%3;
-	    if (MODE==1) body.classList.add("delete_mode");
-	    if (MODE==2) body.classList.add("inspect_mode");
-	    break;
 	case 48: 
-	    if (MODE!=0) break;
 	    var p = ControlPoint.create({"x": mx, "y": my}); 
 	    C.add(p); 
 	    break;
 	case 49:
-	    if (MODE!=0) break;
 	    var c_tmp = Construction.create();
 	    var p1 = ToolControlPoint.create({"x": Math.max(50,mx-0.1*Graphics.XS), "y": my});
 	    var p2 = ToolControlPoint.create({"x": Math.min(Graphics.XS-50, mx+0.1*Graphics.XS), "y": my});
@@ -79,7 +97,6 @@ function main() {
 	    Tools.push(c_tmp);
 	    break;
 	case 50:
-	    if (MODE!=0) break;
 	    var c_tmp = Construction.create();
 	    var p1 = ToolControlPoint.create({"x": mx, "y": my});
 	    var p2 = ToolControlPoint.create({"x": mx,
@@ -88,37 +105,26 @@ function main() {
 	    c_tmp.add(p1, p2, c);
 	    Tools.push(c_tmp);
 	    break;
-	case 97:
-	    if (MODE==0) undo(true);
-	    break;
-	case 100:
-	    if (MODE==0) undo(false);
-	    break;
-	case 108: 
-	    if (MODE==0) load();
-	    break;
-	case 115:
-	    if (MODE==0) save(); 
-	    break;
+	case 97: undo(true); break;
+	case 100: undo(false); break;
+	case 118: console.log(C.gizmos[135].toString());break;
 	default:
 	    console.log("Unrecognised keycode: "+key);
 	    break;
 	}
-	highlight();
+	highlight(e);
     }
 
     window.onmousedown = function(e) {
 	if (!HIGHLIGHTED) return;
 	var xy = Graphics.e2coord(e);
-	var gizmo = HIGHLIGHTED.gizmo, tool = HIGHLIGHTED.tool;
-	switch(MODE) {
-	case 0:
+	var gizmo = HIGHLIGHTED.gizmo, tool = HIGHLIGHTED.tool, m = mode(e);
+	if (m == "normal") {
 	    // gizmo must be a ControlPoint or a ToolControlPoint
 	    gizmo.highlight(false);
 	    HIGHLIGHTED = null;
 	    DRAGGING = [gizmo, gizmo.x - xy[0], gizmo.y - xy[1], tool];
-	    break;
-	case 1:
+	} else if (m == "delete") {
 	    gizmo.destroy();
 	    C.remove_deleted_gizmos();
 	    var j=0;
@@ -128,37 +134,41 @@ function main() {
 		if (!tl.empty()) Tools[j++] = Tools[i]; 
 	    }
 	    while (Tools.length > j) { Tools.pop(); }
-	    break;
-	case 2:
+	} else if (m == "hide") {
+	    gizmo.hide(!gizmo.hidden);
+	    HIGHLIGHTED = null;
+	} else if (m == "inspect") {
 	    console.log(gizmo.toString());
-	    break;
 	}
-	highlight();
+	highlight(m);
     }
 
-    function highlight() {
+    function highlight(m) {
 	var classes = null;
 	if (!DRAGGING) {
-	    switch (MODE) {
-	    case 0:
+	    if (m == "normal") {
 		classes = {
 		    "ControlPoint": 20,
 		    "ToolControlPoint": 20 
 		};
-		break;
-	    case 1:
+	    } else if (m == "delete") {
 		classes = { 
 		    "ControlPoint": 20,
 		    "ToolControlPoint": 20,
 		    "Line": 10,
 		    "Circle": 10
 		};
-		break;
-	    case 2:
+	    } else if (m == "hide") {
+		classes = {
+		    "LineLineIntersection": 20,
+		    "SingleCircleIntersection": 20,
+		    "Line": 10,
+		    "Circle": 10
+		};
+	    } else if (m == "inspect") {
 		classes = {
 		    "ControlPoint": 20,
 		    "ToolControlPoint": 20,
-		    "IntersectionPoint": 20,
 		    "LineLineIntersection": 20,
 		    "SingleCircleIntersection": 20,
 		    "Line": 10,
@@ -173,7 +183,7 @@ function main() {
 		      };
 	}
 	if (classes) {
-	    var best_obj = find_closest_object(MOUSE[0], MOUSE[1], classes);
+	    var best_obj = find_closest_object(MOUSE[0], MOUSE[1], classes, m=="inspect" || m=="hide");
 	    if (best_obj[0]) {
 		var hl = best_obj[1]<=0, sw = HIGHLIGHTED !== best_obj[0];
 		if (HIGHLIGHTED) {
@@ -188,7 +198,7 @@ function main() {
 
     window.onmousemove = function(e) {
 	MOUSE = Graphics.e2coord(e);
-	highlight();
+	highlight(mode(e));
 	if (DRAGGING) {
 	    var obj = DRAGGING[0], x0 = DRAGGING[1], y0 = DRAGGING[2];
 	    obj.set_position(x0+MOUSE[0], y0+MOUSE[1]);
@@ -222,7 +232,7 @@ function main() {
 		    tool.update(); // redraw after snapping
 		}
 	    }
-	    highlight();
+	    highlight(mode(e));
 	}
     }
 }

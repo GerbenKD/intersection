@@ -4,47 +4,60 @@ body {
 }
 
 body.delete_mode {
-	background-color: #808080;
+    background-color: #808080;
 }
 
 body.inspect_mode {
     background-color: #ffe0c0;
 }
 
+body.hide_mode {
+    background-color: #ff8080;
+}
+
 .line,.circle {
-	fill: none;
-	stroke: orange; 
-	stroke-width: 1px;
+    fill: none;
+    stroke: orange; 
+    stroke-width: 1px;
 }
 
 .line.highlighted, .circle.highlighted {
-	stroke-width: 5px;
+    stroke-width: 5px;
+}
+
+.line.hidden, .circle.hidden {
+    stroke: #d0d0d0;
 }
 
 
 .controlpoint,.toolcontrolpoint {
-	stroke: black;
-	stroke-width: 2px;
+    stroke: black;
+    stroke-width: 2px;
 }
 
 .controlpoint {
-	fill: blue;
+    fill: blue;
 }
 
 .toolcontrolpoint {
-	fill: cyan;
+    fill: cyan;
 }
 
 .controlpoint.highlighted, .toolcontrolpoint.highlighted {
-	stroke-width: 5px;
+    stroke-width: 5px;
 }
 
 .intersectionpoint {
-	stroke: black;
-	stroke-width: 1px;
-	fill: green;
+    stroke: black;
+    stroke-width: 1px;
+    fill: green;
 }
 
 .intersectionpoint.highlighted {
-	stroke-width: 3;
+    stroke-width: 3;
+}
+
+.intersectionpoint.hidden {
+    stroke-width: 0;
+    fill: #a0a0a0;
 }

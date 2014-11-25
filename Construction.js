@@ -32,11 +32,11 @@ var Construction = new function() {
      * The associated value determines the slack, which is subtracted from the distance to get control over
      * the priority.
      */
-    this.find_closest_object = function(mx, my, class_map) {
+    this.find_closest_object = function(mx, my, class_map, include_hidden) {
 	var closest_obj = null, closest_dist=Infinity;
 	for (var i=0; i<this.gizmos.length; i++) {
 	    var gizmo = this.gizmos[i];
-	    if (!gizmo.valid || !gizmo.svg) continue;
+	    if (!gizmo.valid || !gizmo.svg || (gizmo.hidden && !include_hidden)) continue;
 	    var slack = 0;
 	    if (class_map) {
 		if (!(gizmo.type in class_map)) continue;
@@ -248,6 +248,16 @@ var Construction = new function() {
 	}
     }
 
+    this.hint_hidden = function(state) {
+	for (var i=0; i<this.gizmos.length; i++) {
+	    var gizmo = this.gizmos[i];
+	    if (gizmo.svg && gizmo.hidden) {
+		gizmo.svg.style.visibility = state ? "visible" : "hidden";
+	    }
+	}
+    }
+
+
     /* This function modifies all gizmos in this construction so they can be JSON.stringified appropriately.
        The following fields are changed to allow this:
        - parents: replaced by an array of parent ids
@@ -306,9 +316,10 @@ var Construction = new function() {
 		children[ch.id] = ch;
 	    }
 	    gizmo.children = children;
+	    if (gizmo.hidden) gizmo.hide(true);
 	}
-
 	this.update();
+	this.hint_hidden(false);
     }
 }
 

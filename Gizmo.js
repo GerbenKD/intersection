@@ -55,6 +55,7 @@ var Gizmo = new function() {
 	    instance.children = {};
 	    for (var i=0; i<instance.parents.length; i++) {
 		var parent = instance.parents[i];
+		if (parent.hidden) instance.hidden = true;
 		parent.children[instance.id]=instance;
 	    }
 	    return instance;
@@ -69,7 +70,7 @@ var Gizmo = new function() {
 
     this.remove_svg = function() {
 	if (this.svg) { 
-	    this.hide();
+	    Graphics.hide(this.group, this.svg);
 	    delete this.svg;
 	}
     }
@@ -78,6 +79,13 @@ var Gizmo = new function() {
 	if (!this.svg) this.init_graphics();
 	if (state) Graphics.add_class(this.svg, "highlighted");
 	else       Graphics.remove_class(this.svg, "highlighted");		
+    }
+
+    this.hide = function(state) {
+	if (!this.svg) this.init_graphics();
+	if (state) Graphics.add_class(this.svg, "hidden");
+	else       Graphics.remove_class(this.svg, "hidden");
+	this.hidden = state;
     }
 
     this.recalculate = function() {}
@@ -97,9 +105,9 @@ var Gizmo = new function() {
 	    if (this.valid) {
 		if (!this.svg) this.init_graphics();
 		this.recalculate_graphics();
-		if (!old_valid) this.show();
+		if (!old_valid) Graphics.show(this.group, this.svg);
 	    } else {
-		if (old_valid) this.hide();
+		if (old_valid) Graphics.hide(this.group, this.svg);
 	    }
 	}
     }
@@ -110,13 +118,6 @@ var Gizmo = new function() {
     }
 
     this.svg_attrib = function(attrib) { Graphics.svg_attrib(this.svg, attrib); }
-
-    this.hide = function() { Graphics.hide(this.group, this.svg); }
-
-    this.show = function() {
-	if (!this.svg) this.init_graphics();
-	Graphics.show(this.group, this.svg); 
-    }
 
     this.toString = function(indent) {
 	var spc = "";
@@ -417,7 +418,8 @@ var CircleCircleIntersections = Gizmo.extend("CircleCircleIntersections", functi
 	var dx = x2-x1, dy = y2-y1;
 	var d2 = dx*dx+dy*dy;
 	var D = ((r1+r2)*(r1+r2)/d2-1) * (1-(r1-r2)*(r1-r2)/d2);
-	if (D<=0) { this.valid = false; return; }
+	if (D<-SMALL) { this.valid = false; return; }
+	if (D<0) D=0;
 	var K = 0.25*Math.sqrt(D);
 	var dr2 = 0.5*(r1*r1-r2*r2)/d2;
 	var xs = 0.5*(x1+x2)+dx*dr2, xt =  2*dy*K;
