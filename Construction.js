@@ -67,19 +67,37 @@ var Construction = new function() {
 	while (this.gizmos.length > j) this.gizmos.pop();
     }
     
-    // all objects with src as parent are redirected to dst
-    this.redirect = function(src, dst) {
-	for (var i=0; i<this.gizmos.length; i++) {
-	    if (src === this.gizmos[i]) { this.gizmos.splice(i,1); break; }
-	}
-	src.remove_svg();
-	for (var id in src.children) {
-	    var child = src.children[id];
-	    dst.children[id] = child;
-	    for (var j=0; j<child.parents.length; j++) {
-		if (child.parents[j]===src) child.parents[j] = dst;
+    // If map[src_id]=[src,dst], then all references to src are replaced by references to dst
+    this.redirect = function(map) {
+	// first attach all src's children to dst and destruct the src gizmo
+	for (var src_id in map) {
+	    var src = map[src_id][0], dst = map[src_id][1];
+
+	    // relink my children
+	    for (var id in src.children) {
+		var child = src.children[id];
+		dst.children[id] = child;
+		for (var j=0; j<child.parents.length; j++) {
+		    if (child.parents[j]===src) child.parents[j] = dst;
+		}
 	    }
+
+	    // relink my parents
+	    for (var i=0; i<src.parents.length; i++) {
+		var par = src.parents[i];
+		delete par.children[src_id];
+		par.children[dst.id] = dst;
+	    }
+
+	    src.destruct();
 	}
+	// now remove all src gizmos from the gizmo list
+	var j=0;
+	for (var i=0; i<this.gizmos.length; i++) {
+	    var gizmo = this.gizmos[i];
+	    if (!(this.gizmos[i].id in map)) this.gizmos[j++] = gizmo;
+	}
+	while (this.gizmos.length > j) this.gizmos.pop();
     }
 
     this.num_control_points = function() {
@@ -90,19 +108,31 @@ var Construction = new function() {
 	return n;
     }
 
+
+    /* Known issues: 
+       - if points are sometimes invalid, but when valid they match other points, they are not unified
+       - Duplicates can exist in the tool! They are not detected unless they also match a point in dst
+       - think about what to do with hidden / visible points? If a visible point maps to a hidden point, 
+         make it visible
+       - If the duplicate point error occurs, simulate some more!
+       - Remove duplicate lines and circles!
+     */
+
     this.find_all_duplicates = function(dst) {
-	return;
 	console.log("Searching for duplicates");
 
 	var res = scan_points(this.gizmos);
 	var points = res[0], targets = res[1], controls = res[2];
 	var candidates = initialize_candidates(points, targets);
 	test_candidates(controls, candidates, dst, this);
+
+	var num_found = 0;
 	for (var id in candidates) {
-	    var targets = candidates[id][1];
-	    if (targets.length>1) console.error("It appears there are duplicate points in dst");
+	    if (candidates[id][1].length > 1) console.error("There are duplicate points in dst!");
 	    candidates[id][1] = candidates[id][1][0];
+	    num_found++;
 	}
+	console.log("I found "+num_found+" duplicate points");
 	return candidates;
 
 	// initialize points, targets and controls arrays
@@ -110,22 +140,22 @@ var Construction = new function() {
 	    var points = [], targets = [], controls = [];
 	    for (var i=0; i<gizmos.length; i++) {
 		var gizmo = gizmos[i];
-		if (gizmo.is_point && gizmo.valid) points.push(gizmo);
+		if (gizmo.is_a("Point") && gizmo.valid) points.push(gizmo);
 	    }
 
 	    for (var i=0; i<dst.gizmos.length; i++) {
 		var gizmo = dst.gizmos[i];
-		if (gizmo.is_point && gizmo.valid) targets.push(gizmo);
-		if (gizmo.set_position) controls.push(gizmo);
+		if (gizmo.is_a("Point") && gizmo.valid) targets.push(gizmo);
+		if (gizmo.is_a("ControlPoint")) controls.push(gizmo);
 	    }
-	    console.log("There are "+targets.length+" targets and "+controls.length+" control points");
+	    console.log("There are "+points.length+" points, "+targets.length+" targets and "+controls.length+" control points");
 	    return [points, targets, controls];
 	}
 
 	// reorders the points and targets arrays
 	// returns a mapping src_id -> [src, [dst...]]
 	function initialize_candidates(points, targets) {
-	    console.log("initializing candidates");
+	    console.log("Initializing candidates");
 	    function by_coord(p1, p2) { return p1.x-p2.x; }
 	    points.sort(by_coord);
 	    targets.sort(by_coord);
@@ -142,14 +172,9 @@ var Construction = new function() {
 		    if (pt_i.distance_to_point(pt_k) < SMALL) {
 			var id = pt_i.id;
 			if (!candidates[id]) candidates[id] = [pt_i, []];
-			candidates[id].push(pt_k);
+			candidates[id][1].push(pt_k);
 		    }
 		}
-	    }
-	    // report results for debugging, TODO disable this
-	    for (var id in candidates) {
-		var src = candidates[id][0];
-		console.log("There is a "+src.toString()+"(id="+id+") with "+candidates[id][1].length+" candidates.");
 	    }
 	    return candidates;
 	}
@@ -198,8 +223,10 @@ var Construction = new function() {
 
     this.inject = function(dst) {
 	// For the time being, just copies stuff
-	this.find_all_duplicates(dst); // for testing
+	console.log("Pre-inject: tool contains "+this.gizmos.length+" gizmos, main has "+dst.gizmos.length);
+	this.redirect(this.find_all_duplicates(dst));
 	dst.add.apply(dst, this.gizmos);
+	console.log("Post-inject: tool has "+this.gizmos.length+" gizmos, main contains "+dst.gizmos.length+" gizmos.");
     }
 
     this.create_intersections = function(other) {
@@ -313,6 +340,9 @@ var Construction = new function() {
 	    var children = {};
 	    for (var j=0; j<gizmo.children.length; j++) {
 		var ch = map[gizmo.children[j]];
+		if (!ch) {
+		    console.log("gizmo with new_id "+gizmo.id+" and type "+gizmo.type+" cannot find child with old_id="+gizmo.children[j]);
+		}
 		children[ch.id] = ch;
 	    }
 	    gizmo.children = children;
@@ -322,19 +352,3 @@ var Construction = new function() {
 	this.hint_hidden(false);
     }
 }
-
-/*
-  tool injection design:
-
-  - tool control points are redirected to points in C by the user
-  - create all intersections and add them to the tool
-  - find equivalent point sets between C and tool. Points in both C and 
-  tool are assumed unique, but depending on how the tool's control points are attached
-  multiple tool points can now become equivalent. The equivalent point sets can 
-  be represented as a mapping Tool point => C point
-  - redirect all points in the mapping
-  - the tool now contains remaining unique points and all lines and circles, and
-  circleinteractions objects. The non-points might be in C already. 
-  - When non-points are redirected, unify them with existing children
-  of their new parents.
-*/

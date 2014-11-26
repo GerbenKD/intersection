@@ -68,7 +68,7 @@ var Gizmo = new function() {
 	return instance;
     }
 
-    this.remove_svg = function() {
+    this.destruct = function() {
 	if (this.svg) { 
 	    Graphics.hide(this.group, this.svg);
 	    delete this.svg;
@@ -100,7 +100,6 @@ var Gizmo = new function() {
 	var old_valid = this.valid || false;
 	this.valid = v;
 	if (v) this.recalculate();
-	// change visibility if validity changed
 	if (this.init_graphics) {
 	    if (this.valid) {
 		if (!this.svg) this.init_graphics();
@@ -148,7 +147,7 @@ var Gizmo = new function() {
     // destroy me if I have no remaining children, 
     // and if I'm destroyed, check if my parents have more children
     this.destroy_upstream = function() {
-	this.remove_svg();
+	this.destruct();
 	var id = this.id;      this.id = -1;
 	var p  = this.parents; this.parents = [];
 	for (var i=0; i<p.length; i++) {
@@ -187,6 +186,7 @@ var ControlPoint = Point.extend("ControlPoint", function() {
     this.init_graphics = function() {
 	this.svg_create("circle", "controlpoint");
 	this.svg_attrib({"r": "10"});
+	if (this.hidden) Graphics.add_class(this.svg, "hidden");
     }
 
     this.set_position = function(x,y) { 
@@ -219,7 +219,7 @@ var Line = Gizmo.extend("Line", function() {
     this.compute_intersection_coords = function(x1,y1,x2,y2,x3,y3,x4,y4) {
 	var x12 = x1-x2, x34=x3-x4, y12=y1-y2, y34=y3-y4;
 	var N = x12*y34 - y12*x34;
-	if (Math.abs(N)<SMALL) return null;
+	if (Math.abs(N)<0.01) return null; // No intersections for lines that are almost parallel
 	var f1 = x1*y2-y1*x2, f2 = x3*y4-y3*x4;
 	return [(f1*x34 - x12*f2)/N, (f1*y34 - y12*f2)/N];
     }

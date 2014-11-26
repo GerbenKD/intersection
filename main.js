@@ -107,7 +107,9 @@ function main() {
 	    break;
 	case 97: undo(true); break;
 	case 100: undo(false); break;
-	case 118: console.log(C.gizmos[135].toString());break;
+	case 118:
+	    
+	    break;
 	default:
 	    console.log("Unrecognised keycode: "+key);
 	    break;
@@ -220,7 +222,8 @@ function main() {
 	    DRAGGING = null;
 	    if (tool!==C && HIGHLIGHTED) {
 		// Snap this ToolControlPoint to HIGHLIGHTED.gizmo
-		tool.redirect(obj, HIGHLIGHTED.gizmo);
+		var red = {}; red[obj.id] = [obj, HIGHLIGHTED.gizmo];
+		tool.redirect(red);
 		if (tool.num_control_points()==0) {
 		    tool.create_intersections(C);
 		    tool.inject(C);
