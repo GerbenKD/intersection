@@ -34,38 +34,28 @@ function main() {
 	}
     }();
 
-    function find_closest_object(mx, my, classes, include_hidden) {
-	var best_obj = C.find_closest_object(mx, my, classes, include_hidden);
+    function find_closest_object(mx, my, classes, flags) {
+	if (!flags) flags = {};
+	var best_obj = C.find_closest_object(mx, my, classes, flags.include_hidden);
 	best_obj[2] = C;
 
-	for (var i = 0; i < Tools.length; i++) {
-	    var res = Tools[i].find_closest_object(mx, my, classes, include_hidden);
-	    if (res[1] < best_obj[1]) {
-		best_obj = res;
-		best_obj[2] = Tools[i];
+	if (flags.include_tools) {
+	    for (var i = 0; i < Tools.length; i++) {
+		var res = Tools[i].find_closest_object(mx, my, classes, flags.include_hidden);
+		if (res[1] < best_obj[1]) {
+		    best_obj = res;
+		    best_obj[2] = Tools[i];
+		}
 	    }
 	}
-
 	return best_obj;
-    }
-
-    function delete_object(mx,  my) {
-	console.log("Deleting object");
-
-	var best_obj = C.find_closest_object(mx, my);
-
-	for (var i = 0; i < Tools.length; i++) {
-	    var res = Tools[i].find_closest_object(mx, my);
-	    if (res[1] < best_obj[1]) {
-		best_obj = res;
-	    }
-	}
-	console.log(best_obj[0].toString());
     }
 
     function load(load_buffer) {
 	console.log("Loading buffer "+load_buffer);
-	C.unpack(localStorage["buffer_"+load_buffer]);
+	var c_tmp = Construction.create();
+	c_tmp.unpack(localStorage["buffer_"+load_buffer]);
+	Tools.push(c_tmp);
     }
 
     function save(save_buffer) {
@@ -185,7 +175,9 @@ function main() {
 		      };
 	}
 	if (classes) {
-	    var best_obj = find_closest_object(MOUSE[0], MOUSE[1], classes, m=="inspect" || m=="hide");
+	    var best_obj = find_closest_object(MOUSE[0], MOUSE[1], classes, 
+					       { "include_hidden": m=="inspect" || m=="hide",
+					         "include_tools": m!="hide" });
 	    if (best_obj[0]) {
 		var hl = best_obj[1]<=0, sw = HIGHLIGHTED !== best_obj[0];
 		if (HIGHLIGHTED) {
@@ -222,11 +214,27 @@ function main() {
 	    DRAGGING = null;
 	    if (tool!==C && HIGHLIGHTED) {
 		// Snap this ToolControlPoint to HIGHLIGHTED.gizmo
-		var red = {}; red[obj.id] = [obj, HIGHLIGHTED.gizmo];
+		var red = {}; red[obj.id] = [Point, obj, HIGHLIGHTED.gizmo];
 		tool.redirect(red);
 		if (tool.num_control_points()==0) {
-		    tool.create_intersections(C);
+		    var new_points = Construction.create_intersections(tool, C);
+
+		    /* TODO vervelende issue: *
+		       De new_points zitten al wel gelinkt aan de gizmos in tool.
+		       Dus als je tool.inject(C) doet, kunnen er al punten in new_points
+		       gedelete worden enzo.
+		       Er gaat iets dat hiermee te maken lijkt te hebben mis als je twee
+		       identieke cirkels construeert.
+		       Maar deleted_gizmos wissen in new_points zoals hieronder in het commentaar
+		       lijkt niet te helpen.
+		     */
+
+		    console.log("Injecting tool into main");
 		    tool.inject(C);
+		    // TODO werkt dit? new_points.remove_deleted_gizmos();
+		    console.log("Injecting new intersections into main");
+		    new_points.inject(C);
+		    console.log("Done");
 		    for (var i=0; i<Tools.length; i++) {
 			if (Tools[i]===tool) { Tools.splice(i, 1); break; }
 		    }

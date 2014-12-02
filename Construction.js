@@ -42,7 +42,7 @@ var Construction = new function() {
 		if (!(gizmo.type in class_map)) continue;
 		slack = class_map[gizmo.type];
 	    }
-	    var d = gizmo.distance_to_coords(mx, my)-slack;
+	    var d = gizmo.distance_c(mx, my)-slack;
 	    if (d<closest_dist) {
 		closest_dist = d;
 		closest_obj = gizmo;
@@ -67,11 +67,20 @@ var Construction = new function() {
 	while (this.gizmos.length > j) this.gizmos.pop();
     }
     
-    // If map[src_id]=[src,dst], then all references to src are replaced by references to dst
+    /* If map[src_id]=[*,src,dst], then all references to src are replaced by references to dst.
+
+       TODO!!!
+       Since we've now figured out that src===dst, we should find all children of dst that have
+       more than one parent equal to dst. Such children are invalid and should be killed, and now
+       is the first time that we can detect that they're invalid.
+    */
     this.redirect = function(map) {
 	// first attach all src's children to dst and destruct the src gizmo
 	for (var src_id in map) {
-	    var src = map[src_id][0], dst = map[src_id][1];
+	    var src = map[src_id][1], dst = map[src_id][2];
+
+	    // unhide dst if src is visible
+	    if (dst.hidden && !src.hidden) delete dst.hidden;
 
 	    // relink my children
 	    for (var id in src.children) {
@@ -82,24 +91,32 @@ var Construction = new function() {
 		}
 	    }
 
-	    // relink my parents
+	    // unlink my parents
 	    for (var i=0; i<src.parents.length; i++) {
 		var par = src.parents[i];
 		delete par.children[src_id];
-		par.children[dst.id] = dst;
 	    }
 
 	    src.destruct();
-	}
-	// now remove all src gizmos from the gizmo list
-	var j=0;
-	for (var i=0; i<this.gizmos.length; i++) {
-	    var gizmo = this.gizmos[i];
-	    if (!(this.gizmos[i].id in map)) this.gizmos[j++] = gizmo;
-	}
-	while (this.gizmos.length > j) this.gizmos.pop();
-    }
 
+	    // kill all children of dst with more than one parent equal to dst
+	    for (var id in dst.children) {
+		var c = 0;
+		var ch = dst.children[id];
+		for (var i=0; i<ch.parents.length; i++) {
+		    if (ch.parents[i]===dst) c++;
+		}
+		if (c==0) console.error("Inconsistent parent/child links");
+		if (c>1) {
+		    console.log("Killing gizmo with duplicate parent: "+ch.toString());
+		    ch.destroy();
+		}
+	    }
+	}
+
+	this.remove_deleted_gizmos();
+    }
+    
     this.num_control_points = function() {
 	var n = 0;
 	for (var i=0; i<this.gizmos.length; i++) {
@@ -109,163 +126,176 @@ var Construction = new function() {
     }
 
 
-    /* Known issues: 
-       - if points are sometimes invalid, but when valid they match other points, they are not unified
-       - Duplicates can exist in the tool! They are not detected unless they also match a point in dst
-       - think about what to do with hidden / visible points? If a visible point maps to a hidden point, 
-         make it visible
-       - If the duplicate point error occurs, simulate some more!
-       - Remove duplicate lines and circles!
-     */
-
-    this.find_all_duplicates = function(dst) {
+    this.find_all_duplicates = function(src, dst) {
 	console.log("Searching for duplicates");
 
-	var res = scan_points(this.gizmos);
-	var points = res[0], targets = res[1], controls = res[2];
-	var candidates = initialize_candidates(points, targets);
-	test_candidates(controls, candidates, dst, this);
+	var src_f = filter(src.gizmos);
+	var dst_f = filter(dst.gizmos);
 
-	var num_found = 0;
-	for (var id in candidates) {
-	    if (candidates[id][1].length > 1) console.error("There are duplicate points in dst!");
-	    candidates[id][1] = candidates[id][1][0];
-	    num_found++;
+	if (src_f[3].length!=0) {
+	    console.error("find_all_duplicates: src should not contain control points");
 	}
-	console.log("I found "+num_found+" duplicate points");
-	return candidates;
+	var controls = dst_f[3];
 
-	// initialize points, targets and controls arrays
-	function scan_points(gizmos) {
-	    var points = [], targets = [], controls = [];
+	var map = {}; // map of duplicate candidates: src_id -> [src, [dst...]]
+	initialize_candidates(map, Point,  src_f[0], dst_f[0]);
+	initialize_candidates(map, Line,   src_f[1], dst_f[1]);
+	initialize_candidates(map, Circle, src_f[2], dst_f[2]);
+
+	var op = []; // original positions of the control points
+	for (var i=0; i<controls.length; i++) {
+	    op.push([controls[i].x, controls[i].y]);
+	}
+
+	// test stuff
+	for (var i=0; i<5; i++) {
+	    test_candidates();
+	}
+
+	move_control_points(0);
+
+
+	var num = [0,0,0];
+	for (var id in map) {
+	    if (map[id][2].length > 1) console.error("There are duplicate points in dst!");
+	    map[id][2] = map[id][2][0];
+	    var gizmo = map[id][0];
+	    if      (gizmo.is_a("Point"))  num[0]++;
+	    else if (gizmo.is_a("Line"))   num[1]++;
+	    else if (gizmo.is_a("Circle")) num[2]++;
+	}
+	console.log("I found "+num[0]+" duplicate points, "+num[1]+" duplicate lines, "+num[2]+" duplicate circles.");
+	return map;
+
+	/* Filter valid gizmos into three types: points, lines and circles.
+	   Also returns a list of control points: a subset of the points.
+	*/
+	function filter(gizmos) {
+	    var res = [[], [], [], []];
 	    for (var i=0; i<gizmos.length; i++) {
 		var gizmo = gizmos[i];
-		if (gizmo.is_a("Point") && gizmo.valid) points.push(gizmo);
+		if (gizmo.valid) {
+		    if      (gizmo.is_a("ControlPoint")) res[3].push(gizmo);
+		    if      (gizmo.is_a("Point"))        res[0].push(gizmo);
+		    else if (gizmo.is_a("Line"))         res[1].push(gizmo);
+		    else if (gizmo.is_a("Circle"))       res[2].push(gizmo);
+		}
 	    }
-
-	    for (var i=0; i<dst.gizmos.length; i++) {
-		var gizmo = dst.gizmos[i];
-		if (gizmo.is_a("Point") && gizmo.valid) targets.push(gizmo);
-		if (gizmo.is_a("ControlPoint")) controls.push(gizmo);
-	    }
-	    console.log("There are "+points.length+" points, "+targets.length+" targets and "+controls.length+" control points");
-	    return [points, targets, controls];
+	    return res;
 	}
 
-	// reorders the points and targets arrays
-	// returns a mapping src_id -> [src, [dst...]]
-	function initialize_candidates(points, targets) {
-	    console.log("Initializing candidates");
+	// Augments the map with new candidates of the given type (Point, Line or Circle)
+	function initialize_candidates(map, type, sources, targets) {
 	    function by_coord(p1, p2) { return p1.x-p2.x; }
-	    points.sort(by_coord);
-	    targets.sort(by_coord);
-	    var candidates = {};
+	    sources.sort(type.comparator);
+	    targets.sort(type.comparator);
 	    var j=0;
-	    for (var i=0; i<points.length; i++) {
-		var pt_i = points[i];
+	    for (var i=0; i<sources.length; i++) {
+		var src_i = sources[i];
 		for (; j<targets.length; j++) {
-		    if (pt_i.x-targets[j].x < SMALL) break;
+		    if (type.comparator(src_i, targets[j]) < SMALL) break;
 		}
 		for (var k=j; k<targets.length; k++) {
-		    var pt_k = targets[k];
-		    if (pt_k.x - pt_i.x >= SMALL) break;
-		    if (pt_i.distance_to_point(pt_k) < SMALL) {
-			var id = pt_i.id;
-			if (!candidates[id]) candidates[id] = [pt_i, []];
-			candidates[id][1].push(pt_k);
+		    var tgt_k = targets[k];
+		    if (type.comparator(tgt_k, src_i) >= SMALL) break;
+		    if (type.distance(src_i, tgt_k) < SMALL) {
+			var id = src_i.id;
+			console.log("Adding candidate for "+src_i.toString());
+			if (!map[id]) map[id] = [type, src_i, []];
+			map[id][2].push(tgt_k);
 		    }
 		}
 	    }
-	    return candidates;
 	}
 
-	function test_candidates(controls, candidates, constr1, constr2) {
-	    var op = []; // original positions of the control points
-
+	// Moves control points by a random value in [-dev,dev] and recalculates the structure.
+	// Uses closure variables "op", "controls", "src" and "dst"
+	function move_control_points(dev) {
 	    for (var i=0; i<controls.length; i++) {
-		op.push([controls[i].x, controls[i].y]);
+		var dx = dev ? Math.random()*2*dev-dev : 0;
+		var dy = dev ? Math.random()*2*dev-dev : 0;
+		controls[i].set_position(op[i][0]+dx, op[i][1]+dy);
 	    }
+	    src.update();
+	    dst.update();
+	}
 
-	    for (var test=0; test<5; test++) {
+	// Tests candidates the given map, removing targets that turn out to be different.
+	function test_candidates(map) {
+	    move_control_points(50);
 
-		// randomize control points and recalculate structure
-		for (var i=0; i<op.length; i++) {
-		    var dx = Math.random()*100-50, dy = Math.random()*100-50;
-		    controls[i].set_position(op[i][0]+dx, op[i][1]+dy);
-		}
-		constr1.update(); constr2.update();
-
-		// filter candidates
-		for (var id in candidates) {
-		    var src = candidates[id][0], targets = candidates[id][1];
-		    var new_targets = [];
-		    for (var i=0; i<targets.length; i++) {
-			var tgt = targets[i];
-			if (tgt.valid && tgt.distance_to_point(src)<SMALL) {
-			    new_targets.push(tgt);
-			}
-		    }
-		    if (new_targets.length>0) {
-			candidates[id][1] = new_targets;
-		    } else {
-			delete candidates[id];
+	    for (var id in map) {
+		var type = map[id][0], src = map[id][1], targets = map[id][2];
+		var new_targets = [];
+		for (var i=0; i<targets.length; i++) {
+		    var tgt_i = targets[i];
+		    if (tgt_i.valid && type.distance(src, tgt_i)<SMALL) {
+			new_targets.push(tgt_i);
 		    }
 		}
+		if (new_targets.length>0) {
+		    map[id][1] = new_targets;
+		} else {
+		    delete map[id];
+		}
 	    }
-
-	    // restore original positions
-	    for (var i=0; i<op.length; i++) {
-		controls[i].set_position(op[i][0], op[i][1]);
-	    }
-	    constr1.update(); constr2.update();
 	}
     }
 
     this.inject = function(dst) {
-	// For the time being, just copies stuff
-	console.log("Pre-inject: tool contains "+this.gizmos.length+" gizmos, main has "+dst.gizmos.length);
-	this.redirect(this.find_all_duplicates(dst));
+	console.log("Pre-inject: src contains "+this.gizmos.length+" gizmos, dst has "+dst.gizmos.length);
+	this.redirect(Construction.find_all_duplicates(this, dst));
 	dst.add.apply(dst, this.gizmos);
-	console.log("Post-inject: tool has "+this.gizmos.length+" gizmos, main contains "+dst.gizmos.length+" gizmos.");
+	console.log("Post-inject: src has "+this.gizmos.length+" gizmos, dst has "+dst.gizmos.length+" gizmos.");
     }
 
-    this.create_intersections = function(other) {
-	var lines = [], circles = [];
-	for (var i=0; i<other.gizmos.length; i++) {
-	    var gizmo = other.gizmos[i];
-	    if      (gizmo.is_a("Line"))   lines.push(gizmo);
-	    else if (gizmo.is_a("Circle")) circles.push(gizmo);
+
+
+    // creates all intersections between lines/circles in c1 and lines/circles in c2, and returns the
+    // resulting mess as a new Construction
+    // usage: var intersection_points = Construction.create_intersections(main, tool);
+    this.create_intersections = function(c1, c2) {
+
+	var dst = this.create();
+
+	var lines2 = [], circles2 = [];
+	for (var i=0; i<c2.gizmos.length; i++) {
+	    var gizmo = c2.gizmos[i];
+	    if      (gizmo.is_a("Line"))   lines2.push(gizmo);
+	    else if (gizmo.is_a("Circle")) circles2.push(gizmo);
 	}
 
-	function addci(construction, ci) { 
-	    construction.add(ci, 
-			     SingleCircleIntersection.create({"parents": [ci], "which": 0}),
-			     SingleCircleIntersection.create({"parents": [ci], "which": 1}));
+	function addci(ci) { 
+	    dst.add(ci, 
+		    SingleCircleIntersection.create({"parents": [ci], "which": 0}),
+		    SingleCircleIntersection.create({"parents": [ci], "which": 1}));
 	}
 	
-	for (var i=0; i<this.gizmos.length; i++) {
-	    var gizmo = this.gizmos[i];
+	for (var i=0; i<c1.gizmos.length; i++) {
+	    var gizmo = c1.gizmos[i];
 
 	    // create all intersections with lines in other
 	    if (gizmo.is_a("Line")) {
-		for (var j=0; j<lines.length; j++) {
-		    this.add(LineLineIntersection.create({"parents": [gizmo,lines[j]]}));
+		for (var j=0; j<lines2.length; j++) {
+		    dst.add(LineLineIntersection.create({"parents": [gizmo,lines2[j]]}));
 		}
-		for (var j=0; j<circles.length; j++) {
-		    addci(this, CircleLineIntersections.create({"parents": [circles[j], gizmo]}));
+		for (var j=0; j<circles2.length; j++) {
+		    addci(CircleLineIntersections.create({"parents": [circles2[j], gizmo]}));
 		}
 	    } else if (gizmo.is_a("Circle")) {
-		for (var j=0; j<lines.length; j++) {
-		    addci(this, CircleLineIntersections.create({"parents": [gizmo, lines[j]]}));
+		for (var j=0; j<lines2.length; j++) {
+		    addci(CircleLineIntersections.create({"parents": [gizmo, lines2[j]]}));
 		}
-		for (var j=0; j<circles.length; j++) {
-		    var cci = CircleCircleIntersections.create({"parents": [circles[j], gizmo]});
-		    this.add(cci, 
-			     SingleCircleIntersection.create({"parents": [cci], "which": 0}),
-			     SingleCircleIntersection.create({"parents": [cci], "which": 1}));
+		for (var j=0; j<circles2.length; j++) {
+		    var cci = CircleCircleIntersections.create({"parents": [circles2[j], gizmo]});
+		    dst.add(cci, 
+			    SingleCircleIntersection.create({"parents": [cci], "which": 0}),
+			    SingleCircleIntersection.create({"parents": [cci], "which": 1}));
 		}
 	    }
 	}
+	
+	return dst;
     }
 
     this.report = function() { 
@@ -302,8 +332,9 @@ var Construction = new function() {
 	    var gizmo = this.gizmos[i];
 	    var igizmo = {};
 	    for (var key in gizmo) {
-		if ((key=="type" || gizmo.hasOwnProperty(key)) && !held_back[key]) igizmo[key] = gizmo[key]; 
+		if (gizmo.hasOwnProperty(key) && !held_back[key]) igizmo[key] = gizmo[key]; 
 	    }
+	    igizmo.type = gizmo.type == "ControlPoint" ? "ToolControlPoint" : gizmo.type;
 	    var p = [];
 	    for (var j=0; j<gizmo.parents.length; j++) {
 		p.push(gizmo.parents[j].id);
@@ -341,7 +372,7 @@ var Construction = new function() {
 	    for (var j=0; j<gizmo.children.length; j++) {
 		var ch = map[gizmo.children[j]];
 		if (!ch) {
-		    console.log("gizmo with new_id "+gizmo.id+" and type "+gizmo.type+" cannot find child with old_id="+gizmo.children[j]);
+		    console.error("gizmo with new_id "+gizmo.id+" and type "+gizmo.type+" cannot find child with old_id="+gizmo.children[j]);
 		}
 		children[ch.id] = ch;
 	    }

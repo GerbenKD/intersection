@@ -73,6 +73,9 @@ var Gizmo = new function() {
 	    Graphics.hide(this.group, this.svg);
 	    delete this.svg;
 	}
+	this.id = -1;
+	delete this.parents;
+	delete this.children;
     }
 
     this.highlight = function(state) {
@@ -82,7 +85,7 @@ var Gizmo = new function() {
     }
 
     this.hide = function(state) {
-	if (!this.svg) this.init_graphics();
+	if (!this.svg) { if (this.init_graphics) this.init_graphics(); else return; }
 	if (state) Graphics.add_class(this.svg, "hidden");
 	else       Graphics.remove_class(this.svg, "hidden");
 	this.hidden = state;
@@ -111,9 +114,13 @@ var Gizmo = new function() {
 	}
     }
 
-    //	Start out hidden. Show upon recalculate_check_valid
+    //	Start out detached from the DOM tree. Attach upon recalculate_check_valid
     this.svg_create = function(name, clazz) {
 	this.svg = Graphics.svg_create(name, clazz);
+	if (this.hidden) {
+	    Graphics.add_class(this.svg, "hidden");
+	    this.svg.style.visibility = "hidden";
+	}
     }
 
     this.svg_attrib = function(attrib) { Graphics.svg_attrib(this.svg, attrib); }
@@ -130,6 +137,9 @@ var Gizmo = new function() {
     }
 
     // I'll kill you, kill your children and if your parents have no other children, they're dead too
+    // actually, this method has a problem: if three lines go through a single point that is defined
+    // by two of them, then deleting one of the two lines will remove the intersection point even though
+    // it should still be accessible through the other two lines.
     this.destroy = function() {
 	var c = []; // this.children should not be modified while iterating over it. So buffer it
 	for (var id in this.children) {
@@ -147,10 +157,11 @@ var Gizmo = new function() {
     // destroy me if I have no remaining children, 
     // and if I'm destroyed, check if my parents have more children
     this.destroy_upstream = function() {
+	var id = this.id;
+	var p = this.parents;
 	this.destruct();
-	var id = this.id;      this.id = -1;
-	var p  = this.parents; this.parents = [];
 	for (var i=0; i<p.length; i++) {
+	    if (p[i].id==-1) continue;
 	    delete p[i].children[id];
 	    if (Object.keys(p[i].children) == 0 && !p[i].is_a("ControlPoint")) {
 		p[i].destroy_upstream();
@@ -163,20 +174,27 @@ var Point = Gizmo.extend("Point", function() {
 
     this.group = "points";
 
-    this.distance = function(x1,y1,x2,y2) { 
+    this.distance_cc = function(x1,y1,x2,y2) { 
 	var dx = x1-x2, dy = y1-y2;
 	return Math.sqrt(dx*dx+dy*dy);
     }
 
-    this.distance_to_point = function(other) {
-	return Point.distance(this.x, this.y, other.x, other.y);
+    this.distance_c = function(x, y) {
+	return Point.distance_cc(this.x, this.y, x, y);
     }
 
-    this.distance_to_coords = function(x, y) {
-	return Point.distance(this.x, this.y, x, y);
+    // Sorts points by x coordinate. Used by find_duplicates
+    this.comparator = function(p1, p2) { return p1.x - p2.x; }
+
+    this.distance = function(p1, p2) {
+	return Point.distance_cc(p1.x, p1.y, p2.x, p2.y);
     }
 
     this.recalculate_graphics = function() {
+	if (isNaN(this.x) || isNaN(this.y)) {
+	    console.error("Undefined coordinate; I am a "+this.type+" with id="+this.id);
+	    console.error(this.toString());
+	}
 	Graphics.svg_attrib(this.svg, { "cx": this.x, "cy": this.y });
     }
 });
@@ -186,7 +204,6 @@ var ControlPoint = Point.extend("ControlPoint", function() {
     this.init_graphics = function() {
 	this.svg_create("circle", "controlpoint");
 	this.svg_attrib({"r": "10"});
-	if (this.hidden) Graphics.add_class(this.svg, "hidden");
     }
 
     this.set_position = function(x,y) { 
@@ -203,6 +220,7 @@ var ControlPoint = Point.extend("ControlPoint", function() {
 });
 
 var ToolControlPoint = ControlPoint.extend("ToolControlPoint", function() {
+
     this.init_graphics = function() {
 	this.svg_create("circle", "toolcontrolpoint");
 	this.svg_attrib({"r": "10"});
@@ -236,9 +254,35 @@ var Line = Gizmo.extend("Line", function() {
 	return [x1 + b_hat_x * a_scalar, y1 + b_hat_y * a_scalar];
     } 
 
-    this.distance_to_coords = function(x,y) {
+
+    // Sorts lines by their x coordinate at y=0. Used by find_duplicates
+    this.comparator = function(l1, l2) {
+	function x_at_y0(l) {
+	    var x0 = l1.parents[0].x, y0 = l1.parents[0].y;
+	    var dx = l1.parents[1].x - x0, dy = l1.parents[1].y-y0;
+	    if (Math.abs(dy)<SMALL) return Infinity;
+	    var steps = -y0/dy;
+	    return x0 + steps * dx;
+	}
+	return x_at_y0(l1) - x_at_y0(l2);
+    }
+
+    // returns the distance between parallel lines l1 and l2, or some large number if they
+    // are not parallel
+    this.distance = function(l1, l2) {
+	var x0 = l1.parents[0].x, y0 = l1.parents[0].y;
+	var dx = l1.parents[1].x - x0, dy = l1.parents[1].y-y0;
+	var d = dx*dx+dy*dy;
+	if (d<SMALL) return Infinity;
+	var steps = 1000 / d;
+	var d1 = l2.distance_c(x0, y0);
+	var d2 = l2.distance_c(x0+steps*dx, y0+steps*dy);
+	return d1 > d2 ? d1 : d2;
+    }
+
+    this.distance_c = function(x,y) {
 	var p = this.project_coords(x,y);
-	return p ? Point.distance(p[0], p[1], x, y) : Infinity;
+	return p ? Point.distance_cc(p[0], p[1], x, y) : Infinity;
     }
 
     this.compute_intersection = function(line1, line2) {
@@ -282,56 +326,7 @@ var Line = Gizmo.extend("Line", function() {
     }
 });
 
-var IntersectionPoint = Point.extend("IntersectionPoint", function() {
-
-    this.find_duplicates = function() {
-	// find number of control points and back up their coordinates
-	var cp = [];
-	for (var i=0; i<Gizmo.INSTANCE_LIST.length; i++) {
-	    var obj = Gizmo.INSTANCE_LIST[i];
-	    if (!obj.set_position) break; // TODO check if it has ControlPoint class
-	    cp.push([obj.x, obj.y]);
-	}
-
-	// find all points that might match me. Note control points may also match!
-	var candidates = [];
-	for (var i=0; i<Gizmo.INSTANCE_LIST.length; i++) {
-	    var obj = Gizmo.INSTANCE_LIST[i];
-	    if (obj===this) continue; // obviously I match myself
-	    if (this.valid != obj.valid) continue;
-	    if (this.distance_to_point(obj) < SMALL) candidates.push(obj);
-	}
-
-	for (var test=0; test<5 && candidates.length>0; test++) {
-	    // randomize control points
-	    for (var i=0; i<cp.length; i++) {
-		var cpo = Gizmo.INSTANCE_LIST[i];
-		var dx = Math.random()*100-50, dy = Math.random()*100-50;
-		cpo.set_position(cp[i][0]+dx, cp[i][1]+dy);
-	    }
-	    Gizmo.update();
-
-	    // filter candidates
-	    var new_candidates = [];
-	    for (var i=0; i<candidates.length; i++) {
-		var obj = candidates[i];
-		if (this.valid==obj.valid && this.distance_to_point(obj)<SMALL) {
-		    new_candidates.push(obj);
-		}
-	    }
-	    candidates = new_candidates;
-	}
-
-	// repair control points
-	for (var i=0; i<cp.length; i++) {
-	    Gizmo.INSTANCE_LIST[i].set_position(cp[i][0], cp[i][1]);
-	}
-	Gizmo.update();
-	return candidates;
-    }
-
-
-});
+var IntersectionPoint = Point.extend("IntersectionPoint", function() {});
 
 
 var LineLineIntersection = IntersectionPoint.extend("LineLineIntersection", function() {
@@ -362,19 +357,23 @@ var Circle = Gizmo.extend("Circle", function() {
 	this.svg_create("circle", "circle");
     }
 
-    this.centre = function() { return this.parents[0]; }
-    this.radius2 = function() { 
-	var c = this.parents[0], b = this.parents[1];
-	var dx = c.x-b.x, dy = c.y-b.y;
-	return dx*dx+dy*dy;
-    }
     this.radius = function() {
-	return this.parents[0].distance_to_point(this.parents[1]); 
+	return Point.distance(this.parents[0], this.parents[1]); 
     }
 
-    this.distance_to_coords = function(x,y) {
-	var d = this.parents[0].distance_to_coords(x,y);
-	return Math.abs(this.radius() - d);
+    // Sorts circles by the x position of their centre. Used by find_duplicates.
+    this.comparator = function(c1, c2) { return c1.parents[0].x - c2.parents[0].x; }
+
+    // The "distance" between two circles makes no sense, but is used to quantify
+    // to what extent they are equal. It is the distance between the centres plus the difference
+    // in radius.
+    this.distance = function(c1, c2) {
+	return Point.distance(c1.parents[0], c2.parents[0]) + Math.abs(c1.radius()-c2.radius());
+    }
+
+    // Distance between a point and the circle, used for highlighting
+    this.distance_c = function(x,y) {
+	return Math.abs(this.radius() - this.parents[0].distance_c(x,y));
     }
 
     this.recalculate_graphics = function() {
@@ -385,32 +384,55 @@ var Circle = Gizmo.extend("Circle", function() {
     }
 });
 
-var CircleLineIntersections = Gizmo.extend("CircleLineIntersections", function() {
+
+var CircleIntersections = Gizmo.extend("CircleIntersections", function() {
+
+    this.num_intersections = function() {
+	return this.valid==false ? 0 : this.x.length;
+    }
+
+});
+
+var CircleLineIntersections = CircleIntersections.extend("CircleLineIntersections", function() {
 
     this.recalculate = function() {
 	var circle = this.parents[0], line = this.parents[1];
-	var cx = circle.centre().x, cy = circle.centre().y, 
-	    r2 = circle.radius2();
+	var cx = circle.parents[0].x, cy = circle.parents[0].y, 
+	    bx = circle.parents[1].x, by = circle.parents[1].y;
+	var r2 = (cx-bx)*(cx-bx) + (cy-by)*(cy-by);
 	var x1 = line.parents[0].x - cx, y1 = line.parents[0].y - cy;
 	var x2 = line.parents[1].x - cx, y2 = line.parents[1].y - cy;
 	var dx = x2-x1, dy = y2-y1;
 	var dr2 = dx*dx+dy*dy;
 	var D = x1*y2-x2*y1;
 	var R = r2*dr2 - D*D;
-	if (R<=SMALL || dr2<=SMALL) { this.valid = false; return; }
-	var sqrtR = Math.sqrt(R)/dr2;
+	
+	// case 1: no intersections
+	if (R<=-SMALL || dr2<=SMALL) { this.valid = false; return; }
 	D = D/dr2;
-	this.x = [cx+D*dy+dx*sqrtR, cx+D*dy-dx*sqrtR];
-	this.y = [cy-D*dx+dy*sqrtR, cy-D*dx-dy*sqrtR];
-	if (!(isFinite(this.x[0]) && isFinite(this.y[0]) &&
-	      isFinite(this.x[1]) && isFinite(this.y[1]))) this.valid = false;
+
+	var xs = cx+D*dy;
+	var ys = cy-D*dx;
+
+	if (R<SMALL) {
+	    // case 2: one intersection. Pretend that R is zero
+	    this.x = xs;
+	    this.y = ys;
+	} else {
+	    // case 3: two intersections
+	    var sqrtR = Math.sqrt(R)/dr2;
+	    var xt = dx*sqrtR, yt = dy*sqrtR;
+
+	    this.x = [xs+xt, xs-xt];
+	    this.y = [ys+yt, ys-yt];
+	}
     }
 });
 
-var CircleCircleIntersections = Gizmo.extend("CircleCircleIntersections", function() {
+var CircleCircleIntersections = CircleIntersections.extend("CircleCircleIntersections", function() {
 
     this.recalculate = function() {
-	var centre1 = this.parents[0].centre(), centre2 = this.parents[1].centre();
+	var centre1 = this.parents[0].parents[0], centre2 = this.parents[1].parents[0];
 	var b1 = this.parents[0].parents[1];
 	var x1 = centre1.x, y1 = centre1.y;
 	var x2 = centre2.x, y2 = centre2.y;
@@ -418,22 +440,32 @@ var CircleCircleIntersections = Gizmo.extend("CircleCircleIntersections", functi
 	var dx = x2-x1, dy = y2-y1;
 	var d2 = dx*dx+dy*dy;
 	var D = ((r1+r2)*(r1+r2)/d2-1) * (1-(r1-r2)*(r1-r2)/d2);
+
+	// case 1: no intersections
 	if (D<-SMALL) { this.valid = false; return; }
-	if (D<0) D=0;
-	var K = 0.25*Math.sqrt(D);
+	
 	var dr2 = 0.5*(r1*r1-r2*r2)/d2;
-	var xs = 0.5*(x1+x2)+dx*dr2, xt =  2*dy*K;
-	var ys = 0.5*(y1+y2)+dy*dr2, yt = -2*dx*K;
+	var xs = 0.5*(x1+x2)+dx*dr2
+	var ys = 0.5*(y1+y2)+dy*dr2
 
-	// get a consistent ordering of the two intersection points
-	if (xt*(b1.x-x1) + yt*(b1.y-y1) > SMALL) {
-	    xt = -xt; yt = -yt;
+	if (D<SMALL) {
+	    // case 2: one intersection. Pretend that D is zero
+	    this.x = [xs];
+	    this.y = [ys];
+	} else {
+	    // case 3: two intersections
+	    var K = 0.5*Math.sqrt(D);
+	    var xt =  dy*K;
+	    var yt = -dx*K;
+
+	    // get a consistent ordering of the two intersection points
+	    if (xt*(b1.x-x1) + yt*(b1.y-y1) > SMALL) {
+		xt = -xt; yt = -yt;
+	    }
+
+	    this.x = [xs+xt, xs-xt];
+	    this.y = [ys+yt, ys-yt];
 	}
-
-	this.x = [xs+xt, xs-xt];
-	this.y = [ys+yt, ys-yt];
-	if (!(isFinite(xs) && isFinite(xt) && isFinite(ys) && isFinite(yt))) 
-	    this.valid = false;
     }
 });
 
@@ -446,10 +478,12 @@ var SingleCircleIntersection = IntersectionPoint.extend("SingleCircleIntersectio
     }
 
     this.recalculate = function() {
-	this.valid = this.parents[0].valid && "which" in this;
-	if (this.valid) {
+	var w = "which" in this ? this.which : 2;
+	if (w<this.parents[0].num_intersections()) {
 	    this.x = this.parents[0].x[this.which];
 	    this.y = this.parents[0].y[this.which];
+	} else {
+	    this.valid = false;
 	}
     }
 
