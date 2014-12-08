@@ -1,4 +1,5 @@
 intersection
 ============
 
-Having fun with Circles and Lines!
+"Every point of interest is at the intersection of two lines."
+	- S. de Rooij (2014)
