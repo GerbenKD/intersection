@@ -69,6 +69,7 @@ var Gizmo = new function() {
     }
 
     this.destruct = function() {
+	console.error("*** DESTRUCTING "+this.toString()+" ***");
 	if (this.svg) { 
 	    Graphics.hide(this.group, this.svg);
 	    delete this.svg;
@@ -130,8 +131,12 @@ var Gizmo = new function() {
 	if (!indent) indent=0;
 	for (var i=0; i<indent; i++) { spc+=" "; }
 	var r = spc + this.type+"["+this.id+"/"+(this.valid?"+":"-")+"]:\n";
-	for (var i=0; i<this.parents.length; i++) {
-	    r += this.parents[i].toString(indent+2);
+	if ("parents" in this) {
+	    for (var i=0; i<this.parents.length; i++) {
+		r += this.parents[i].toString(indent+2);
+	    }
+	} else {
+	    r += "<no parents>";
 	}
 	return r;
     }
@@ -439,6 +444,13 @@ var CircleCircleIntersections = CircleIntersections.extend("CircleCircleIntersec
 	var r1 = this.parents[0].radius(), r2 = this.parents[1].radius();
 	var dx = x2-x1, dy = y2-y1;
 	var d2 = dx*dx+dy*dy;
+
+	if (d2<SMALL) {
+	    // circles with same centre have no intersections
+	    this.valid = false;
+	    return;
+	}
+
 	var D = ((r1+r2)*(r1+r2)/d2-1) * (1-(r1-r2)*(r1-r2)/d2);
 
 	// case 1: no intersections

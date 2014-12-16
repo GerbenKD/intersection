@@ -1,6 +1,7 @@
 "use strict";
 
 function main() {
+
     var C = Construction.create();
     var Tools = [];
     var MOUSE = null, DRAGGING = null, HIGHLIGHTED = null;
@@ -227,11 +228,13 @@ function main() {
 		       identieke cirkels construeert.
 		       Maar deleted_gizmos wissen in new_points zoals hieronder in het commentaar
 		       lijkt niet te helpen.
+
 		     */
 
 		    console.log("Injecting tool into main");
 		    tool.inject(C);
-		    // TODO werkt dit? new_points.remove_deleted_gizmos();
+		    // TODO werkt dit? 
+		    new_points.remove_deleted_gizmos();
 		    console.log("Injecting new intersections into main");
 		    new_points.inject(C);
 		    console.log("Done");
@@ -240,7 +243,7 @@ function main() {
 		    }
 		    C.update();
 		} else {
-		    tool.update(); // redraw after snapping
+		    tool.update(); // reedraw after snapping
 		}
 	    }
 	    highlight(mode(e));

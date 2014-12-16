@@ -99,7 +99,12 @@ var Construction = new function() {
 
 	    src.destruct();
 
-	    // kill all children of dst with more than one parent equal to dst
+	    /* kill all children of dst with more than one parent equal to dst.
+	       These should be intersection points defined by a gizmo in tool and a gizmo in C,
+	       constructed a short while ago by create_intersections.
+	       Therefore they should not have children.
+	    */
+	    var kill_set = {};
 	    for (var id in dst.children) {
 		var c = 0;
 		var ch = dst.children[id];
@@ -107,11 +112,20 @@ var Construction = new function() {
 		    if (ch.parents[i]===dst) c++;
 		}
 		if (c==0) console.error("Inconsistent parent/child links");
-		if (c>1) {
-		    console.log("Killing gizmo with duplicate parent: "+ch.toString());
-		    ch.destroy();
-		}
+		if (c>1) kill_set[id] = true;
 	    }
+	    for (var id in kill_set) {
+		var ch = dst.children[id];
+		for (var i=0; i<ch.parents.length; i++) {
+		    var par = ch.parents[i];
+		    delete par.children[id];
+		}
+		for (var ch_id in ch.children) {
+		    ch.children[ch_id].destruct();
+		}
+		ch.destruct();
+	    }
+
 	}
 
 	this.remove_deleted_gizmos();
@@ -126,6 +140,7 @@ var Construction = new function() {
     }
 
 
+    // map of duplicate candidates: src_id -> [type, src, dst]
     this.find_all_duplicates = function(src, dst) {
 	console.log("Searching for duplicates");
 
@@ -137,7 +152,7 @@ var Construction = new function() {
 	}
 	var controls = dst_f[3];
 
-	var map = {}; // map of duplicate candidates: src_id -> [src, [dst...]]
+	var map = {}; // maps src_id -> [type, src, [dst...]]
 	initialize_candidates(map, Point,  src_f[0], dst_f[0]);
 	initialize_candidates(map, Line,   src_f[1], dst_f[1]);
 	initialize_candidates(map, Circle, src_f[2], dst_f[2]);
@@ -152,17 +167,17 @@ var Construction = new function() {
 	    test_candidates();
 	}
 
-	move_control_points(0);
+	move_control_points(0); // move them back to original positions
 
 
 	var num = [0,0,0];
 	for (var id in map) {
 	    if (map[id][2].length > 1) console.error("There are duplicate points in dst!");
 	    map[id][2] = map[id][2][0];
-	    var gizmo = map[id][0];
-	    if      (gizmo.is_a("Point"))  num[0]++;
-	    else if (gizmo.is_a("Line"))   num[1]++;
-	    else if (gizmo.is_a("Circle")) num[2]++;
+	    var type = map[id][0];
+	    if      (type === Point)  num[0]++;
+	    else if (type === Line)   num[1]++;
+	    else if (type === Circle) num[2]++;
 	}
 	console.log("I found "+num[0]+" duplicate points, "+num[1]+" duplicate lines, "+num[2]+" duplicate circles.");
 	return map;
