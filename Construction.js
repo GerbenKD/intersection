@@ -102,7 +102,8 @@ var Construction = new function() {
 	    /* kill all children of dst with more than one parent equal to dst.
 	       These should be intersection points defined by a gizmo in tool and a gizmo in C,
 	       constructed a short while ago by create_intersections.
-	       Therefore they should not have children.
+	       Therefore they should be LineLineIntersections or Circle(Line|Circle)intersections with one
+	       level of children.
 	    */
 	    var kill_set = {};
 	    for (var id in dst.children) {

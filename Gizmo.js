@@ -141,6 +141,7 @@ var Gizmo = new function() {
 	return r;
     }
 
+    // DEPRECATED!!! This function is wrong!!!!!!!!!!!!!!!!!!!!!!
     // I'll kill you, kill your children and if your parents have no other children, they're dead too
     // actually, this method has a problem: if three lines go through a single point that is defined
     // by two of them, then deleting one of the two lines will remove the intersection point even though
