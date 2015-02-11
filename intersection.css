@@ -48,9 +48,9 @@ body.hide_mode {
 }
 
 .intersectionpoint {
-    stroke: black;
+    stroke: orange;
     stroke-width: 1px;
-    fill: green;
+    fill: orange;
 }
 
 .intersectionpoint.highlighted {
