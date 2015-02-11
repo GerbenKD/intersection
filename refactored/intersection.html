@@ -1,0 +1,70 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">
+<html>
+<head>
+<title>SVG test</title>
+</head>
+<link rel="stylesheet" type="text/css" href="intersection.css">
+
+<body id = "body">
+
+<svg id="svg">
+
+<g id="lines"></g>
+<g id="points"></g>
+<g id="highlighted"></g>
+<g id="controlpoints"></g>
+
+</svg>
+
+
+
+<script>
+
+function load(urls, callback) {
+
+    function load_single(url, callback){
+
+	var script = document.createElement("script")
+	script.type = "text/javascript";
+
+	if (script.readyState){  //IE
+            script.onreadystatechange = function() {
+		if (script.readyState == "loaded" ||
+                    script.readyState == "complete") {
+                    script.onreadystatechange = null;
+                    callback();
+		}
+            };
+	} else {  //Others
+            script.onload = callback;
+	}
+
+	script.src = url;
+	document.getElementsByTagName("head")[0].appendChild(script);
+    }
+
+    var num_loaded = 0;
+    function loaded(name) { 
+	return function() { 
+	    console.log("Loaded '"+name+"'");
+	    num_loaded++;
+	    if (num_loaded == urls.length) {
+		console.log("Done, starting game");
+		callback();
+	    }
+	};
+    }
+    for (var i=0; i<urls.length; i++) {
+	load_single(urls[i], loaded(urls[i]));
+    }
+}
+
+SMALL = 0.0001;
+load(["Tool.js", "Gizmo.js", "Graphics.js", "main.js"], function() { main(); });
+
+
+</script>
+
+
+</body>
+</html>

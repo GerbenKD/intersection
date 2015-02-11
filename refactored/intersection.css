@@ -1,0 +1,51 @@
+body {
+    border: none;
+    margin: 0px 0px 0px 0px;
+}
+
+.line,.circle {
+    fill: none;
+    stroke: orange; 
+    stroke-width: 1px;
+}
+
+.line.highlighted, .circle.highlighted {
+    stroke-width: 5px;
+}
+
+.hidden {
+    visibility: hidden;
+}
+
+
+.controlpoint,.toolcontrolpoint {
+    stroke: black;
+    stroke-width: 2px;
+}
+
+.controlpoint {
+    fill: blue;
+}
+
+.toolcontrolpoint {
+    fill: cyan;
+}
+
+.controlpoint.highlighted, .toolcontrolpoint.highlighted {
+    stroke-width: 5px;
+}
+
+.intersectionpoint {
+    stroke: black;
+    stroke-width: 1px;
+    fill: green;
+}
+
+.intersectionpoint.highlighted {
+    stroke-width: 3;
+}
+
+.intersectionpoint.hidden {
+    stroke-width: 0;
+    fill: #a0a0a0;
+}
