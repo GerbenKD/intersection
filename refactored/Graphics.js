@@ -1,5 +1,9 @@
 "use strict";
 
+/* TODO: refactor this so that graphics objects are proper objects and don't have stowaways.
+   Hide and show can be called directly on them.
+*/
+
 var Graphics = new function() {
 
     this.XS              = window.innerWidth;
@@ -28,18 +32,37 @@ var Graphics = new function() {
     this.has_class    = function(elt, cls) { return elt.classList.contains(cls); }
 
     //	Start out hidden. Show upon recalculate_check_valid
-    this.svg_create = function(name, group, clazz) {
+    this.svg_create = function(name, group, clazz, attrib) {
 	var svg = document.createElementNS(this.SVG_NS, name);
-	this.add_class(svg, "hidden");
-	if (clazz) this.add_class(svg, clazz);
-	this.groups[group].appendChild(svg);
+	var grp = this.groups[group];
+	svg.stowaways = { group: grp };
+	this.add_class(svg, clazz);
+	this.svg_attrib(svg, attrib);
+	this.svg_hide(svg);
+	grp.appendChild(svg);
 	return svg;
     }
 
+    this.svg_destroy = function(elt) {
+	elt.stowaways.group.removeChild(elt);
+    }
+   
     this.svg_attrib = function(elt, attrib) {
 	for (var key in attrib) {
 	    elt.setAttribute(key, attrib[key]);
 	}
+    }
+
+    this.svg_hide = function(elt) {
+	if (elt.stowaways.hidden) { console.error("Hiding an element that's already hidden!"); return; }
+	elt.stowaways.hidden = true;
+	this.add_class(elt, "hidden");
+    }
+
+    this.svg_show = function(elt) {
+	if (!elt.stowaways.hidden) { console.error("Showing an element that's not hidden!"); return; }
+	elt.stowaways.hidden = false;
+	this.remove_class(elt, "hidden");
     }
 
      //converts a mouse event to screen coords
