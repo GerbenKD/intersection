@@ -5,13 +5,16 @@
   =================================== Tool: ==================================
   - tool.id             - for serialization and to use as key in hash
 
-  - abstract tool.create({fields})    - create an instance of this tool class
+  - abstract tool.create({fields})     - create an instance of this tool class
   - abstract tool.connect(src_tool, src_socket, dst_socket)
   - abstract tool.disconnect(dst_socket)
-  - abstract tool.recalculate()       - update the outputs and the valid status of the tool  
-  - abstract tool.add_graphics(level) - make this tool visible. Level 1 - show outputs, 2 - show everything
-  - abstract tool.update_graphics()   - bring graphics up to date
-  
+  - abstract tool.recalculate()        - update the outputs and the valid status of the tool  
+  - abstract tool.add_graphics(level)  - make this tool visible. Level 1 - show outputs, 2 - show everything
+  - abstract tool.update_graphics()    - bring graphics up to date
+  - abstract tool.get_input(socket)    - returns [input_tool, output_socket]
+  - abstract tool.get_output(socket)   - returns output gizmo at that socket
+  - abstract tool.get_graphics(socket) - returns graphics object or an error
+  - tool.listen                        - get gizmo at an input
   ================================ BasicTool: =================================
   hidden fields:
   - bt.inputs    - [ [src_tool, src_socket], ... ]
@@ -19,7 +22,7 @@
   - bt.graphics  - if it exists, [ svg object, ... ] one for each output
 
   additional methods:
-  - bt.listen        - get gizmo at an input; could be moved up to tool if that should be useful
+
   - bt.add_output    - add an output gizmo to a tool and create its graphics if necessary
   - bt.remove_output - remove an output gizmo, deleting its graphics if necessary
 
@@ -47,7 +50,11 @@ var Tool = new function() {
 	}
     }();
 
-
+    // return the Gizmo at the given input
+    this.listen = function(socket) {
+	var connection = this.get_input(socket);
+	return connection[0].get_output(connection[1]);
+    }
 
 };
 
@@ -77,12 +84,6 @@ var BasicTool = Tool.extend(function() {
 	}
 	this.inputs[socket] = null;
 	this.num_connections--;
-    }
-
-    // return the Gizmo at the given input
-    this.listen = function(socket) {
-	var connection = this.inputs[socket];
-	return connection[0].outputs[connection[1]];
     }
 
     // create svg objects for all connected outputs
@@ -123,6 +124,21 @@ var BasicTool = Tool.extend(function() {
 	    this.graphics[socket]=null;
 	}
 	this.outputs[socket] = null;
+    }
+
+    this.get_input = function(socket) {
+	return this.intputs[socket];
+    }
+
+    this.get_output = function(socket) {
+	return this.outputs[socket];
+    }
+
+    this.get_graphics = function(socket) {
+	if (!this.graphics || !this.graphics[socket]) { 
+	    console.error("Graphics expected for output "+socket); return null; 
+	}
+	return this.graphics[socket];
     }
 
     this.highlight = function(socket, value) {
@@ -276,6 +292,9 @@ var CompoundTool = Tool.extend(function() {
 	this.tools.push(tool);
 	if (this.graphics_level==2 && !tool.graphics) tool.add_graphics();
     }
-        
+     
+    this.get_input    = function(socket) { return this.input_interface.get_input(socket);     }
+    this.get_output   = function(socket) { return this.output_interface.get_output(socket);   }
+    this.get_graphics = function(socket) { return this.output_interface.get_graphics(socket); }
 
 });
