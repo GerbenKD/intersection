@@ -10,21 +10,21 @@
   - abstract tool.disconnect(dst_socket)
   - abstract tool.recalculate()        - update the outputs and the valid status of the tool  
   - abstract tool.add_graphics(level)  - make this tool visible. Level 1 - show outputs, 2 - show everything
-  - abstract tool.update_graphics()    - bring graphics up to date
+  - abstract tool.update_graphics()    - bring sprite up to date
   - abstract tool.get_input(socket)    - returns [input_tool, output_socket]
   - abstract tool.get_output(socket)   - returns output gizmo at that socket
-  - abstract tool.get_graphics(socket) - returns graphics object or an error
+  - abstract tool.get_sprite(socket) - returns sprite object or an error
   - tool.listen                        - get gizmo at an input
   ================================ BasicTool: =================================
   hidden fields:
   - bt.inputs    - [ [src_tool, src_socket], ... ]
   - bt.outputs   - [ gizmo, ... ]
-  - bt.graphics  - if it exists, [ svg object, ... ] one for each output
+  - bt.sprites   - if it exists, [ sprite, ... ] one for each output
 
   additional methods:
 
-  - bt.add_output    - add an output gizmo to a tool and create its graphics if necessary
-  - bt.remove_output - remove an output gizmo, deleting its graphics if necessary
+  - bt.add_output    - add an output gizmo to a tool and create its sprite if necessary
+  - bt.remove_output - remove an output gizmo, deleting its sprite if necessary
 
   =============================== CompoundTool: ===============================
   hidden fields:
@@ -86,22 +86,22 @@ var BasicTool = Tool.extend(function() {
 	this.num_connections--;
     }
 
-    // create svg objects for all connected outputs
+    // create sprites for all connected outputs
     this.add_graphics = function() {
-	if (this.graphics) { console.error("Attempt to add graphics to a tool that already has them"); return; }
-	this.graphics = [];
+	if (this.sprites) { console.error("Attempt to add sprites to a tool that already has them"); return; }
+	this.sprites = [];
 	for (var i=0; i<this.outputs.length; i++) {
 	    if (this.outputs[i]) {
-		this.graphics[i] = this.outputs[i].create_graphics();
+		this.sprites[i] = this.outputs[i].create_sprite();
 	    }
 	}
     }
 
     this.update_graphics = function() {
-	if (!this.graphics) return;
+	if (!this.sprites) return;
 	for (var i=0; i<this.outputs.length; i++) {
 	    var output = this.outputs[i];
-	    if (output) output.update_graphics(this.graphics[i]);
+	    if (output) output.update_sprite(this.sprites[i]);
 	}
     }
 
@@ -113,37 +113,29 @@ var BasicTool = Tool.extend(function() {
 	    }
 	}
 	this.outputs[socket] = gizmo;
-	if (this.graphics) this.graphics[socket] = gizmo.create_graphics();
+	if (this.sprites) this.sprites[socket] = gizmo.create_sprite();
 	return socket;
     }
 
     this.remove_output = function(socket) {
 	if (!this.outputs[socket]) { console.error("Attempt to remove a nonexisting output"); return; }
-	if (this.graphics) { 
-	    this.outputs[socket].destroy_graphics(this.graphics[socket]); 
-	    this.graphics[socket]=null;
-	}
+	if (this.sprites) { this.sprites[socket].destroy(); this.sprites[socket]=null; }
 	this.outputs[socket] = null;
     }
 
-    this.get_input = function(socket) {
-	return this.intputs[socket];
-    }
-
-    this.get_output = function(socket) {
-	return this.outputs[socket];
-    }
-
-    this.get_graphics = function(socket) {
-	if (!this.graphics || !this.graphics[socket]) { 
-	    console.error("Graphics expected for output "+socket); return null; 
+    this.get_input = function(socket) { return this.inputs[socket]; }
+    this.get_output = function(socket) { return this.outputs[socket]; }
+    this.get_sprite = function(socket) {
+	if (!this.sprites || !this.sprites[socket]) { 
+	    console.error("Sprite expected for output "+socket); return null; 
 	}
-	return this.graphics[socket];
+	return this.sprites[socket];
     }
 
     this.highlight = function(socket, value) {
-	if (!this.graphics || !this.graphics[socket]) { console.error("Bad attempt to highlight"); return; }
-	(value ? Graphics.add_class : Graphics.remove_class)(this.graphics[socket], "highlighted");
+	if (!this.sprites || !this.sprites[socket]) { console.error("Bad attempt to highlight"); return; }
+	var g = this.get_sprite(socket);
+	if (value) g.add_class("highlighted"); else g.remove_class("highlighted"); 
     }
 
 });
@@ -201,15 +193,12 @@ var InterfaceTool = BasicTool.extend(function() {
     this.connect = function(src_tool, src_socket, dst_socket) {
 	BasicTool.connect.call(this, src_tool, src_socket, dst_socket);
 	this.outputs[dst_socket] = this.listen(dst_socket); // equals src_tool.outputs[src_socket] 
-	if (this.graphics) this.graphics[dst_socket] = this.outputs[dst_socket].create_graphics();
+	if (this.sprites) this.sprites[dst_socket] = this.outputs[dst_socket].create_sprite();
     }
     
     this.disconnect = function(socket) {
 	BasicTool.disconnect.call(this, socket);
-	if (this.graphics) { 
-	    this.outputs[socket].destroy_graphics(this.graphics[socket]); 
-	    this.graphics[socket]=null;
-	}
+	if (this.sprites) { this.graphics[socket].destroy(); this.graphics[socket]=null; }
 	this.outputs[socket] = null;
     }
     
@@ -293,8 +282,8 @@ var CompoundTool = Tool.extend(function() {
 	if (this.graphics_level==2 && !tool.graphics) tool.add_graphics();
     }
      
-    this.get_input    = function(socket) { return this.input_interface.get_input(socket);     }
-    this.get_output   = function(socket) { return this.output_interface.get_output(socket);   }
-    this.get_graphics = function(socket) { return this.output_interface.get_graphics(socket); }
+    this.get_input  = function(socket) { return this.input_interface.get_input(socket);     }
+    this.get_output = function(socket) { return this.output_interface.get_output(socket);   }
+    this.get_sprite = function(socket) { return this.output_interface.get_sprite(socket); }
 
 });

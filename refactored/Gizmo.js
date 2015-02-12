@@ -12,22 +12,13 @@ var Gizmo = new function() {
 
     this.create = function() { return this.extend(function() {}); }
 
-
-    // TODO refactor Graphics, then remove these
-    this.add_class    = function(clazz) { Graphics.add_class   (this.svg, clazz); }
-    this.remove_class = function(clazz) { Graphics.remove_class(this.svg, clazz); }
-
-    this.update_graphics = function(svg) {
+    this.update_sprite = function(sprite) {
 	if (this.valid) {
-	    this.move_graphics(svg);
-	    if (svg.stowaways.hidden) Graphics.svg_show(svg);
+	    this.move_sprite(sprite);
+	    if (sprite.hidden()) sprite.show();
 	} else {
-	    if (!svg.stowaways.hidden) Graphics.svg_hide(svg);
+	    if (!sprite.hidden()) sprite.hide();
 	}
-    }
-
-    this.destroy_graphics = function(svg) { 
-	Graphics.svg_destroy(svg);
     }
 
 }();
@@ -51,15 +42,16 @@ var Point = Gizmo.extend(function() {
     // Sorts points by x coordinate. Used by find_duplicates
     this.comparator = function(p1, p2) { return p1.x - p2.x; }
 
-    this.move_graphics = function(svg) {
-	Graphics.svg_attrib(svg, { "cx": this.x, "cy": this.y });
-    }
+    this.move_sprite = function(sprite) { sprite.attrib({ "cx": this.x, "cy": this.y }); }
 });
 
 var ConstructedPoint = Point.extend(function() {
 
-    this.create_graphics = function() { 
-	return Graphics.svg_create("circle", "points", "intersectionpoint", {"r": "5"}); 
+    this.create_sprite = function() { 
+	var sprite = Graphics.create("circle", "points");
+	sprite.add_class("intersectionpoint");
+	sprite.attrib({"r":"5"});
+	return sprite;
     }
 
 });
@@ -70,8 +62,11 @@ var ControlPoint = Point.extend(function() {
 
     this.create_at = function(x,y) { return this.extend(function() { this.x = x; this.y = y; }); }
 
-    this.create_graphics = function() {
-	return Graphics.svg_create("circle", "controlpoints", "controlpoint", {"r":"10"});
+    this.create_sprite = function() {
+	var sprite = Graphics.create("circle", "controlpoints");
+	sprite.add_class("controlpoint");
+	sprite.attrib({"r":"10"});
+	return sprite;
     }
 });
 
@@ -88,8 +83,10 @@ var Line = Gizmo.extend(function() {
 	}
     }
 
-    this.create_graphics = function() {
-	return Graphics.svg_create("line", "lines", "line", {});
+    this.create_sprite = function() {
+	var sprite = Graphics.create("line", "lines");
+	sprite.add_class("line");
+	return sprite;
     }
 
 
@@ -122,13 +119,12 @@ var Line = Gizmo.extend(function() {
 	    line2.p2.x, line2.p2.y);
     }
 
-    this.move_graphics = function(svg) {
+    this.move_sprite = function(sprite) {
 	var exit1 = extend(this.p1, this.p2);
 	var exit2 = extend(this.p2, this.p1);
 
 	if (exit1!=null && exit2 != null) {
-	    Graphics.svg_attrib(svg, { "x1": exit1[0], "y1": exit1[1],
-				       "x2": exit2[0], "y2": exit2[1]});
+	    sprite.attrib({ "x1": exit1[0], "y1": exit1[1], "x2": exit2[0], "y2": exit2[1]});
 	}
 
 	// If the exits are undefined we can only hope that the old line runs
@@ -166,8 +162,10 @@ var Circle = Gizmo.extend(function() {
 	}
     }
 
-    this.create_graphics = function() {
-	return Graphics.svg_create("circle", "lines", "circle");
+    this.create_sprite = function() {
+	var sprite = Graphics.create("circle", "lines");
+	sprite.add_class("circle");
+	return sprite;
     }
 
     this.radius = function() {
@@ -179,8 +177,8 @@ var Circle = Gizmo.extend(function() {
 	return Math.abs(this.radius() - Point.distance_cc(this.center[0], this.center[1], x, y));
     }
 
-    this.move_graphics = function(svg) {
+    this.move_sprite = function(sprite) {
 	var r = this.radius(); 
-	Graphics.svg_attrib(svg, {"cx": this.center[0], "cy": this.center[1], "r": r});
+	sprite.attrib({"cx": this.center[0], "cy": this.center[1], "r": r});
     }
 });

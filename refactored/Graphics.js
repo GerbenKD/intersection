@@ -26,45 +26,7 @@ var Graphics = new function() {
 
     this.SVG.setAttribute("width",  this.XS);
     this.SVG.setAttribute("height", this.YS);
-
-    this.add_class    = function(elt, cls) { elt.classList.add(cls);    }
-    this.remove_class = function(elt, cls) { elt.classList.remove(cls); }
-    this.has_class    = function(elt, cls) { return elt.classList.contains(cls); }
-
-    //	Start out hidden. Show upon recalculate_check_valid
-    this.svg_create = function(name, group, clazz, attrib) {
-	var svg = document.createElementNS(this.SVG_NS, name);
-	var grp = this.groups[group];
-	svg.stowaways = { group: grp };
-	this.add_class(svg, clazz);
-	this.svg_attrib(svg, attrib);
-	this.svg_hide(svg);
-	grp.appendChild(svg);
-	return svg;
-    }
-
-    this.svg_destroy = function(elt) {
-	elt.stowaways.group.removeChild(elt);
-    }
-   
-    this.svg_attrib = function(elt, attrib) {
-	for (var key in attrib) {
-	    elt.setAttribute(key, attrib[key]);
-	}
-    }
-
-    this.svg_hide = function(elt) {
-	if (elt.stowaways.hidden) { console.error("Hiding an element that's already hidden!"); return; }
-	elt.stowaways.hidden = true;
-	this.add_class(elt, "hidden");
-    }
-
-    this.svg_show = function(elt) {
-	if (!elt.stowaways.hidden) { console.error("Showing an element that's not hidden!"); return; }
-	elt.stowaways.hidden = false;
-	this.remove_class(elt, "hidden");
-    }
-
+    
      //converts a mouse event to screen coords
     this.e2coord = function(e) {
 	e = e || window.event;
@@ -75,4 +37,34 @@ var Graphics = new function() {
 	var y = e.pageY || (e.clientY  + scrollTop);
 	return [x,y];
     }
+
+    var Sprite = new function() {
+	this.extend = function(constr) { constr.prototype = this; return new constr(); }
+
+	this.add_class    = function(cls)    { this.svg.classList.add(cls); this.classes[cls] = true;   }
+	this.remove_class = function(cls)    { this.svg.classList.remove(cls); delete this.classes[cls]; }
+	this.has_class    = function(cls)    { return this.classes[cls]; }
+	this.attrib       = function(attrib) { for (var key in attrib) { this.svg.setAttribute(key, attrib[key]); } }
+	this.destroy      = function ()      { this.group.removeChild(this.svg); }
+	
+	this.hide = function()   { this.add_class("hidden"); }
+	this.show = function()   { this.remove_class("hidden"); }
+	this.hidden = function() { return this.has_class("hidden"); }
+    }
+
+    //	Start out hidden. Show upon recalculate_check_valid
+    this.create = function(name, group) {
+	var svg = document.createElementNS(this.SVG_NS, name);
+	var grp = this.groups[group];
+	var sprite = Sprite.extend(function() {
+	    this.svg = svg;
+	    this.group = grp;
+	    this.classes = {};
+	});
+	sprite.add_class("hidden");
+	grp.appendChild(svg);
+	return sprite;
+    }
+
+
 }
