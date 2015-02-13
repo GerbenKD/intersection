@@ -344,13 +344,17 @@ var LineLineIntersection = IntersectionPoint.extend("LineLineIntersection", func
 
     this.recalculate = function() {
 	var line1 = this.parents[0], line2 = this.parents[1];
-	var xy = Line.compute_intersection(line1, line2);
-	if (xy && isFinite(xy[0]) && isFinite(xy[1])) {
-	    this.x = xy[0];
-	    this.y = xy[1];
-	} else {
-	    this.valid = false;
+	var v = line1.valid && line2.valid;
+	var xy;
+	if (v) {
+	    xy = Line.compute_intersection(line1, line2);
+	    v = xy && isFinite(xy[0]) && isFinite(xy[1]);
 	}
+	this.mark_valid(v);
+	if (v) {
+	    this.outputs[0].x = xy[0];
+	    this.outputs[0].y = xy[1];
+	} 
     }
 
 });

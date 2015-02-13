@@ -11,6 +11,7 @@
   - abstract tool.recalculate()        - update the outputs and the valid status of the tool  
   - abstract tool.add_graphics(level)  - make this tool visible. Level 1 - show outputs, 2 - show everything
   - abstract tool.update_graphics()    - bring sprite up to date
+  - abstract tool.max_output_socket()  - returns highest output socket number of this tool
   - abstract tool.get_input(socket)    - returns [input_tool, output_socket]
   - abstract tool.get_output(socket)   - returns output gizmo at that socket
   - abstract tool.get_sprite(socket) - returns sprite object or an error
@@ -123,6 +124,8 @@ var BasicTool = Tool.extend(function() {
 	this.outputs[socket] = null;
     }
 
+    this.max_output_socket = function() { return this.outputs.length; }
+
     this.get_input = function(socket) { return this.inputs[socket]; }
     this.get_output = function(socket) { return this.outputs[socket]; }
     this.get_sprite = function(socket) {
@@ -142,14 +145,14 @@ var BasicTool = Tool.extend(function() {
 
 var ControlPointTool = BasicTool.extend(function() {
 
-    this.add = function(x,y) {
-	return this.add_output(ControlPoint.create_at(x,y));
+    this.add = function(pos) {
+	return this.add_output(ControlPoint.create(pos));
     }
 
-    this.find_closest = function(x,y) {
+    this.find_closest = function(pos) {
 	var i_best=-1, d_best = Infinity;
 	for (var i=0; i<this.outputs.length; i++) {
-	    var d = this.outputs[i].distance_to_c(x,y);
+	    var d = this.outputs[i].distance_to_c(pos);
 	    if (d < d_best) { d_best = d; i_best = i; }
 	}
 	return [i_best, d_best];
@@ -161,7 +164,13 @@ var ControlPointTool = BasicTool.extend(function() {
 var LineTool = BasicTool.extend(function() {
 
     this.recalculate = function() {
-	this.outputs[0].recalculate(this.listen(0), this.listen(1));
+	var point1 = this.listen(0), point2 = this.listen(1);
+	var line = this.outputs[0];
+	line.valid = point1.valid && point2.valid;
+	if (line.valid) {
+	    line.p1 = point1.dup();
+	    line.p2 = point2.dup();
+	}
     }
 
     this.create = function(fields) {
@@ -176,7 +185,13 @@ var LineTool = BasicTool.extend(function() {
 var CircleTool = BasicTool.extend(function() {
 
     this.recalculate = function() {
-	this.outputs[0].recalculate(this.listen(0), this.listen(1));
+	var center = this.listen(0), border = this.listen(1);
+	var circle = this.outputs[0];
+	circle.valid = center.valid && border.valid;
+	if (circle.valid) {
+	    circle.center = center.dup();
+	    circle.border = border.dup();
+	}
     }
 
     this.create = function(fields) {
@@ -186,6 +201,148 @@ var CircleTool = BasicTool.extend(function() {
     }
 
 });
+
+
+var CCI_Tool = BasicTool.extend(function() {
+
+    this.create = function() {
+	var instance = BasicTool.create.call(this);
+	instance.add_output(ConstructedPoint.create());
+	instance.add_output(ConstructedPoint.create());
+	return instance;
+    }
+
+    this.mark_valid = function(v) {
+	this.outputs[0].valid = v;
+	this.outputs[1].valid = v;
+    }
+
+    this.recalculate = function() {
+ 	var circle1 = this.listen(0), circle2 = this.listen(1); // nieuw
+	if (!circle1.valid || !circle2.valid) { this.mark_valid(false); return; }
+	this.mark_valid(true);
+	var centre1 = circle1.center; // UK vs US!
+	var centre2 = circle2.center;
+
+	var x1 = centre1[0], y1 = centre1[1];
+	var x2 = centre2[0], y2 = centre2[1];
+	var r1 = circle1.radius(), r2 = circle2.radius();
+	var dx = x2-x1, dy = y2-y1;
+	var d2 = dx*dx+dy*dy;
+
+	if (d2<SMALL2) { this.mark_valid(false); return; } // circles with same centre have no intersections
+
+	var D = ((r1+r2)*(r1+r2)/d2-1) * (1-(r1-r2)*(r1-r2)/d2);
+
+	// case 1: no intersections
+	if (D < -SMALL) { this.mark_valid(false); return; }
+	
+	var dr2 = 0.5*(r1*r1-r2*r2)/d2;
+	var xs = 0.5*(x1+x2)+dx*dr2
+	var ys = 0.5*(y1+y2)+dy*dr2
+
+	if (D<SMALL) {
+	    // case 2: one intersection. Pretend that D is zero
+	    this.outputs[0].pos = [xs, ys];
+	    this.outputs[1].pos = [xs, ys];
+	} else {
+	    // case 3: two intersections
+	    var K = 0.5*Math.sqrt(D);
+	    var xt =  dy*K;
+	    var yt = -dx*K;
+
+	    // get a consistent ordering of the two intersection points
+	    var b1 = circle1.border;
+	    if (xt*(b1[0]-x1) + yt*(b1[1]-y1) > SMALL) {
+		xt = -xt; yt = -yt;
+	    }
+	    
+	    this.outputs[0].pos = [xs+xt, ys+yt];
+	    this.outputs[1].pos = [xs-xt, ys-yt];
+	}
+    }
+});
+
+
+var LCI_Tool = BasicTool.extend(function() {
+
+    this.create = function() {
+	var instance = BasicTool.create.call(this);
+	instance.add_output(ConstructedPoint.create());
+	instance.add_output(ConstructedPoint.create());
+	return instance;
+    }
+
+    this.mark_valid = function(v) {
+	this.outputs[0].valid = v;
+	this.outputs[1].valid = v;
+    }
+
+    this.recalculate = function() {
+	var line = this.listen(0), circle = this.listen(1);
+	if (!line.valid || !circle.valid) { this.mark_valid(false); return; }
+	this.mark_valid(true);
+	var cx = circle.center[0], cy = circle.center[1],
+	    bx = circle.border[0], by = circle.border[1];
+	var r2 = (cx-bx)*(cx-bx) + (cy-by)*(cy-by);
+	var x1 = line.p1[0] - cx, y1 = line.p1[1] - cy;
+	var x2 = line.p2[0] - cx, y2 = line.p2[1] - cy;
+	var dx = x2-x1, dy = y2-y1;
+	var dr2 = dx*dx+dy*dy;
+	var D = x1*y2-x2*y1;
+	var R = r2*dr2 - D*D;
+	
+	// case 1: no intersections
+	if (R<=-SMALL2 || dr2<=SMALL2) { this.mark_valid(false); return; }
+	D = D/dr2;
+
+	var xs = cx+D*dy;
+	var ys = cy-D*dx;
+
+	if (R<SMALL2) {
+	    // case 2: one intersection. Pretend that R is zero
+	    this.outputs[0].pos = [xs, ys];
+	    this.outputs[1].pos = [xs, ys];
+	} else {
+	    // case 3: two intersections
+	    var sqrtR = Math.sqrt(R)/dr2;
+	    var xt = dx*sqrtR, yt = dy*sqrtR;
+
+	    this.outputs[0].pos = [xs+xt, ys+yt];
+	    this.outputs[1].pos = [xs-xt, ys-yt];
+	}
+    }
+
+
+});
+
+var LLI_Tool = BasicTool.extend(function() {
+
+    this.create = function() {
+	var instance = BasicTool.create.call(this);
+	instance.add_output(ConstructedPoint.create());
+	return instance;
+    }
+
+    this.mark_valid = function(v) {
+	this.outputs[0].valid = v;
+    }
+
+
+    this.recalculate = function() {
+	var line1 = this.listen(0), line2 = this.listen(1);
+	var v = line1.valid && line2.valid;
+	var xy;
+	if (v) {
+	    xy = Line.compute_intersection(line1, line2);
+	    v = xy && isFinite(xy[0]) && isFinite(xy[1]);
+	}
+	this.mark_valid(v);
+	if (v) this.outputs[0].pos = xy;
+    }
+
+});
+
 
 
 var InterfaceTool = BasicTool.extend(function() {
@@ -217,12 +374,6 @@ var InterfaceTool = BasicTool.extend(function() {
 
 var CompoundTool = Tool.extend(function() {
 
-    /*
-  - abstract tool.recalculate()       - update the outputs and the valid status of the tool  
-  - abstract tool.add_graphics(level) - make this tool visible. Level 1 - show outputs, 2 - show everything
-  - abstract tool.update_graphics()   - bring graphics up to date
-    */
-
     this.create = function(fields) {
 	return this.extend(function() {
 	    for (var key in fields) { this[key] = fields[key]; }
@@ -251,12 +402,19 @@ var CompoundTool = Tool.extend(function() {
 
     this.add_graphics = function(lvl) {
 	this.graphics_level = lvl;
-	if (lvl==1) {
+	switch (lvl) {
+	case 1:
 	    this.output_interface.add_graphics();
-	} else {
+	    break;
+	case 2:
+	    // TODO perhaps outputs should have a special look, or something
 	    for (var i=0; i<this.tools.length; i++) {
 		this.tools[i].add_graphics();
 	    }
+	    break;
+	default:
+	    console.error("Bad graphics level!");
+	    break;
 	}
     }
     
@@ -278,12 +436,46 @@ var CompoundTool = Tool.extend(function() {
     }
 
     this.add_tool = function(tool) {
+	function create_intersection(tool1, socket1, gizmo1, tool2, socket2, gizmo2) {
+	    var itool;
+	    var invert = false;
+	    if (gizmo1.type == "line") {
+		itool = gizmo2.type == "line" ? LLI_Tool.create() : LCI_Tool.create(); 
+	    } else {
+		invert = true;
+		itool = gizmo2.type == "line" ? LCI_Tool.create() : CCI_Tool.create(); 
+	    }
+	    itool.connect(tool1, socket1, invert ? 1 : 0);
+	    itool.connect(tool2, socket2, invert ? 0 : 1);
+	    return itool;
+	}
+
+	var n_existing_tools = this.tools.length;
 	this.tools.push(tool);
-	if (this.graphics_level==2 && !tool.graphics) tool.add_graphics();
+
+	var gr = this.graphics_level==2 && !tool.graphics;
+	if (gr) tool.add_graphics();
+
+	for (var j=0; j<tool.max_output_socket(); j++) {
+	    var gizmo = tool.get_output(j);
+	    if (!gizmo) continue;
+	    if (gizmo.type == "point") continue;
+	    for (var i=0; i<n_existing_tools; i++) {
+		var test_tool = this.tools[i];
+		for (var k=0; k<test_tool.max_output_socket(); k++) {
+		    var test_gizmo = test_tool.get_output(k);
+		    if (!test_gizmo) continue;
+		    if (test_gizmo.type == "point") continue;
+		    var itool = create_intersection(tool, j, gizmo, test_tool, k, test_gizmo);
+		    if (gr) itool.add_graphics();
+		    this.tools.push(itool);
+		}
+	    }
+	}
     }
      
-    this.get_input  = function(socket) { return this.input_interface.get_input(socket);     }
-    this.get_output = function(socket) { return this.output_interface.get_output(socket);   }
+    this.get_input  = function(socket) { return this.input_interface.get_input(socket);   }
+    this.get_output = function(socket) { return this.output_interface.get_output(socket); }
     this.get_sprite = function(socket) { return this.output_interface.get_sprite(socket); }
 
 });

@@ -19,6 +19,7 @@
 
 
 <script>
+"use strict";
 
 function load(urls, callback) {
 
@@ -59,7 +60,8 @@ function load(urls, callback) {
     }
 }
 
-SMALL = 0.0001;
+var SMALL = 0.0001;
+var SMALL2 = SMALL*SMALL;
 load(["Tool.js", "Gizmo.js", "Graphics.js", "main.js"], function() { main(); });
 
 

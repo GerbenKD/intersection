@@ -26,23 +26,22 @@ var Gizmo = new function() {
 var Point = Gizmo.extend(function() {
     this.type = "point";
 
-    this.distance_cc = function(x1,y1,x2,y2) { 
-	var dx = x1-x2, dy = y1-y2;
+    this.dup = function() { return [this.pos[0], this.pos[1]]; }
+
+    this.distance_cc = function(pos1, pos2) { 
+	var dx = pos1[0]-pos2[0], dy = pos1[1]-pos2[1];
 	return Math.sqrt(dx*dx+dy*dy);
     }
 
     this.distance_pp = function(p1, p2) {
-	return Point.distance_cc(p1.x, p1.y, p2.x, p2.y);
+	return Point.distance_cc(p1.pos, p2.pos);
     }
 
-    this.distance_to_c = function(x, y) {
-	return Point.distance_cc(this.x, this.y, x, y);
+    this.distance_to_c = function(pos) {
+	return Point.distance_cc(this.pos, pos);
     }
 
-    // Sorts points by x coordinate. Used by find_duplicates
-    this.comparator = function(p1, p2) { return p1.x - p2.x; }
-
-    this.move_sprite = function(sprite) { sprite.attrib({ "cx": this.x, "cy": this.y }); }
+    this.move_sprite = function(sprite) { sprite.attrib({ "cx": this.pos[0], "cy": this.pos[1] }); }
 });
 
 var ConstructedPoint = Point.extend(function() {
@@ -60,7 +59,7 @@ var ControlPoint = Point.extend(function() {
 
     this.valid = true;
 
-    this.create_at = function(x,y) { return this.extend(function() { this.x = x; this.y = y; }); }
+    this.create = function(pos) { return this.extend(function() { this.pos = pos; }); }
 
     this.create_sprite = function() {
 	var sprite = Graphics.create("circle", "controlpoints");
@@ -75,20 +74,11 @@ var Line = Gizmo.extend(function() {
 
     this.type = "line";
 
-    this.recalculate = function(point1, point2) {
-	this.valid = point1.valid && point2.valid;
-	if (this.valid) {
-	    this.p1 = [point1.x, point1.y];
-	    this.p2 = [point2.x, point2.y];
-	}
-    }
-
     this.create_sprite = function() {
 	var sprite = Graphics.create("line", "lines");
 	sprite.add_class("line");
 	return sprite;
     }
-
 
     // computers the intersection of two given lines
     this.compute_intersection_coords = function(x1,y1,x2,y2,x3,y3,x4,y4) {
@@ -99,10 +89,18 @@ var Line = Gizmo.extend(function() {
 	return [(f1*x34 - x12*f2)/N, (f1*y34 - y12*f2)/N];
     }
 
+    this.compute_intersection = function(line1, line2) {
+	return this.compute_intersection_coords(
+	    line1.p1[0], line1.p1[1],
+	    line1.p2[0], line1.p2[1],
+	    line2.p1[0], line2.p1[1],
+	    line2.p2[0], line2.p2[1]);
+    }
+
     // returns the coordinates of the projection of (x,y) onto this line
     this.project_coords = function(x,y) {
-	var x1 = this.parents[0].x, y1 = this.parents[0].y,
-	    x2 = this.parents[1].x, y2 = this.parents[1].y;
+	var x1 = this.p1[0], y1 = this.p1[1],
+	    x2 = this.p2[0], y2 = this.p2[1];
 	var bx = x2-x1, by = y2-y1, ax = x - x1, ay = y - y1;
 	var b_len = Math.sqrt(bx*bx+by*by);
 	if (b_len < SMALL) return null;
@@ -110,14 +108,6 @@ var Line = Gizmo.extend(function() {
 	var a_scalar = ax * b_hat_x + ay * b_hat_y;
 	return [x1 + b_hat_x * a_scalar, y1 + b_hat_y * a_scalar];
     } 
-
-    this.compute_intersection = function(line1, line2) {
-	return this.compute_intersection_coords(
-	    line1.p1.x, line1.p1.y,
-	    line1.p2.x, line1.p2.y,
-	    line2.p1.x, line2.p1.y,
-	    line2.p2.x, line2.p2.y);
-    }
 
     this.move_sprite = function(sprite) {
 	var exit1 = extend(this.p1, this.p2);
@@ -142,7 +132,7 @@ var Line = Gizmo.extend(function() {
 	    }
 	    if (dy!=0) {
 		var iy = dy>0 ? Graphics.YS : 0;
-		var ix = x+(iy-y)/dy * dx
+		var ix = x+(iy-y)/dy * dx;
 		if (ix>=0 && ix<=Graphics.XS) return [ix, iy];
 	    }
 	    return null;
@@ -154,14 +144,6 @@ var Line = Gizmo.extend(function() {
 var Circle = Gizmo.extend(function() {
     this.type = "circle";
     
-    this.recalculate = function(center, border) {
-	this.valid = center.valid && border.valid;
-	if (this.valid) {
-	    this.center = [center.x, center.y];
-	    this.border = [border.x, border.y];
-	}
-    }
-
     this.create_sprite = function() {
 	var sprite = Graphics.create("circle", "lines");
 	sprite.add_class("circle");
@@ -169,16 +151,15 @@ var Circle = Gizmo.extend(function() {
     }
 
     this.radius = function() {
-	return Point.distance_cc(this.center[0], this.center[1], this.border[0], this.border[1]); 
+	return Point.distance_cc(this.center, this.border);
     }
 
     // Distance between a point and the circle, used for highlighting
-    this.distance_c = function(x,y) {
-	return Math.abs(this.radius() - Point.distance_cc(this.center[0], this.center[1], x, y));
+    this.distance_c = function(pos) {
+	return Math.abs(this.radius() - Point.distance_cc(this.center, pos));
     }
 
     this.move_sprite = function(sprite) {
-	var r = this.radius(); 
-	sprite.attrib({"cx": this.center[0], "cy": this.center[1], "r": r});
+	sprite.attrib({"cx": this.center[0], "cy": this.center[1], "r": this.radius()});
     }
 });
