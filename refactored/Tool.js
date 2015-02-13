@@ -11,7 +11,8 @@
   - abstract tool.recalculate()        - update the outputs and the valid status of the tool  
   - abstract tool.add_graphics(level)  - make this tool visible. Level 1 - show outputs, 2 - show everything
   - abstract tool.update_graphics()    - bring sprite up to date
-  - abstract tool.max_output_socket()  - returns highest output socket number of this tool
+  - abstract tool.max_input_socket()   - returns a number greater than all used input socket numbers
+  - abstract tool.max_output_socket()  - returns a number greater than all used output socket numbers
   - abstract tool.get_input(socket)    - returns [input_tool, output_socket]
   - abstract tool.get_output(socket)   - returns output gizmo at that socket
   - abstract tool.get_sprite(socket) - returns sprite object or an error
@@ -124,6 +125,7 @@ var BasicTool = Tool.extend(function() {
 	this.outputs[socket] = null;
     }
 
+    this.max_input_socket = function() { return this.inputs.length; }
     this.max_output_socket = function() { return this.outputs.length; }
 
     this.get_input = function(socket) { return this.inputs[socket]; }
@@ -477,5 +479,40 @@ var CompoundTool = Tool.extend(function() {
     this.get_input  = function(socket) { return this.input_interface.get_input(socket);   }
     this.get_output = function(socket) { return this.output_interface.get_output(socket); }
     this.get_sprite = function(socket) { return this.output_interface.get_sprite(socket); }
+    this.max_output_socket = function() { return this.output_interface.max_output_socket(); }
+    this.max_input_socket = function() { return this.input_interface.max_input_socket(); }
+
+    // invariant: every tool's inputs refer to tools earlier in the tools array, or to the controlpoint tool
+    this.separate = function(tool, socket) {
+	var dependent = {}; // hashes dependent tools that have been seen
+	var dependent_tools = [];
+
+	var i_wr = 0;
+	for (var i_rd=0; i_rd<this.tools.length; i_rd++) {
+	    var t = this.tools[i_rd];
+	    var dep = check_dependent(t);
+	    if (dep) {
+		dependent_tools.push(t);
+		dependent[t.id] = true;
+	    } else {
+		this.tools[i_wr++] = t;
+	    }
+	}
+	if (i_rd-i_wr != dependent_tools.length) console.error("More shit and fans");
+	for (var i=0; i<i_rd-i_wr; i++) { this.tools[i_wr+i] = dependent_tools[i]; }
+	
+	return i_wr;
+
+	// tool is dependent on the controlpoint if its inputs refer to either another dependent tool, or
+	// to the controlpoint tool with the correct socket
+	function check_dependent(t) {
+	    for (var i=0; i<t.max_input_socket(); i++) {
+		var inp = t.get_input(i);
+		if (!inp) continue;
+		if ((inp[0]===tool && inp[1]==socket) || dependent[inp[0].id]) return true;
+	    }
+	    return false;
+	}
+    }
 
 });

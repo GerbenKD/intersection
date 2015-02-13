@@ -60,6 +60,8 @@ function main() {
 
     window.onmousedown = function(e) {
 	if (!HIGHLIGHTED) return;
+	var num_indep = CT.separate(HIGHLIGHTED[0], HIGHLIGHTED[1]);
+	console.log("I found "+num_indep+"/"+CT.tools.length+" independent tools whose outputs are snap targets");
 	var cp = HIGHLIGHTED[0].get_output(HIGHLIGHTED[1]);
 	DRAGGING = [HIGHLIGHTED[0], HIGHLIGHTED[1], cp.pos[0] - MOUSE[0], cp.pos[1] - MOUSE[1]];
 	highlight();
