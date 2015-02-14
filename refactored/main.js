@@ -76,47 +76,51 @@ function main() {
     window.onmousedown = function(e) {
 	if (!HIGHLIGHTED) return;
 	var num_indep = CT.separate(HIGHLIGHTED[0], HIGHLIGHTED[1]);
-	console.log("I found "+num_indep+"/"+CT.tools.length+" independent tools whose outputs are snap targets");
+	// console.log("I found "+num_indep+"/"+CT.tools.length+" independent tools whose outputs are snap targets");
+
+	var T = CT.get_tools(num_indep);
+	var indep_tools = T[0], dep_tools = T[1];
+
+	var cpl = get_controlpoint_listeners(dep_tools);
+
+	// first find all CP sockets connected to the same tool as the one being dragged
+	var disqualified_cp_sockets = {};
+	for (var i=0; i<cpl.length; i++) {
+	    for (var j=0; j<dep_tools[i].max_input_socket(); j++) {
+		var connection = dep_tools[i].get_input(j);
+		if (connection) disqualified_cp_sockets[connection[1]] = true;
+	    }
+	}
+
+	indep_tools.push(CP);
+	HIGHLIGHT_TARGETS = select_outputs(indep_tools, function(tool,socket,gizmo,sprite) { 
+	    return gizmo.type == "point" && !(tool===CP && disqualified_cp_sockets[socket]);
+	});
+
 	var cp = HIGHLIGHTED[0].get_output(HIGHLIGHTED[1]);
-	HIGHLIGHT_TARGETS = get_drag_targets(num_indep);
-	DRAGGING = [HIGHLIGHTED[0], HIGHLIGHTED[1], cp.pos[0] - MOUSE[0], cp.pos[1] - MOUSE[1], num_indep];
+	DRAGGING = [HIGHLIGHTED[0], HIGHLIGHTED[1], cp.pos[0] - MOUSE[0], cp.pos[1] - MOUSE[1], num_indep, cpl];
 	apply_outputs(HIGHLIGHT_TARGETS, function(tool,socket,gizmo,sprite) { sprite.add_class("sparkly"); });
 	highlight();
     }
 
-    function get_drag_targets(num_indep) {
-	var T = CT.get_tools(num_indep);
-	var indep_tools = T[0], dep_tools = T[1];
-
-	// first find all CP sockets connected to the same tool as the one being dragged
-	var disqualified_cp_sockets = {};
-	for (var i=0; i<dep_tools.length; i++) {
-	    var disqualify = false;
-	    for (var j=0; j<dep_tools[i].max_input_socket(); j++) {
-		var connection = dep_tools[i].get_input(j);
-		if (connection && connection[0]===HIGHLIGHTED[0] && connection[1]==HIGHLIGHTED[1]) { 
-		    disqualify=true; break; 
-		}
-	    }
-	    if (disqualify) {
-		for (var j=0; j<dep_tools[i].max_input_socket(); j++) {
-		    var connection = dep_tools[i].get_input(j);
-		    if (connection) disqualified_cp_sockets[connection[1]] = true;
+    function get_controlpoint_listeners(tools) {
+	var res = [];
+	for (var i=0; i<tools.length; i++) {
+	    var t = tools[i];
+	    for (var j=0; j<t.max_input_socket(); j++) {
+		var connection=t.get_input(j);
+		if (connection && connection[0]===HIGHLIGHTED[0] && connection[1]==HIGHLIGHTED[1]) {
+		    res.push([t, j]);
 		}
 	    }
 	}
-
-	// now find all outputs that can be snapped to
-	indep_tools.push(CP);
-	return select_outputs(indep_tools, function(tool,socket,gizmo,sprite) { 
-	    return gizmo.type == "point" && !(tool===CP && disqualified_cp_sockets[socket]);
-	});
+	return res;
     }
 
     window.onmousemove = function(e) {
 	MOUSE = Graphics.e2coord(e);
 	if (DRAGGING) {
-	    var gizmo = DRAGGING[0].outputs[DRAGGING[1]];
+	    var gizmo = DRAGGING[0].get_output(DRAGGING[1]);
 	    gizmo.pos = [MOUSE[0]+DRAGGING[2], MOUSE[1]+DRAGGING[3]];
 	    CP.update_graphics();
 	    CT.recalculate(DRAGGING[4]);
@@ -128,10 +132,34 @@ function main() {
     window.onmouseup = function(e) {
 	if (!DRAGGING) return;
 	apply_outputs(HIGHLIGHT_TARGETS, function(tool, socket,gizmo,sprite) { sprite.remove_class("sparkly"); });
+	if (HIGHLIGHTED) {
+	    snap(DRAGGING[5], HIGHLIGHTED);
+	    // TODO also snap all points that depend on the snapped controlpoint!
+	    CT.recalculate(DRAGGING[4]);
+	    CT.update_graphics(DRAGGING[4]);
+	}
 	DRAGGING = null;
 	HIGHLIGHT_TARGETS = select_outputs([CP], function() { return true; }); // all controlpoints
 	highlight();
     }
+}
+
+
+
+function snap(cpl, target) {
+    // figure out the controlpointtool and relevant output socket
+    if (!cpl || cpl.length==0) return;
+    var cp = cpl[0][0].get_input(cpl[0][1]);
+
+    // rewire
+    for (var i=0; i<cpl.length; i++) {
+	var inp = cpl[i]; // contains dst_tool and dst_socket
+	inp[0].disconnect(inp[1]);
+	inp[0].connect(target[0], target[1], inp[1]);
+    }
+
+    // destroy controlpoint
+    cp[0].remove_output(cp[1]);
 }
 
 function apply_outputs(outputs, func) {

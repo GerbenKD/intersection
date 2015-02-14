@@ -83,7 +83,7 @@ var BasicTool = Tool.extend(function() {
     }
 
     this.disconnect = function(socket) {
-	if (this.inputs[socket]) {
+	if (!this.inputs[socket]) {
 	    console.error("Attempt to disconnect an unconnected socket "+socket); return;
 	}
 	this.inputs[socket] = null;
