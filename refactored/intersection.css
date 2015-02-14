@@ -26,7 +26,7 @@ body {
 .controlpoint {
     stroke: black;
     stroke-width: 2px;
-    fill: blue;
+    fill: #0000d0;
 }
 
 .controlpoint.highlighted {
@@ -34,19 +34,67 @@ body {
 }
 
 .controlpoint.sparkly {
-    fill: #90b0ff;
+    
+    -webkit-animation: cp_sparkle 1.3s linear infinite;
+       -moz-animation: cp_sparkle 1.3s linear infinite;
+            animation: cp_sparkle 1.3s linear infinite;
 }
+
+
+@-webkit-keyframes cp_sparkle {
+    0%   { fill: #0000d0; }
+    50%  { fill: white;   }
+    100% { fill: #0000d0; }
+}
+
+@-moz-keyframes cp_sparkle {
+    0%   { fill: #0000d0; }
+    50%  { fill: white;   }
+    100% { fill: #0000d0; }
+}
+
+@keyframes cp_sparkle {
+    0%   { fill: #0000d0; }
+    50%  { fill: white;   }
+    100% { fill: #0000d0; }
+}
+
 
 .intersectionpoint {
     stroke: black;
     stroke-width: 1px;
-    fill: green;
+    fill: #00d000;
 }
 
 .intersectionpoint.highlighted {
     stroke-width: 3;
 }
 
+
+
 .intersectionpoint.sparkly {
-    fill: #a0ffa0;
+    
+    -webkit-animation: isp_sparkle 1.3s linear infinite;
+       -moz-animation: isp_sparkle 1.3s linear infinite;
+            animation: isp_sparkle 1.3s linear infinite;
 }
+
+
+@-webkit-keyframes isp_sparkle {
+    0%   { fill: #00d000; }
+    50%  { fill: white;   }
+    100% { fill: #00d000; }
+}
+
+@-moz-keyframes isp_sparkle {
+    0%   { fill: #00d000; }
+    50%  { fill: white;   }
+    100% { fill: #00d000; }
+}
+
+@keyframes isp_sparkle {
+    0%   { fill: #00d000; }
+    50%  { fill: white;   }
+    100% { fill: #00d000; }
+}
+
