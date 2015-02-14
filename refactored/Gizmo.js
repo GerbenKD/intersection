@@ -98,16 +98,21 @@ var Line = Gizmo.extend(function() {
     }
 
     // returns the coordinates of the projection of (x,y) onto this line
-    this.project_coords = function(x,y) {
+    this.project_coords = function(pos) {
 	var x1 = this.p1[0], y1 = this.p1[1],
 	    x2 = this.p2[0], y2 = this.p2[1];
-	var bx = x2-x1, by = y2-y1, ax = x - x1, ay = y - y1;
+	var bx = x2-x1, by = y2-y1, ax = pos[0] - x1, ay = pos[1] - y1;
 	var b_len = Math.sqrt(bx*bx+by*by);
 	if (b_len < SMALL) return null;
 	var b_hat_x = bx / b_len, b_hat_y = by / b_len;
 	var a_scalar = ax * b_hat_x + ay * b_hat_y;
 	return [x1 + b_hat_x * a_scalar, y1 + b_hat_y * a_scalar];
     } 
+
+    this.distance_to_c = function(pos) {
+        var p = this.project_coords(pos);
+        return p ? Point.distance_cc(p, pos) : Infinity;
+    }
 
     this.move_sprite = function(sprite) {
 	var exit1 = extend(this.p1, this.p2);
@@ -155,7 +160,7 @@ var Circle = Gizmo.extend(function() {
     }
 
     // Distance between a point and the circle, used for highlighting
-    this.distance_c = function(pos) {
+    this.distance_to_c = function(pos) {
 	return Math.abs(this.radius() - Point.distance_cc(this.center, pos));
     }
 

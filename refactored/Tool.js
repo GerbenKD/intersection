@@ -8,14 +8,15 @@
   - abstract tool.create({fields})     - create an instance of this tool class
   - abstract tool.connect(src_tool, src_socket, dst_socket)
   - abstract tool.disconnect(dst_socket)
-  - abstract tool.recalculate()        - update the outputs and the valid status of the tool  
+  - abstract tool.recalculate(num_indep) - update the outputs and the valid status of the tool, skipping independents
   - abstract tool.add_graphics(level)  - make this tool visible. Level 1 - show outputs, 2 - show everything
-  - abstract tool.update_graphics()    - bring sprite up to date
+  - abstract tool.update_graphics(num_indep) - bring sprite up to date, skipping independent tools
   - abstract tool.max_input_socket()   - returns a number greater than all used input socket numbers
   - abstract tool.max_output_socket()  - returns a number greater than all used output socket numbers
   - abstract tool.get_input(socket)    - returns [input_tool, output_socket]
   - abstract tool.get_output(socket)   - returns output gizmo at that socket
-  - abstract tool.get_sprite(socket) - returns sprite object or an error
+  - abstract tool.get_sprite(socket)   - returns sprite object or an error
+  - abstract tool.has_graphics()       - returns graphics level
   - tool.listen                        - get gizmo at an input
   ================================ BasicTool: =================================
   hidden fields:
@@ -36,7 +37,8 @@
   - ct.graphics_level (1 = outputs, 2 = everything)
 
   additional methods:
-  - ct.add_tool          - add a new tool to the compound tool
+  - ct.add_tool(tool)                  - add a new tool to the compound tool
+  - ct.get_tools(num_indep, dependent) - returns all dependent / independent tools given the number of independents
 */
 
 var Tool = new function() {
@@ -136,6 +138,7 @@ var BasicTool = Tool.extend(function() {
 	}
 	return this.sprites[socket];
     }
+    this.has_graphics = function() { return this.sprites ? 1 : 0; }
 
     this.highlight = function(socket, value) {
 	if (!this.sprites || !this.sprites[socket]) { console.error("Bad attempt to highlight"); return; }
@@ -394,9 +397,10 @@ var CompoundTool = Tool.extend(function() {
     }
 
     
-    this.recalculate = function() {
+    this.recalculate = function(num_indep) {
+	if (!num_indep) num_indep = 0;
 	this.input_interface.recalculate();
-	for (var i = 0; i < this.tools.length; i++) {
+	for (var i = num_indep; i < this.tools.length; i++) {
 	    this.tools[i].recalculate();
 	}
 	this.output_interface.recalculate();
@@ -419,15 +423,18 @@ var CompoundTool = Tool.extend(function() {
 	    break;
 	}
     }
+
+    this.has_graphics = function() { return this.graphics_level; }
     
-    this.update_graphics = function() {
+    this.update_graphics = function(num_indep) {
 	if (!this.graphics_level) return;
+	if (!num_indep) num_indep = 0;
 	switch (this.graphics_level) {
 	case 1:
 	    this.output_interface.update_graphics();
 	    break;
 	case 2:
-	    for (var i=0; i<this.tools.length; i++) {
+	    for (var i=num_indep; i<this.tools.length; i++) {
 		this.tools[i].update_graphics();
 	    }
 	    break;
@@ -498,7 +505,7 @@ var CompoundTool = Tool.extend(function() {
 		this.tools[i_wr++] = t;
 	    }
 	}
-	if (i_rd-i_wr != dependent_tools.length) console.error("More shit and fans");
+	if (i_rd-i_wr != dependent_tools.length) console.error("This should not happen");
 	for (var i=0; i<i_rd-i_wr; i++) { this.tools[i_wr+i] = dependent_tools[i]; }
 	
 	return i_wr;
@@ -513,6 +520,10 @@ var CompoundTool = Tool.extend(function() {
 	    }
 	    return false;
 	}
+    }
+   
+    this.get_tools = function(num_indep) {
+	return [this.tools.slice(0, num_indep), this.tools.slice(num_indep, this.tools.length)];
     }
 
 });
