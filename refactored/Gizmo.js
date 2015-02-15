@@ -58,6 +58,7 @@ var ConstructedPoint = Point.extend(function() {
 var ControlPoint = Point.extend(function() {
 
     this.valid = true;
+    this.controlpoint = true;
 
     this.create = function(pos) { return this.extend(function() { this.pos = pos; }); }
 

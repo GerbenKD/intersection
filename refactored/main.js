@@ -45,16 +45,12 @@ function main() {
 
     function highlight() {
 	var old = HIGHLIGHTED;
-	var affinity = {
-	    circle: 5,
-	    line: 5,
-	    point: 10 // TODO make controlpoints even more affine somehow
-	};
 	var i_best, d_best = Infinity;
 	for (var i=0; i<HIGHLIGHT_TARGETS.length; i++) {
 	    var gizmo = HIGHLIGHT_TARGETS[i][2];
 	    if (gizmo.valid) {
-		var d = gizmo.distance_to_c(MOUSE) - affinity[gizmo.type];
+		var affinity = gizmo.type != "point" ? 5 : gizmo.controlpoint ? 15 : 10;
+		var d = gizmo.distance_to_c(MOUSE) - affinity;
 		if (d < d_best) {
 		    d_best = d;
 		    i_best = i;
@@ -81,14 +77,15 @@ function main() {
 	var T = CT.get_tools(num_indep);
 	var indep_tools = T[0], dep_tools = T[1];
 
-	var cpl = get_controlpoint_listeners(dep_tools);
+	var cpl = get_controlpoint_listeners(dep_tools, HIGHLIGHTED);
 
 	// first find all CP sockets connected to the same tool as the one being dragged
 	var disqualified_cp_sockets = {};
 	for (var i=0; i<cpl.length; i++) {
-	    for (var j=0; j<dep_tools[i].max_input_socket(); j++) {
-		var connection = dep_tools[i].get_input(j);
-		if (connection) disqualified_cp_sockets[connection[1]] = true;
+	    var t = cpl[i][0]; // this tool listens to the control point
+	    for (var j=0; j<t.max_input_socket(); j++) {
+		var connection = t.get_input(j);
+		if (connection && connection[0]===HIGHLIGHTED[0]) disqualified_cp_sockets[connection[1]] = true;
 	    }
 	}
 
@@ -101,20 +98,6 @@ function main() {
 	DRAGGING = [HIGHLIGHTED[0], HIGHLIGHTED[1], cp.pos[0] - MOUSE[0], cp.pos[1] - MOUSE[1], num_indep, cpl];
 	apply_outputs(HIGHLIGHT_TARGETS, function(tool,socket,gizmo,sprite) { sprite.add_class("sparkly"); });
 	highlight();
-    }
-
-    function get_controlpoint_listeners(tools) {
-	var res = [];
-	for (var i=0; i<tools.length; i++) {
-	    var t = tools[i];
-	    for (var j=0; j<t.max_input_socket(); j++) {
-		var connection=t.get_input(j);
-		if (connection && connection[0]===HIGHLIGHTED[0] && connection[1]==HIGHLIGHTED[1]) {
-		    res.push([t, j]);
-		}
-	    }
-	}
-	return res;
     }
 
     window.onmousemove = function(e) {
@@ -134,7 +117,6 @@ function main() {
 	apply_outputs(HIGHLIGHT_TARGETS, function(tool, socket,gizmo,sprite) { sprite.remove_class("sparkly"); });
 	if (HIGHLIGHTED) {
 	    snap(DRAGGING[5], HIGHLIGHTED);
-	    // TODO also snap all points that depend on the snapped controlpoint!
 	    CT.recalculate(DRAGGING[4]);
 	    CT.update_graphics(DRAGGING[4]);
 	}
@@ -144,6 +126,20 @@ function main() {
     }
 }
 
+
+function get_controlpoint_listeners(tools, out_connection) {
+    var res = [];
+    for (var i=0; i<tools.length; i++) {
+	var t = tools[i];
+	for (var j=0; j<t.max_input_socket(); j++) {
+	    var connection=t.get_input(j);
+	    if (connection && connection[0]===out_connection[0] && connection[1]==out_connection[1]) {
+		res.push([t, j]);
+	    }
+	}
+    }
+    return res;
+}
 
 
 function snap(cpl, target) {
