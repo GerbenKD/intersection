@@ -79,19 +79,24 @@ function main() {
 
 	var cpl = get_controlpoint_listeners(dep_tools, HIGHLIGHTED);
 
-	// first find all CP sockets connected to the same tool as the one being dragged
-	var disqualified_cp_sockets = {};
+	// first find all point outputs connected to the same tool as the one being dragged
+	var disqualified_outputs = {};
 	for (var i=0; i<cpl.length; i++) {
 	    var t = cpl[i][0]; // this tool listens to the control point
 	    for (var j=0; j<t.max_input_socket(); j++) {
 		var connection = t.get_input(j);
-		if (connection && connection[0]===HIGHLIGHTED[0]) disqualified_cp_sockets[connection[1]] = true;
+		if (connection) {
+		    var id = connection[0].id;
+		    if (!disqualified_outputs[id]) disqualified_outputs[id] = {};
+		    disqualified_outputs[id][connection[1]]=true;
+		}
 	    }
 	}
 
 	indep_tools.push(CP);
 	HIGHLIGHT_TARGETS = select_outputs(indep_tools, function(tool,socket,gizmo,sprite) { 
-	    return gizmo.type == "point" && !(tool===CP && disqualified_cp_sockets[socket]);
+	    if (gizmo.type != "point") return false;
+	    return !((tool.id in disqualified_outputs) && disqualified_outputs[tool.id][socket]);
 	});
 
 	var cp = HIGHLIGHTED[0].get_output(HIGHLIGHTED[1]);

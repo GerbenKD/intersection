@@ -5,7 +5,7 @@
   =================================== Tool: ==================================
   - tool.id             - for serialization and to use as key in hash
 
-  - abstract tool.create({fields})     - create an instance of this tool class
+  - abstract tool.create()             - create an instance of this tool class
   - abstract tool.connect(src_tool, src_socket, dst_socket)
   - abstract tool.disconnect(dst_socket)
   - abstract tool.recalculate(num_indep) - update the outputs and the valid status of the tool, skipping independents
@@ -349,6 +349,32 @@ var LLI_Tool = BasicTool.extend(function() {
 });
 
 
+/* Connect the ArcTool as follows:
+   - create the CircleTool first, either with or without graphics.
+   - connect input 0 to the CircleTool.
+   - connect inputs 1 and 2 to a CCI_Tool or LCI_Tool, which intersect the correct Circle
+
+   Upon recalculate, the Arc gizmo is supplied with the coordinates of central and two border points.
+   Recalculate also checks that the intersections both have the correct Circle as parent.
+
+   Note that the UI for ArcTools is different than for other Tools.
+   It is combined with marking circles as outputs.
+   There are no loose controlpoints
+*/
+var ArcTool = BasicTool.extend(function() {
+	
+    this.create = function() {
+	
+    }
+    /*
+  - abstract tool.recalculate(num_indep) - update the outputs and the valid status of the tool, skipping independents
+  - abstract tool.add_graphics(level)  - make this tool visible. Level 1 - show outputs, 2 - show everything
+  - abstract tool.update_graphics(num_indep) - bring sprite up to date, skipping independent tools
+    */
+});
+
+
+
 
 var InterfaceTool = BasicTool.extend(function() {
     
@@ -376,12 +402,10 @@ var InterfaceTool = BasicTool.extend(function() {
     
 });
 
-
 var CompoundTool = Tool.extend(function() {
 
-    this.create = function(fields) {
+    this.create = function() {
 	return this.extend(function() {
-	    for (var key in fields) { this[key] = fields[key]; }
 	    this.input_interface  = InterfaceTool.create();
 	    this.output_interface = InterfaceTool.create();
 	    this.tools = [];
