@@ -224,6 +224,7 @@ var CompoundTool = Tool.extend(function() {
 		var src_hash = candidates[dst[i]];
 		var src = Object.keys(src_hash);
 		var first = src_hash[src[0]];
+		if (!first) {console.log("src="+src+" src.length="+src.length+", src[0]="+src[0]); }
 		var str = first[0].id+"@"+first[2]+" is duplicated in tool(s) ";
 		for (var j=0; j<src.length; j++) {
 		    var item = src_hash[src[j]];
@@ -284,6 +285,7 @@ var CompoundTool = Tool.extend(function() {
 		var dst_key = dst_keys[dst_ix];
 		var src_hash = candidates[dst_key];
 		var src_tool_ids = Object.keys(src_hash);
+		var deleted = 0;
 		for (var src_ix=0; src_ix<src_tool_ids.length; src_ix++) {
 		    var src_key = src_tool_ids[src_ix];
 		    var dst_src_sock = src_hash[src_key];
@@ -295,7 +297,8 @@ var CompoundTool = Tool.extend(function() {
 		    if (matching_outputs.length==0) {
 			// these turn out not to be equal
 			delete src_hash[src_key];
-			if (src_tool_ids.length==1) delete candidates[dst_key];
+			deleted++;
+			if (deleted == src_tool_ids.length) delete candidates[dst_key];
 		    }
 		}
 

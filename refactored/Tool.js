@@ -461,7 +461,7 @@ var LCI_Tool = BasicTool.extend(function() {
     }
 
 
-    if (true) {
+    if (false) {
 	this.add_graphics = function() {
 	    BasicTool.add_graphics.call(this);
 	    for (var i=0; i<this.max_output_socket(); i++) {
