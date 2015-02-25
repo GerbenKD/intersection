@@ -3,6 +3,7 @@
    Connections are maintained by the tools.
 */
 
+
 var Gizmo = new function() {
 
     this.extend = function(constr) { 
@@ -178,3 +179,5 @@ var Circle = Gizmo.extend(function() {
 	sprite.attrib({"cx": this.center[0], "cy": this.center[1], "r": this.radius()});
     }
 });
+
+

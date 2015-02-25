@@ -248,11 +248,6 @@ var CompoundTool = Tool.extend(function() {
 	    }
 	    list.sort(function(a,b) { return a[2][0] - b[2][0]; });
 	    
-	    console.log("List contains "+list.length+" output gizmos:");
-	    for (var i=0; i<list.length; i++) {
-		console.log("  ("+list[i][2][0]+","+list[i][2][1]+")"); 
-	    }
-
 	    // Find all candidates: tools that are sufficiently close together. Tool with higher index
 	    // is a candidate for snapping to the tool with lower index.
 	    // Construct a map dst_id+":"+dst_sock -> src_id -> [dst, src, dst_socket, dst_index, src_index]

@@ -532,5 +532,3 @@ var ArcTool = BasicTool.extend(function() {
   - abstract tool.update_graphics(num_indep) - bring sprite up to date, skipping independent tools
     */
 });
-
-

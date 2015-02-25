@@ -1,5 +1,6 @@
 "use strict";
 
+
 function main() {
 
     var HIGHLIGHTED;            // [tool, output #]
@@ -173,6 +174,7 @@ function main() {
 	}
 	entries.sort(function(a,b) { return (a[3]-b[3]) || (a[4]-b[4]); });
 
+	var tied = 0;
 	for (var i=0; i!=entries.length; i++) {
 	    var entry = entries[i]; //  [dst, src, dst_socket, dst_index, src_index]
 	    var sockets = entry[1].get_matching_outputs(entry[0].get_output(entry[2]));
@@ -181,9 +183,11 @@ function main() {
 		var src_socket = sockets[j];
 		if (!entry[1].get_tie(src_socket)) {
 		    entry[1].tie(src_socket, entry[0], entry[2]);
+		    tied++;
 		}
 	    }
 	}
+	console.log("Tied "+tied+" points together");
     }
 
 

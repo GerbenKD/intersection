@@ -44,19 +44,19 @@ function load(urls, callback) {
 	document.getElementsByTagName("head")[0].appendChild(script);
     }
 
-    function load(index) { 
-	if (index==urls.length) {
-	    console.log("Done, starting game");
-	    callback();
-	} else {
-	    load_single(urls[index], function() {
-		console.log("Loaded '"+urls[index]+"'");
-		load(index+1);
-	    });
-	}
+    function loaded(index) { 
+	return function() {
+	    console.log("Loaded '"+urls[index]+"'");
+	    if (index==urls.length-1) {
+		console.log("Done, starting game");
+		callback();
+	    } else {
+		load_single(urls[index+1], loaded(index+1));
+	    }
+	};
     }
 
-    load(0);
+    load_single(urls[0], loaded(0));
 }
 
 var SMALL = 0.0001;
