@@ -46,6 +46,13 @@ var Graphics = new function() {
 	this.has_class    = function(cls)    { return this.classes[cls]; }
 	this.attrib       = function(attrib) { for (var key in attrib) { this.svg.setAttribute(key, attrib[key]); } }
 	this.destroy      = function ()      { this.group.removeChild(this.svg); }
+
+	this.lift         = function(group) {
+	    var grp = Graphics.groups[group];
+	    this.group.removeChild(this.svg);
+	    grp.appendChild(this.svg)
+	    this.group = grp;
+	}
 	
 	this.hide = function()   { this.add_class("hidden"); }
 	this.show = function()   { this.remove_class("hidden"); }

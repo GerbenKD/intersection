@@ -28,6 +28,16 @@ var Point = Gizmo.extend(function() {
 
     this.dup = function() { return [this.pos[0], this.pos[1]]; }
 
+    this.equals = function(gizmo) { 
+	if (!this.valid && !gizmo.valid) {
+	    console.error("Attempt to compare two invalid gizmos!");
+	    return false; // don't use this value!
+	}
+	return gizmo.type=="point" && 
+	    this.valid && gizmo.valid &&
+	    (Point.distance_cc(this.pos, gizmo.pos) < SMALL);
+    }
+
     this.distance_cc = function(pos1, pos2) { 
 	var dx = pos1[0]-pos2[0], dy = pos1[1]-pos2[1];
 	return Math.sqrt(dx*dx+dy*dy);
@@ -59,7 +69,6 @@ var ControlPoint = Point.extend(function() {
 
     this.valid = true;
     this.controlpoint = true;
-
     this.create = function(pos) { return this.extend(function() { this.pos = pos; }); }
 
     this.create_sprite = function() {
@@ -87,7 +96,7 @@ var Line = Gizmo.extend(function() {
 	var N = x12*y34 - y12*x34;
 	if (Math.abs(N)<0.01) return null; // No intersections for lines that are almost parallel
 	var f1 = x1*y2-y1*x2, f2 = x3*y4-y3*x4;
-	return [(f1*x34 - x12*f2)/N, (f1*y34 - y12*f2)/N];
+	return [(f1*x34 - x12*f2)/N, (f1*y34 - y12*f2)/N, N>0 ? 1 : -1];
     }
 
     this.compute_intersection = function(line1, line2) {

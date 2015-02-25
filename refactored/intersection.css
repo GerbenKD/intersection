@@ -24,12 +24,11 @@ body {
 
 
 .controlpoint {
-    stroke: black;
-    stroke-width: 2px;
-    fill: #0000d0;
+      fill: #0000b0;
 }
 
 .controlpoint.highlighted {
+    stroke: black;
     stroke-width: 5px;
 }
 
@@ -40,36 +39,33 @@ body {
             animation: cp_sparkle 1.3s linear infinite;
 }
 
-
 @-webkit-keyframes cp_sparkle {
-    0%   { fill: #0000d0; }
+    0%   { fill: #0000b0; }
     50%  { fill: white;   }
-    100% { fill: #0000d0; }
+    100% { fill: #0000b0; }
 }
 
 @-moz-keyframes cp_sparkle {
-    0%   { fill: #0000d0; }
+    0%   { fill: #0000b0; }
     50%  { fill: white;   }
-    100% { fill: #0000d0; }
+    100% { fill: #0000b0; }
 }
 
 @keyframes cp_sparkle {
-    0%   { fill: #0000d0; }
+    0%   { fill: #0000b0; }
     50%  { fill: white;   }
-    100% { fill: #0000d0; }
+    100% { fill: #0000b0; }
 }
 
 
 .intersectionpoint {
-    stroke: black;
-    stroke-width: 1px;
-    fill: #00d000;
+    fill: #00b000;
 }
 
 .intersectionpoint.highlighted {
+    stroke: black;
     stroke-width: 3;
 }
-
 
 
 .intersectionpoint.sparkly {
@@ -81,20 +77,91 @@ body {
 
 
 @-webkit-keyframes isp_sparkle {
-    0%   { fill: #00d000; }
+    0%   { fill: #00b000; }
     50%  { fill: white;   }
-    100% { fill: #00d000; }
+    100% { fill: #00b000; }
 }
 
 @-moz-keyframes isp_sparkle {
-    0%   { fill: #00d000; }
+    0%   { fill: #00b000; }
     50%  { fill: white;   }
-    100% { fill: #00d000; }
+    100% { fill: #00b000; }
 }
 
 @keyframes isp_sparkle {
-    0%   { fill: #00d000; }
+    0%   { fill: #00b000; }
     50%  { fill: white;   }
-    100% { fill: #00d000; }
+    100% { fill: #00b000; }
 }
 
+
+.intersectionpoint0 {
+    fill: red;
+}
+
+.intersectionpoint0.highlighted {
+    stroke: black;
+    stroke-width: 3;
+}
+
+.intersectionpoint0.sparkly {
+    
+    -webkit-animation: isp_sparkle0 1.3s linear infinite;
+       -moz-animation: isp_sparkle0 1.3s linear infinite;
+            animation: isp_sparkle0 1.3s linear infinite;
+}
+
+
+@-webkit-keyframes isp_sparkle0 {
+    0%   { fill: red; }
+    50%  { fill: white;   }
+    100% { fill: red; }
+}
+
+@-moz-keyframes isp_sparkle0 {
+    0%   { fill: red; }
+    50%  { fill: white;   }
+    100% { fill: red; }
+}
+
+@keyframes isp_sparkle0 {
+    0%   { fill: red; }
+    50%  { fill: white;   }
+    100% { fill: red; }
+}
+
+
+.intersectionpoint1 {
+    fill: blue;
+}
+
+.intersectionpoint1.highlighted {
+    stroke: black;
+    stroke-width: 3;
+}
+
+.intersectionpoint1.sparkly {
+    
+    -webkit-animation: isp_sparkle2 1.3s linear infinite;
+       -moz-animation: isp_sparkle2 1.3s linear infinite;
+            animation: isp_sparkle2 1.3s linear infinite;
+}
+
+
+@-webkit-keyframes isp_sparkle1 {
+    0%   { fill: blue; }
+    50%  { fill: white;   }
+    100% { fill: blue; }
+}
+
+@-moz-keyframes isp_sparkle1 {
+    0%   { fill: blue; }
+    50%  { fill: white;   }
+    100% { fill: blue; }
+}
+
+@keyframes isp_sparkle1 {
+    0%   { fill: blue; }
+    50%  { fill: white;   }
+    100% { fill: blue; }
+}

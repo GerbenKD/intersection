@@ -7,7 +7,7 @@ function main() {
     var DRAGGING;               // [tool, output #, dx(mouse-origin), dy(mouse-origin)]. Tool should be ControlPointTool
     var MOUSE;                  // [x,y]
 
-    var CP = ControlPointTool.create(); CP.add_graphics();
+    var CP = ControlPointTool.create(); CP.add_graphics(1);
     var CT = CompoundTool.create();     CT.add_graphics(2);
    
     Graphics.BODY.oncontextmenu = function() { return false; } // disable right click menu
@@ -122,13 +122,71 @@ function main() {
 	apply_outputs(HIGHLIGHT_TARGETS, function(tool, socket,gizmo,sprite) { sprite.remove_class("sparkly"); });
 	if (HIGHLIGHTED) {
 	    snap(DRAGGING[5], HIGHLIGHTED);
-	    CT.recalculate(DRAGGING[4]);
-	    CT.update_graphics(DRAGGING[4]);
+	    CT.recalculate(); 
+	    CT.update_graphics();
 	}
 	DRAGGING = null;
 	HIGHLIGHT_TARGETS = select_outputs([CP], function() { return true; }); // all controlpoints
 	highlight();
     }
+
+
+    /* cpl is list [[tool, input_socket], ...] of listeners to the controlpoint being snapped.
+     * each of them has to be rewired.
+     *
+     * Could be that multiple lines and circles are listening to the controlpoint being snapped; in that case there 
+     * will also exist Intersection objects between these lines and circles. One of the intersection points will
+     * always be the snap target. We need to ensure that these Intersections stay correct: their *first* output should
+     * always remain the snap target. 
+     *
+     * target is the snap target [tool, output_socket]
+     */
+    function snap(cpl, target) {
+	// figure out the controlpointtool and relevant output socket
+	if (!cpl || cpl.length==0) return;
+	var cp = cpl[0][0].get_input(cpl[0][1]);
+
+	// rewire
+	for (var i=0; i<cpl.length; i++) {
+	    var inp = cpl[i]; // contains dst_tool and dst_socket
+	    inp[0].disconnect(inp[1]);
+	    inp[0].connect(target[0], target[1], inp[1]);
+	}
+
+	// destroy controlpoint
+	cp[0].delete_output(cp[1]);
+
+	CT.recalculate();
+	// CT.find_duplicates(CP)
+	tie_em_up(CT.find_duplicates(CP));
+    }
+
+    function tie_em_up(map) {
+
+	var entries = [];
+	for (var dst_key in map) {
+	    var src_hash = map[dst_key];
+	    for (var src_key in src_hash) {
+		var entry = src_hash[src_key];
+		entries.push(entry);
+	    }
+	}
+	entries.sort(function(a,b) { return (a[3]-b[3]) || (a[4]-b[4]); });
+
+	for (var i=0; i!=entries.length; i++) {
+	    var entry = entries[i]; //  [dst, src, dst_socket, dst_index, src_index]
+	    var sockets = entry[1].get_matching_outputs(entry[0].get_output(entry[2]));
+	    if (sockets.length<1) console.error("Somehow a duplicate has disappeared?!");
+	    for (var j=0; j<sockets.length; j++) {
+		var src_socket = sockets[j];
+		if (!entry[1].get_tie(src_socket)) {
+		    entry[1].tie(src_socket, entry[0], entry[2]);
+		}
+	    }
+	}
+    }
+
+
 }
 
 
@@ -147,22 +205,6 @@ function get_controlpoint_listeners(tools, out_connection) {
 }
 
 
-function snap(cpl, target) {
-    // figure out the controlpointtool and relevant output socket
-    if (!cpl || cpl.length==0) return;
-    var cp = cpl[0][0].get_input(cpl[0][1]);
-
-    // rewire
-    for (var i=0; i<cpl.length; i++) {
-	var inp = cpl[i]; // contains dst_tool and dst_socket
-	inp[0].disconnect(inp[1]);
-	inp[0].connect(target[0], target[1], inp[1]);
-    }
-
-    // destroy controlpoint
-    cp[0].remove_output(cp[1]);
-}
-
 function apply_outputs(outputs, func) {
     for (var i=0; i<outputs.length; i++) {
 	func.apply(null, outputs[i]);
@@ -176,7 +218,7 @@ function select_outputs(tools, func) {
 	for (var j=0; j<t.max_output_socket(); j++) {
 	    var gizmo = t.get_output(j);
 	    if (!gizmo) continue;
-	    var sprite = t.has_graphics() ? t.get_sprite(j) : null;
+	    var sprite = t.has_graphics() ? t.get_sprite(j) : undefined;
 	    if (func(t,j,gizmo,sprite)) res.push([t, j, gizmo, sprite]);
 	}
     }
