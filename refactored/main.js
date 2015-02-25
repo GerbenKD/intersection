@@ -95,7 +95,7 @@ function main() {
 
 	indep_tools.push(CP);
 	HIGHLIGHT_TARGETS = select_outputs(indep_tools, function(tool,socket,gizmo,sprite) { 
-	    if (gizmo.type != "point") return false;
+	    if (gizmo.type != "point" || tool.get_tie(socket)) return false;
 	    return !((tool.id in disqualified_outputs) && disqualified_outputs[tool.id][socket]);
 	});
 
@@ -218,7 +218,7 @@ function select_outputs(tools, func) {
 	for (var j=0; j<t.max_output_socket(); j++) {
 	    var gizmo = t.get_output(j);
 	    if (!gizmo) continue;
-	    var sprite = t.has_graphics() ? t.get_sprite(j) : undefined;
+	    var sprite = t.has_graphics() && !t.get_tie(j) ? t.get_sprite(j) : undefined;
 	    if (func(t,j,gizmo,sprite)) res.push([t, j, gizmo, sprite]);
 	}
     }

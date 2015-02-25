@@ -44,26 +44,27 @@ function load(urls, callback) {
 	document.getElementsByTagName("head")[0].appendChild(script);
     }
 
-    var num_loaded = 0;
-    function loaded(name) { 
-	return function() { 
-	    console.log("Loaded '"+name+"'");
-	    num_loaded++;
-	    if (num_loaded == urls.length) {
-		console.log("Done, starting game");
-		callback();
-	    }
-	};
+    function load(index) { 
+	if (index==urls.length) {
+	    console.log("Done, starting game");
+	    callback();
+	} else {
+	    load_single(urls[index], function() {
+		console.log("Loaded '"+urls[index]+"'");
+		load(index+1);
+	    });
+	}
     }
-    for (var i=0; i<urls.length; i++) {
-	load_single(urls[i], loaded(urls[i]));
-    }
+
+    load(0);
 }
 
 var SMALL = 0.0001;
 var SMALL2 = SMALL*SMALL;
-load(["Tool.js", "CompoundTool.js", "Gizmo.js", "Graphics.js", "main.js"], function() { main(); });
 
+
+// TODO loading is currently in-order, while some files can be loaded synchronously, which would be faster
+load(["Graphics.js", "Gizmo.js", "Tool.js", "CompoundTool.js", "main.js"], function() { main(); });
 
 </script>
 

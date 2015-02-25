@@ -193,7 +193,12 @@ var BasicTool = Tool.extend(function() {
 
     this.get_sprite = function(socket) {
 	if (!this.sprites || !this.sprites[socket]) { 
-	    console.error("Sprite expected for output "+socket); return null; 
+	    if (this.get_tie(socket)) {
+		console.error("Attempted to get sprite for socket "+socket+" of "+this.id+", which is tied");
+	    } else {
+		console.error("Sprite expected for output "+socket+" of "+this.id);
+	    }
+	    return undefined;
 	}
 	return this.sprites[socket];
     }
@@ -248,7 +253,7 @@ var ControlPointTool = BasicTool.extend(function() {
     this.randomize = function() {
 	for (var i=0; i<this.outputs.length; i++) {
 	    var gizmo = this.outputs[i];
-	    if (gizmo) gizmo.pos = [Math.random(), Math.random() ];
+	    if (gizmo) gizmo.pos = [100*Math.random(), 100*Math.random() ];
 	}
     }
 
