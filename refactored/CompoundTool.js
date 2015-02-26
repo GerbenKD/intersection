@@ -187,10 +187,15 @@ var CompoundTool = Tool.extend(function() {
 		if (!inp) continue;
 		if ((inp[0]===tool && inp[1]==socket) || dependent[inp[0].id]) return true;
 	    }
+	    // TODO: perhaps the following never happens! Think about it, and/or check if the log message appears.
+	    // If not, then remove this
 	    for (var i=0; i<t.max_output_socket(); i++) {
 		var tie = t.get_tie(i);
 		if (!tie) continue;
-		if ((tie[0]==tool && tie[0]==socket) || dependent[tie[0].id]) return true;
+		if ((tie[0]==tool && tie[0]==socket) || dependent[tie[0].id]) {
+		    console.log("A tool is found to be dependent because of its tie");
+		    return true;
+		}
 	    }
 	    return false;
 	}
