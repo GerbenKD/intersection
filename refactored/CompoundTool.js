@@ -13,6 +13,7 @@
   - ct.get_tools(num_indep, dependent) - returns all dependent / independent tools given the number of independents
 */
 
+
 var InterfaceTool = BasicTool.extend(function() {
 
     this.create_output_gizmo = function(socket) { return this.listen(socket); } // this is teh shit
@@ -166,8 +167,7 @@ var CompoundTool = Tool.extend(function() {
 	var i_wr = 0;
 	for (var i_rd=0; i_rd<this.tools.length; i_rd++) {
 	    var t = this.tools[i_rd];
-	    var dep = check_dependent(t);
-	    if (dep) {
+	    if (check_dependent(t)) {
 		dependent_tools.push(t);
 		dependent[t.id] = true;
 	    } else {
@@ -179,13 +179,18 @@ var CompoundTool = Tool.extend(function() {
 	
 	return i_wr;
 
-	// tool is dependent on the controlpoint if its inputs refer to either another dependent tool, or
+	// tool is dependent on the controlpoint if its inputs or its ties refer to either another dependent tool, or
 	// to the controlpoint tool with the correct socket
 	function check_dependent(t) {
 	    for (var i=0; i<t.max_input_socket(); i++) {
 		var inp = t.get_input(i);
 		if (!inp) continue;
 		if ((inp[0]===tool && inp[1]==socket) || dependent[inp[0].id]) return true;
+	    }
+	    for (var i=0; i<t.max_output_socket(); i++) {
+		var tie = t.get_tie(i);
+		if (!tie) continue;
+		if ((tie[0]==tool && tie[0]==socket) || dependent[tie[0].id]) return true;
 	    }
 	    return false;
 	}
@@ -237,11 +242,12 @@ var CompoundTool = Tool.extend(function() {
 
 	function initialise_candidates(tools) {
 	    // Initialise list = [[tool, tool_index, pos, output_socket], ...],
-	    // filtered for valid points and sorted by x-coordinate. Include CPT
+	    // filtered for valid, untied points and sorted by x-coordinate. Include CPT
 	    var list = [];
 	    for (var index=-1; index < tools.length; index++) {
 		var tool = index<0 ? cpt : tools[index];
 		for (var output_socket = 0; output_socket < tool.max_output_socket(); output_socket++) {
+		    if (tool.get_tie(output_socket)) continue;
 		    var gizmo = tool.get_output(output_socket);
 		    if (!gizmo || !gizmo.valid || gizmo.type != "point") continue;
 		    list.push([tool, index, gizmo.pos, output_socket]);

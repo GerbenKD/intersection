@@ -7,6 +7,7 @@ body {
     fill: none;
     stroke: orange; 
     stroke-width: 1px;
+    pointer-events: none;
 }
 
 .line.highlighted, .circle.highlighted {
@@ -24,7 +25,8 @@ body {
 
 
 .controlpoint {
-      fill: #0000b0;
+    pointer-events: none;
+    fill: #0000b0;
 }
 
 .controlpoint.highlighted {
@@ -59,6 +61,7 @@ body {
 
 
 .intersectionpoint {
+    pointer-events: none;
     fill: #00b000;
 }
 
