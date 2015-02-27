@@ -11,6 +11,8 @@ function main() {
     var CP = ControlPointTool.create(); CP.add_graphics(1);
     var CT = CompoundTool.create();     CT.add_graphics(2);
    
+    State.change("create_controlpoint", [3,4]);
+
     Graphics.BODY.oncontextmenu = function() { return false; } // disable right click menu
 
     window.onkeypress = function(e) {
