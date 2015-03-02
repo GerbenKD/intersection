@@ -59,12 +59,12 @@ var CompoundTool = Tool.extend(function() {
 	this.input_interface.disconnect(dst_socket);
     }
 
-    this.tie = function(src_socket, dst_tool, dst_socket) {
-	this.output_interface.tie(src_socket, dst_tool, dst_socket);
+    this.tie = function(left_tool, left_out_socket, right_out_socket) {
+	this.output_interface.tie(left_tool, left_out_socket, right_out_socket);
     }
 
-    this.untie = function(socket) {
-	this.output_interface.untie(socket);
+    this.untie = function(right_out_socket) {
+	this.output_interface.untie(right_out_socket);
     }
     
     this.recalculate = function(num_indep) {
@@ -152,6 +152,7 @@ var CompoundTool = Tool.extend(function() {
 	    }
 	}
     }
+
      
     this.get_input  = function(socket) { return this.input_interface.get_input(socket);   }
     this.get_output = function(socket) { return this.output_interface.get_output(socket); }
@@ -159,7 +160,7 @@ var CompoundTool = Tool.extend(function() {
     this.max_output_socket = function() { return this.output_interface.max_output_socket(); }
     this.max_input_socket = function() { return this.input_interface.max_input_socket(); }
 
-    // invariant: every tool's inputs refer to tools earlier in the tools array, or to the controlpoint tool
+    // invariant: every tool's inputs/ties refer to tools earlier in the tools array, or to the controlpoint tool
     this.separate = function(tool, socket) {
 	var dependent = {}; // hashes dependent tools that have been seen
 	var dependent_tools = [];
@@ -182,20 +183,10 @@ var CompoundTool = Tool.extend(function() {
 	// tool is dependent on the controlpoint if its inputs or its ties refer to either another dependent tool, or
 	// to the controlpoint tool with the correct socket
 	function check_dependent(t) {
-	    for (var i=0; i<t.max_input_socket(); i++) {
-		var inp = t.get_input(i);
-		if (!inp) continue;
-		if ((inp[0]===tool && inp[1]==socket) || dependent[inp[0].id]) return true;
-	    }
-	    // TODO: perhaps the following never happens! Think about it, and/or check if the log message appears.
-	    // If not, then remove this
-	    for (var i=0; i<t.max_output_socket(); i++) {
-		var tie = t.get_tie(i);
-		if (!tie) continue;
-		if ((tie[0]==tool && tie[0]==socket) || dependent[tie[0].id]) {
-		    console.log("A tool is found to be dependent because of its tie");
-		    return true;
-		}
+	    var connections = t.incoming_connections();
+	    for (var i=0; i<connections.length; i++) {
+		var conn = connections[i];
+		if ((conn[0]==tool && conn[1]==socket) || dependent[conn[0].id]) return true;
 	    }
 	    return false;
 	}
@@ -205,8 +196,10 @@ var CompoundTool = Tool.extend(function() {
 	return [this.tools.slice(0, num_indep), this.tools.slice(num_indep, this.tools.length)];
     }
 
+
     /* Assumes the main compoundtool to have been recalculated.
-     * candidates[dst_tool_id + ":" + dst_socket][src_tool_id] = [dst_tool, src_tool, dst_socket] 
+     * candidates[left_tool_id + ":" + left_out_socket][right_tool_id] = 
+                                        [left_tool, right_tool, left_out_socket, left_index, right_index]
      * if src_tool has an output that is equal to dst_tool at dst_socket
      */
     this.find_duplicates = function(cpt) {
@@ -228,16 +221,15 @@ var CompoundTool = Tool.extend(function() {
 	return candidates;
 
 	function report(msg, candidates) {
-	    var dst = Object.keys(candidates);
-	    console.log(msg+": found "+dst.length+" duplicate target(s):");
-	    for (var i=0; i<dst.length; i++) {
-		var src_hash = candidates[dst[i]];
-		var src = Object.keys(src_hash);
-		var first = src_hash[src[0]];
-		if (!first) {console.log("src="+src+" src.length="+src.length+", src[0]="+src[0]); }
+	    var left_keys = Object.keys(candidates);
+	    console.log(msg+": found "+left_keys.length+" duplicate target(s):");
+	    for (var i=0; i<left_keys.length; i++) {
+		var right_hash = candidates[left_keys[i]];
+		var right_keys = Object.keys(right_hash);
+		var first = right_hash[right_keys[0]];
 		var str = first[0].id+"@"+first[2]+" is duplicated in tool(s) ";
-		for (var j=0; j<src.length; j++) {
-		    var item = src_hash[src[j]];
+		for (var j=0; j<right_keys.length; j++) {
+		    var item = right_hash[right_keys[j]];
 		    if (j>0) str = str + " ; ";
 		    str = str + item[1].id;
 		}
@@ -262,8 +254,6 @@ var CompoundTool = Tool.extend(function() {
 	    
 	    // Find all candidates: tools that are sufficiently close together. Tool with higher index
 	    // is a candidate for snapping to the tool with lower index.
-	    // Construct a map dst_id+":"+dst_sock -> src_id -> [dst, src, dst_socket, dst_index, src_index]
-	    // (dst is the snap target, the tool with lower index)
 	    var map = {};
 	    var j=0;
 	    for (var i=1; i<list.length; i++) {
@@ -276,13 +266,14 @@ var CompoundTool = Tool.extend(function() {
 		    if (list_k[2][0] - ix >= SMALL) break;
 		    if (Point.distance_cc(list_k[2], list_i[2])<SMALL) {
 			// figure out who's source and who's destination
-			var dst_src_sock = list_k[1] > list_i[1] 
+			var info = list_k[1] > list_i[1] 
 			    ? [ list_i[0], list_k[0], list_i[3], list_i[1], list_k[1] ]  // i is destination
 			    : [ list_k[0], list_i[0], list_k[3], list_k[1], list_i[1] ];
-			var dst_key = dst_src_sock[0].id+":"+dst_src_sock[2];
-			var src_hash = map[dst_key];
-			if (!src_hash) { src_hash = {}; map[dst_key] = src_hash; }
-			src_hash[dst_src_sock[1].id] = dst_src_sock;
+			// info is [left_tool, right_tool, left_out_socket, left_index, right_index]
+			var left_key = info[0].id+":"+info[2];
+			var right_hash = map[left_key];
+			if (!right_hash) { right_hash = {}; map[left_key] = right_hash; }
+			right_hash[info[1].id] = info;
 		    }
 		}
 	    }
@@ -291,25 +282,25 @@ var CompoundTool = Tool.extend(function() {
 
 	// Tests candidates the given map, removing targets that turn out to be different.
 	function filter(candidates) {
-	    var dst_keys = Object.keys(candidates);
-	    for (var dst_ix=0; dst_ix<dst_keys.length; dst_ix++) {
-		var dst_key = dst_keys[dst_ix];
-		var src_hash = candidates[dst_key];
-		var src_tool_ids = Object.keys(src_hash);
+	    var left_keys = Object.keys(candidates);
+	    for (var left_ix=0; left_ix<left_keys.length; left_ix++) {
+		var left_key = left_keys[left_ix];
+		var right_hash = candidates[left_key];
+		var right_tool_ids = Object.keys(right_hash);
 		var deleted = 0;
-		for (var src_ix=0; src_ix<src_tool_ids.length; src_ix++) {
-		    var src_key = src_tool_ids[src_ix];
-		    var dst_src_sock = src_hash[src_key];
-		    var src = dst_src_sock[1], gizmo = dst_src_sock[0].get_output(dst_src_sock[2]);
+		for (var right_ix=0; right_ix<right_tool_ids.length; right_ix++) {
+		    var right_key = right_tool_ids[right_ix];
+		    var info = right_hash[right_key];
+		    var src = info[1], gizmo = info[0].get_output(info[2]);
 		    var matching_outputs = src.get_matching_outputs(gizmo);
 		    if (matching_outputs.length>1) {
 			console.log("I found more than one matching output, so this is the really weird case");
 		    }
 		    if (matching_outputs.length==0) {
 			// these turn out not to be equal
-			delete src_hash[src_key];
+			delete right_hash[right_key];
 			deleted++;
-			if (deleted == src_tool_ids.length) delete candidates[dst_key];
+			if (deleted == right_tool_ids.length) delete candidates[left_key];
 		    }
 		}
 

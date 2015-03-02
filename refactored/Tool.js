@@ -2,6 +2,9 @@
 
   A socket is the integer identifier of an input or output in a tool
 
+  A connection is [src_tool, src_output_socket, dst_tool, dst_input_socket, is_tie].
+  If is_tie==true, then the dst_input_socket is actually the output socket that the tie is attached to.
+
   =================================== Tool: ==================================
   - tool.id             - for serialization and to use as key in hash
 
@@ -37,6 +40,7 @@
   - bt.remove_output - remove an output gizmo, deleting its sprite if necessary
 */
 
+
 var Tool = new function() {
 
     // Conveniently construct a subclass or instance. Each tool is given an id.
@@ -66,6 +70,35 @@ var Tool = new function() {
 	}
 	return matches;
     }
+
+    // returns all incoming connections, including ties.
+    this.incoming_connections = function() {
+	var res = [];
+	for (var i=0; i<this.max_input_socket(); i++) {
+	    var conn = this.get_input(i);
+	    if (conn) res.push([conn[0], conn[1], this, i, false]);
+	}
+	for (var i=0; i<this.max_output_socket(); i++) {
+	    var conn = this.get_tie(i);
+	    if (conn) res.push([conn[0], conn[1], this, i, true]);
+	}
+	return res;
+    }
+
+    // It returns all connections from the given tool output to any tool /inside/ this compoundtool.
+    this.get_listeners = function(tool, output_socket, toolset) {
+	var res = [];
+	for (var i=0; i<toolset.length; i++) {
+	    var t = toolset[i];
+	    var connections = t.incoming_connections();
+	    for (var j=0; j<connections.length; j++) {
+		var conn = connections[j];
+		if (conn[0]===tool && conn[1]===output_socket) res.push(conn);
+	    }
+	}
+	return res;
+    }
+
 };
 
 var BasicTool = Tool.extend(function() {
@@ -80,37 +113,37 @@ var BasicTool = Tool.extend(function() {
 	});
     }
 
-    this.connect = function(src_tool, src_socket, dst_socket) {
+    this.connect = function(left_tool, left_out_socket, right_in_socket) {
 	// rudimentary sanity check
-	if (this.inputs[dst_socket]) {
-	    console.error("Disconnect socket "+dst_socket+" of "+this.id+" first"); return;
+	if (this.inputs[right_in_socket]) {
+	    console.error("Disconnect socket "+right_in_socket+" of "+this.id+" first"); return;
 	}
-	this.inputs[dst_socket] = [src_tool, src_socket];
+	this.inputs[right_in_socket] = [left_tool, left_out_socket];
 	this.num_connections++;
     }
 
-    this.disconnect = function(socket) {
-	if (!this.inputs[socket]) {
+    this.disconnect = function(right_in_socket) {
+	if (!this.inputs[right_in_socket]) {
 	    console.error("Attempt to disconnect an unconnected socket "+socket); return;
 	}
-	this.inputs[socket] = undefined;
+	this.inputs[right_in_socket] = undefined;
 	this.num_connections--;
     }
 
-    this.tie = function(src_socket, dst_tool, dst_socket) {
-	if (this.ties[src_socket]) {
-	    console.error("Untie socket "+src_socket+" of "+this.id+" first"); return;
+    this.tie = function(left_tool, left_out_socket, right_out_socket) {
+	if (this.ties[right_out_socket]) {
+	    console.error("Untie socket "+right_out_socket+" of "+this.id+" first"); return;
 	}
-	if (this.outputs[src_socket].type != "point" ||
-	    dst_tool.outputs[dst_socket].type != "point") { 
+	if (this.outputs[right_out_socket].type != "point" ||
+	    left_tool.get_output(left_out_socket).type != "point") { 
 	    console.error("I'm very surprised that you are not tieing two points");
 	}
-	this.delete_output(src_socket);
-	this.ties[src_socket] = [dst_tool, dst_socket];
+	this.delete_output(right_out_socket);
+	this.ties[right_out_socket] = [left_tool, left_out_socket];
     }
 
-    this.get_tie = function(socket) {
-	return this.ties[socket];
+    this.get_tie = function(right_out_socket) {
+	return this.ties[right_out_socket];
     }
 
     this.untie = function(socket) {

@@ -80,19 +80,18 @@ function main() {
 	var T = CT.get_tools(num_indep);
 	var indep_tools = T[0], dep_tools = T[1];
 
-	var cpl = get_controlpoint_listeners(dep_tools, HIGHLIGHTED);
+	var cpl = Tool.get_listeners(HIGHLIGHTED[0], HIGHLIGHTED[1], dep_tools);
 
-	// first find all point outputs connected to the same tool as the one being dragged
+	// first find all point outputs connected to the same tool as the one being dragged...
 	var disqualified_outputs = {};
 	for (var i=0; i<cpl.length; i++) {
-	    var t = cpl[i][0]; // this tool listens to the control point
-	    for (var j=0; j<t.max_input_socket(); j++) {
-		var connection = t.get_input(j);
-		if (connection) {
-		    var id = connection[0].id;
-		    if (!disqualified_outputs[id]) disqualified_outputs[id] = {};
-		    disqualified_outputs[id][connection[1]]=true;
-		}
+	    var t = cpl[i][2]; // this tool is attached to the control point, via a tie or an input
+	    var connections = t.incoming_connections();
+	    for (var j=0; j<connections.length; j++) {
+		var conn = connections[j];
+		var id = conn[0].id;
+		if (!disqualified_outputs[id]) disqualified_outputs[id] = {};
+		disqualified_outputs[id][conn[1]] = true;
 	    }
 	}
 
@@ -134,27 +133,29 @@ function main() {
     }
 
 
-    /* cpl is list [[tool, input_socket], ...] of listeners to the controlpoint being snapped.
-     * each of them has to be rewired.
-     *
-     * Could be that multiple lines and circles are listening to the controlpoint being snapped; in that case there 
-     * will also exist Intersection objects between these lines and circles. One of the intersection points will
-     * always be the snap target. We need to ensure that these Intersections stay correct: their *first* output should
-     * always remain the snap target. 
+    /* cpl is list of connections from the controlpoint being snapped.
+     * Each of them has to be rewired.
      *
      * target is the snap target [tool, output_socket]
      */
     function snap(cpl, target) {
-	// figure out the controlpointtool and relevant output socket
-	if (!cpl || cpl.length==0) return;
-	var cp = cpl[0][0].get_input(cpl[0][1]);
+	if (cpl.length==0) return;
 
 	// rewire
 	for (var i=0; i<cpl.length; i++) {
-	    var inp = cpl[i]; // contains dst_tool and dst_socket
-	    inp[0].disconnect(inp[1]);
-	    inp[0].connect(target[0], target[1], inp[1]);
+	    var conn = cpl[i]; // contains dst_tool and dst_socket
+	    // conn = [CP, out_socket, tool, in_socket | out_socket, tie?]
+	    if (conn[4]) {
+		conn[2].untie(conn[3]);
+		conn[2].tie(target[0], target[1], conn[3]);
+	    } else {
+		conn[2].disconnect(conn[3]);
+		conn[2].connect(target[0], target[1], conn[3]);
+	    }
 	}
+
+	// figure out the controlpointtool and relevant output socket
+	var cp = cpl[0]; // get any connection from CP and the right output socket
 
 	// destroy controlpoint
 	cp[0].delete_output(cp[1]);
@@ -164,27 +165,30 @@ function main() {
 	tie_em_up(CT.find_duplicates(CP));
     }
 
+
+    // map[left_tool_id + ":" + left_out_socket][right_tool_id] = info
+    // info = [left_tool, right_tool, left_out_socket, left_index, right_index]
     function tie_em_up(map) {
 
 	var entries = [];
-	for (var dst_key in map) {
-	    var src_hash = map[dst_key];
-	    for (var src_key in src_hash) {
-		var entry = src_hash[src_key];
-		entries.push(entry);
+	for (var left_key in map) {
+	    var right_hash = map[left_key];
+	    for (var right_key in right_hash) {
+		var info = right_hash[right_key];
+		entries.push(info);
 	    }
 	}
 	entries.sort(function(a,b) { return (a[3]-b[3]) || (a[4]-b[4]); });
 
 	var tied = 0;
 	for (var i=0; i!=entries.length; i++) {
-	    var entry = entries[i]; //  [dst, src, dst_socket, dst_index, src_index]
-	    var sockets = entry[1].get_matching_outputs(entry[0].get_output(entry[2]));
-	    if (sockets.length<1) console.error("Somehow a duplicate has disappeared?!");
-	    for (var j=0; j<sockets.length; j++) {
-		var src_socket = sockets[j];
-		if (!entry[1].get_tie(src_socket)) {
-		    entry[1].tie(src_socket, entry[0], entry[2]);
+	    var info = entries[i]; 
+	    var right_out_sockets = info[1].get_matching_outputs(info[0].get_output(info[2]));
+	    if (right_out_sockets.length<1) console.error("Somehow a duplicate has disappeared?!");
+	    for (var j=0; j<right_out_sockets.length; j++) {
+		var right_out_socket = right_out_sockets[j];
+		if (!info[1].get_tie(right_out_socket)) {
+		    info[1].tie(info[0], info[2], right_out_socket);
 		    tied++;
 		}
 	    }
