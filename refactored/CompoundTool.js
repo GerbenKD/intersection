@@ -6,7 +6,6 @@
   - ct.input_interface
   - ct.output_interface
   - ct.tools             - [ tool, tool, ... ] - in topological sorted order
-  - ct.graphics_level (1 = outputs, 2 = everything)
 
   additional methods:
   - ct.add_tool(tool)                  - add a new tool to the compound tool
@@ -76,45 +75,15 @@ var CompoundTool = Tool.extend(function() {
 	this.output_interface.recalculate();
     }
 
-    this.add_graphics = function(lvl) {
-	this.graphics_level = lvl;
-	switch (lvl) {
-	case 1:
-	    this.output_interface.add_graphics();
-	    break;
-	case 2:
-	    // TODO perhaps outputs should have a special look, or something
-	    for (var i=0; i<this.tools.length; i++) {
-		this.tools[i].add_graphics();
-	    }
-	    break;
-	default:
-	    console.error("Bad graphics level!");
-	    break;
-	}
-    }
+    this.destroy = function() { this.output_interface.destroy(); }
+    this.has_graphics = function() { return this.output_interface.has_graphics(); }
+    this.add_graphics = function() { this.output_interface.add_graphics(); }
+    this.update_graphics = function() { this.output_interface.update_graphics(); }
 
-    this.has_graphics = function() { return this.graphics_level; }
-    
-    this.update_graphics = function(num_indep) {
-	if (!this.graphics_level) return;
-	if (!num_indep) num_indep = 0;
-	switch (this.graphics_level) {
-	case 1:
-	    this.output_interface.update_graphics();
-	    break;
-	case 2:
-	    for (var i=num_indep; i<this.tools.length; i++) {
-		this.tools[i].update_graphics();
-	    }
-	    break;
-	default:
-	    console.error("Graphics level "+this.graphics_level+" not implemented in update_graphics");
-	    break;
-	}
-    }
 
-    this.add_tool = function(tool) {
+    this.add_tool = function(tool) { this.tools.push(tool); }
+
+    this.add_tool_with_intersections = function(tool) {
 	function create_intersection(tool1, socket1, gizmo1, tool2, socket2, gizmo2) {
 	    var itool;
 	    var invert = false;
@@ -130,24 +99,18 @@ var CompoundTool = Tool.extend(function() {
 	}
 
 	var n_existing_tools = this.tools.length;
-	this.tools.push(tool);
-
-	var gr = this.graphics_level==2 && !tool.graphics;
-	if (gr) tool.add_graphics();
+	this.add_tool(tool);
 
 	for (var j=0; j<tool.max_output_socket(); j++) {
 	    var gizmo = tool.get_output(j);
-	    if (!gizmo) continue;
-	    if (gizmo.type == "point") continue;
+	    if (!gizmo || gizmo.type == "point") continue;
 	    for (var i=0; i<n_existing_tools; i++) {
 		var test_tool = this.tools[i];
 		for (var k=0; k<test_tool.max_output_socket(); k++) {
 		    var test_gizmo = test_tool.get_output(k);
 		    if (!test_gizmo) continue;
 		    if (test_gizmo.type == "point") continue;
-		    var itool = create_intersection(tool, j, gizmo, test_tool, k, test_gizmo);
-		    if (gr) itool.add_graphics();
-		    this.tools.push(itool);
+		    this.add_tool(create_intersection(tool, j, gizmo, test_tool, k, test_gizmo));
 		}
 	    }
 	}
@@ -178,7 +141,7 @@ var CompoundTool = Tool.extend(function() {
 	if (i_rd-i_wr != dependent_tools.length) console.error("This should not happen");
 	for (var i=0; i<i_rd-i_wr; i++) { this.tools[i_wr+i] = dependent_tools[i]; }
 	
-	return i_wr;
+	return [this.tools.slice(0, i_wr), this.tools.slice(i_wr)];
 
 	// tool is dependent on the controlpoint if its inputs or its ties refer to either another dependent tool, or
 	// to the controlpoint tool with the correct socket
@@ -192,10 +155,6 @@ var CompoundTool = Tool.extend(function() {
 	}
     }
    
-    this.get_tools = function(num_indep) {
-	return [this.tools.slice(0, num_indep), this.tools.slice(num_indep, this.tools.length)];
-    }
-
 
     /* Assumes the main compoundtool to have been recalculated.
      * candidates[left_tool_id + ":" + left_out_socket][right_tool_id] = 
@@ -307,5 +266,121 @@ var CompoundTool = Tool.extend(function() {
 	    }
 	}
     }
+
+    /* ----------------------------------- State change objects  -------------------------------- */ 
+
+    /* cpl is list of connections from the controlpoint being snapped.
+     * Each of them has to be rewired.
+     *
+     * target is the snap target [tool, output_socket]
+     */
+    this.snap = function(cpl, target) {
+	if (cpl.length==0) return;
+
+	// rewire
+	for (var i=0; i<cpl.length; i++) {
+	    var conn = cpl[i]; // contains dst_tool and dst_socket
+	    // conn = [CP, cp_out_socket, right_tool, right_socket, is_tie]
+	    if (conn[4]) {
+		conn[2].untie(conn[3]);
+		conn[2].tie(target[0], target[1], conn[3]);
+	    } else {
+		conn[2].disconnect(conn[3]);
+		conn[2].connect(target[0], target[1], conn[3]);
+	    }
+	}
+
+	// figure out the controlpointtool and relevant output socket
+	var cp = cpl[0]; // get any connection from CP and the right output socket
+
+	// destroy controlpoint
+	cp[0].delete_output(cp[1]);
+
+	this.recalculate();
+	// CT.find_duplicates(CP)
+	tie_em_up.call(this, this.find_duplicates(this.CP));
+    }
+
+
+    // map[left_tool_id + ":" + left_out_socket][right_tool_id] = info
+    // info = [left_tool, right_tool, left_out_socket, left_index, right_index]
+    function tie_em_up(map) {
+
+	var entries = [];
+	for (var left_key in map) {
+	    var right_hash = map[left_key];
+	    for (var right_key in right_hash) {
+		var info = right_hash[right_key];
+		entries.push(info);
+	    }
+	}
+	entries.sort(function(a,b) { return (a[3]-b[3]) || (a[4]-b[4]); });
+
+	var tied = 0;
+	for (var i=0; i!=entries.length; i++) {
+	    var info = entries[i]; 
+	    var right_out_sockets = info[1].get_matching_outputs(info[0].get_output(info[2]));
+	    if (right_out_sockets.length<1) console.error("Somehow a duplicate has disappeared?!");
+	    for (var j=0; j<right_out_sockets.length; j++) {
+		var right_out_socket = right_out_sockets[j];
+		if (!info[1].get_tie(right_out_socket)) {
+		    info[1].tie(info[0], info[2], right_out_socket);
+		    tied++;
+		}
+	    }
+	}
+	console.log("Tied "+tied+" points together");
+    }
+
+    /* ---------------------------------- State specific --------------------------------------- */ 
+
+    this.perform = function(change) {
+	var fn = change[0];
+	var fu = eval("C_"+fn);
+	if (!fu) { console.error("Unknown change: '"+fn+"'"); return; }
+	// log the action in the undo buffer
+	console.log("Performing "+fn);
+	return fu.apply(this, change.slice(1));
+    }
+
+    // returns tool id
+    function C_create_line() {
+	var out_socket1 = this.CP.add([0,0]);
+	var out_socket2 = this.CP.add([0,0]);
+	var line = LineTool.create();
+	line.connect(this.CP, out_socket1, 0);
+	line.connect(this.CP, out_socket2, 1);
+	this.add_tool_with_intersections(line);
+	return [out_socket1, out_socket2];
+    }
+
+    // returns tool id
+    function C_create_circle() {
+	var out_socket1 = this.CP.add([0,0]);
+	var out_socket2 = this.CP.add([0,0]);
+	var circle = CircleTool.create();
+	circle.connect(this.CP, out_socket1, 0);
+	circle.connect(this.CP, out_socket2, 1);
+	this.add_tool_with_intersections(circle);
+	return [out_socket1, out_socket2];
+    }
+
+    function C_load_tool(filename) {
+    }
+
+    function C_move_controlpoint(cp_out_socket, pos) {
+	this.CP.get_output(cp_out_socket).pos = [pos[0], pos[1]];
+    }
+
+    function C_snap(cp_out_socket, left_tool, left_out_socket) {
+	var T = this.separate(this.CP, cp_out_socket);
+	var cpl = Tool.get_listeners(this.CP, cp_out_socket, T[1]);
+	this.snap(cpl, [left_tool, left_out_socket]);
+    }
+
+
+
+
+
 
 });

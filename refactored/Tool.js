@@ -2,8 +2,7 @@
 
   A socket is the integer identifier of an input or output in a tool
 
-  A connection is [src_tool, src_output_socket, dst_tool, dst_input_socket, is_tie].
-  If is_tie==true, then the dst_input_socket is actually the output socket that the tie is attached to.
+  A connection is [left_tool, left_output_socket, right_tool, right_socket, is_tie].
 
   =================================== Tool: ==================================
   - tool.id             - for serialization and to use as key in hash
@@ -108,7 +107,6 @@ var BasicTool = Tool.extend(function() {
 	    this.inputs   = [];
 	    this.outputs  = [];
 	    this.ties     = [];
-	    this.num_connections = 0;
 	    for (var key in fields) { this[key] = fields[key]; }
 	});
     }
@@ -119,7 +117,6 @@ var BasicTool = Tool.extend(function() {
 	    console.error("Disconnect socket "+right_in_socket+" of "+this.id+" first"); return;
 	}
 	this.inputs[right_in_socket] = [left_tool, left_out_socket];
-	this.num_connections++;
     }
 
     this.disconnect = function(right_in_socket) {
@@ -127,7 +124,6 @@ var BasicTool = Tool.extend(function() {
 	    console.error("Attempt to disconnect an unconnected socket "+socket); return;
 	}
 	this.inputs[right_in_socket] = undefined;
-	this.num_connections--;
     }
 
     this.tie = function(left_tool, left_out_socket, right_out_socket) {
@@ -163,12 +159,26 @@ var BasicTool = Tool.extend(function() {
 	if (this.sprites) this.add_sprite(socket);
     }
 
+    this.destroy = function() {
+	this.ties = [];
+	this.inputs = [];
+	this.outputs = [];
+	if (this.sprites) {
+	    for (var i=0; i<this.sprites.length; i++) {
+		this.remove_sprite(i);
+	    }
+	}
+    }
+
+    // Warning, any listeners may still refer to this output!
+    // Deletes ties, sprites and outputs at one fell swoop
     this.delete_output = function(socket) {
-	if (!this.outputs[socket]) { 
-	    console.error("Attempt to delete nonexisting output at socket "+socket+" of "+this.id);
+	if (!this.outputs[socket] && !this.ties[socket]) { 
+	    console.error("Attempt to delete nonexisting output/tie at socket "+socket+" of "+this.id);
 	    return;
 	}
-	if (this.sprites) this.remove_sprite(socket);
+	if (this.sprites)      this.remove_sprite(socket);
+	this.ties[socket]    = undefined;
 	this.outputs[socket] = undefined;
     }
 
@@ -194,8 +204,6 @@ var BasicTool = Tool.extend(function() {
 	    this.add_sprite(i);
 	}
     }
-
-    // TODO: remove_graphics?
 
     this.update_graphics = function() {
 	if (!this.sprites) return;
