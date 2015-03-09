@@ -47,6 +47,7 @@ var CompoundTool = Tool.extend(function() {
 	    this.input_interface  = InterfaceTool.create();
 	    this.output_interface = InterfaceTool.create();
 	    this.tools = [];
+	    this.id2tool = [];
 	});
     }
 
@@ -66,10 +67,9 @@ var CompoundTool = Tool.extend(function() {
 	this.output_interface.untie(right_out_socket);
     }
     
-    this.recalculate = function(num_indep) {
-	if (!num_indep) num_indep = 0;
+    this.recalculate = function() {
 	this.input_interface.recalculate();
-	for (var i = num_indep; i < this.tools.length; i++) {
+	for (var i = 0; i < this.tools.length; i++) {
 	    this.tools[i].recalculate();
 	}
 	this.output_interface.recalculate();
@@ -81,7 +81,11 @@ var CompoundTool = Tool.extend(function() {
     this.update_graphics = function() { this.output_interface.update_graphics(); }
 
 
-    this.add_tool = function(tool) { this.tools.push(tool); }
+    this.add_tool = function(tool) { 
+	tool.id = this.id2tool.length;
+	this.id2tool.push(tool)
+	this.tools.push(tool); 
+    }
 
     this.add_tool_with_intersections = function(tool) {
 	function create_intersection(tool1, socket1, gizmo1, tool2, socket2, gizmo2) {
@@ -124,8 +128,8 @@ var CompoundTool = Tool.extend(function() {
     this.max_input_socket = function() { return this.input_interface.max_input_socket(); }
 
     // invariant: every tool's inputs/ties refer to tools earlier in the tools array, or to the controlpoint tool
-    this.separate = function(tool, socket) {
-	var dependent = {}; // hashes dependent tools that have been seen
+    function separate(tool, socket) {
+	var dependent = []; // maps dependent tools that have been seen
 	var dependent_tools = [];
 
 	var i_wr = 0;
@@ -140,7 +144,7 @@ var CompoundTool = Tool.extend(function() {
 	}
 	if (i_rd-i_wr != dependent_tools.length) console.error("This should not happen");
 	for (var i=0; i<i_rd-i_wr; i++) { this.tools[i_wr+i] = dependent_tools[i]; }
-	
+
 	return [this.tools.slice(0, i_wr), this.tools.slice(i_wr)];
 
 	// tool is dependent on the controlpoint if its inputs or its ties refer to either another dependent tool, or
@@ -161,11 +165,12 @@ var CompoundTool = Tool.extend(function() {
                                         [left_tool, right_tool, left_out_socket, left_index, right_index]
      * if src_tool has an output that is equal to dst_tool at dst_socket
      */
-    this.find_duplicates = function(cpt) {
+    function find_duplicates() {
 	console.log("Searching for duplicates");
 
 	var candidates = initialise_candidates(this.tools);
 	report("Initialised candidates", candidates);
+	var cpt = this.id2tool[0]; // TODO that's temporarily where the CPT is
 	var state = cpt.get_state();
 	for (var tst=0; tst<5; tst++) {
 	    cpt.randomize();
@@ -200,8 +205,8 @@ var CompoundTool = Tool.extend(function() {
 	    // Initialise list = [[tool, tool_index, pos, output_socket], ...],
 	    // filtered for valid, untied points and sorted by x-coordinate. Include CPT
 	    var list = [];
-	    for (var index=-1; index < tools.length; index++) {
-		var tool = index<0 ? cpt : tools[index];
+	    for (var index=0; index < tools.length; index++) {
+		var tool = tools[index];
 		for (var output_socket = 0; output_socket < tool.max_output_socket(); output_socket++) {
 		    if (tool.get_tie(output_socket)) continue;
 		    var gizmo = tool.get_output(output_socket);
@@ -274,19 +279,20 @@ var CompoundTool = Tool.extend(function() {
      *
      * target is the snap target [tool, output_socket]
      */
-    this.snap = function(cpl, target) {
+    function snap(cpl, target) {
 	if (cpl.length==0) return;
 
 	// rewire
 	for (var i=0; i<cpl.length; i++) {
 	    var conn = cpl[i]; // contains dst_tool and dst_socket
 	    // conn = [CP, cp_out_socket, right_tool, right_socket, is_tie]
+	    var right_tool = conn[2];
 	    if (conn[4]) {
-		conn[2].untie(conn[3]);
-		conn[2].tie(target[0], target[1], conn[3]);
+		right_tool.untie(conn[3]);
+		right_tool.tie(target[0], target[1], conn[3]);
 	    } else {
-		conn[2].disconnect(conn[3]);
-		conn[2].connect(target[0], target[1], conn[3]);
+		right_tool.disconnect(conn[3]);
+		right_tool.connect(target[0], target[1], conn[3]);
 	    }
 	}
 
@@ -298,7 +304,7 @@ var CompoundTool = Tool.extend(function() {
 
 	this.recalculate();
 	// CT.find_duplicates(CP)
-	tie_em_up.call(this, this.find_duplicates(this.CP));
+	tie_em_up.call(this, find_duplicates.call(this, this.id2tool[0])); // Give CPT to find_duplicates
     }
 
 
@@ -332,35 +338,97 @@ var CompoundTool = Tool.extend(function() {
 	console.log("Tied "+tied+" points together");
     }
 
-    /* ---------------------------------- State specific --------------------------------------- */ 
+
+    function tools2ids(tools) { return tools.map(function(tool) { return tool.id; }); }
+    function ids2tools(ids)   { var id2tool = this.id2tool; return ids.map(function(id) { return id2tool[id]; }); }
+
+    // returns all connections from the given tool output to any tool /inside/ this compoundtool.
+    function get_listeners(tool, output_socket, tools) {
+	var res = [];
+	for (var i=0; i<tools.length; i++) {
+	    var t = tools[i];
+	    var connections = t.incoming_connections();
+	    for (var j=0; j<connections.length; j++) {
+		var conn = connections[j];
+		if (conn[0]===tool && conn[1]==output_socket) res.push(conn);
+	    }
+	}
+	return res;
+    }
+
+    function connection_tools_to_ids(connections) {
+	var res = [];
+	for (var i=0; i<connections.length; i++) {
+	    var c = connections[i];
+	    res.push([c[0].id, c[1], c[2].id, c[3], c[4]]);
+	}
+	return res;
+    }
+
+
+    /* ------------------------------- Used from State ----------------------------------------- */ 
+
+    this.incoming_connection_ids = function(id) {
+	return connection_tools_to_ids(this.id2tool[id].incoming_connections());
+    }
+
+    this.split_tools = function(cp_out_socket) {
+	var T = separate.call(this, this.id2tool[0], cp_out_socket);
+	return [tools2ids(T[0]), tools2ids(T[1])];
+    }
+
+    this.get_listener_ids = function(tool_id, output_socket, tool_ids) {
+	var cpl = get_listeners(this.id2tool[tool_id], output_socket, ids2tools.call(this,tool_ids));
+	return connection_tools_to_ids(cpl);
+    }
+
+    this.select_outputs = function(tool_ids, func) {
+	for (var i=0; i<tool_ids.length; i++) {
+	    var tool_id = tool_ids[i];
+	    var t = this.id2tool[tool_id];
+	    var res = [];
+	    for (var j=0; j<t.max_output_socket(); j++) {
+		var gizmo, sprite;
+		var tie = t.get_tie(j);
+		if (!tie) { gizmo = t.get_output(j); if (t.has_graphics() && gizmo) sprite = t.get_sprite(j); }
+		if (gizmo || tie) {
+		    var info = [tool_id, j, gizmo, sprite, tie];
+		    if (func.apply(undefined, info)) res.push(info);
+		}
+	    }
+	}
+	return res;
+    }
 
     this.perform = function(change) {
 	var fn = change[0];
 	var fu = eval("C_"+fn);
 	if (!fu) { console.error("Unknown change: '"+fn+"'"); return; }
-	// log the action in the undo buffer
 	console.log("Performing "+fn);
 	return fu.apply(this, change.slice(1));
     }
 
+
+    /* --------------------------------------- Changes ------------------------------------------- */ 
+
     // returns tool id
     function C_create_line() {
-	var out_socket1 = this.CP.add([0,0]);
-	var out_socket2 = this.CP.add([0,0]);
+	var out_socket1 = this.id2tool[0].add([0,0]);
+	var out_socket2 = this.id2tool[0].add([0,0]);
 	var line = LineTool.create();
-	line.connect(this.CP, out_socket1, 0);
-	line.connect(this.CP, out_socket2, 1);
+	line.connect(this.id2tool[0], out_socket1, 0);
+	line.connect(this.id2tool[0], out_socket2, 1);
 	this.add_tool_with_intersections(line);
 	return [out_socket1, out_socket2];
     }
 
     // returns tool id
     function C_create_circle() {
-	var out_socket1 = this.CP.add([0,0]);
-	var out_socket2 = this.CP.add([0,0]);
+	var out_socket1 = this.id2tool[0].add([0,0]);
+	var out_socket2 = this.id2tool[0].add([0,0]);
 	var circle = CircleTool.create();
-	circle.connect(this.CP, out_socket1, 0);
-	circle.connect(this.CP, out_socket2, 1);
+	circle.connect(this.id2tool[0], out_socket1, 0);
+	circle.connect(this.id2tool[0], out_socket2, 1);
 	this.add_tool_with_intersections(circle);
 	return [out_socket1, out_socket2];
     }
@@ -369,18 +437,15 @@ var CompoundTool = Tool.extend(function() {
     }
 
     function C_move_controlpoint(cp_out_socket, pos) {
-	this.CP.get_output(cp_out_socket).pos = [pos[0], pos[1]];
+	this.id2tool[0].get_output(cp_out_socket).pos = [pos[0], pos[1]];
     }
 
-    function C_snap(cp_out_socket, left_tool, left_out_socket) {
-	var T = this.separate(this.CP, cp_out_socket);
-	var cpl = Tool.get_listeners(this.CP, cp_out_socket, T[1]);
-	this.snap(cpl, [left_tool, left_out_socket]);
+    // Todo, the get listeners forces everything to ids, here we immediately convert everything back. Sucky!
+    function C_snap(cp_out_socket, left_tool_id, left_out_socket) {
+	var T = separate.call(this, this.id2tool[0], cp_out_socket);
+	var id2tool = this.id2tool;
+	var cpl = get_listeners.call(this, this.id2tool[0], cp_out_socket, T[1]);
+	snap.call(this, cpl, [this.id2tool[left_tool_id], left_out_socket]);
     }
-
-
-
-
-
 
 });

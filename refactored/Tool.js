@@ -5,8 +5,6 @@
   A connection is [left_tool, left_output_socket, right_tool, right_socket, is_tie].
 
   =================================== Tool: ==================================
-  - tool.id             - for serialization and to use as key in hash
-
   - abstract tool.create()             - create an instance of this tool class
   - abstract tool.connect(src_tool, src_socket, dst_socket)
   - abstract tool.disconnect(dst_socket)
@@ -43,15 +41,10 @@
 var Tool = new function() {
 
     // Conveniently construct a subclass or instance. Each tool is given an id.
-    this.extend = function() { 
-	var id = 0;
-	return function(constr) {
-	    constr.prototype = this;
-	    var instance = new constr();
-	    instance.id = id++;
-	    return instance;
-	}
-    }();
+    this.extend = function(constr) { 
+	constr.prototype = this;
+	return new constr();
+    };
 
     // return the Gizmo at the given input
     this.listen = function(socket) {
@@ -83,21 +76,6 @@ var Tool = new function() {
 	}
 	return res;
     }
-
-    // It returns all connections from the given tool output to any tool /inside/ this compoundtool.
-    this.get_listeners = function(tool, output_socket, toolset) {
-	var res = [];
-	for (var i=0; i<toolset.length; i++) {
-	    var t = toolset[i];
-	    var connections = t.incoming_connections();
-	    for (var j=0; j<connections.length; j++) {
-		var conn = connections[j];
-		if (conn[0]===tool && conn[1]===output_socket) res.push(conn);
-	    }
-	}
-	return res;
-    }
-
 };
 
 var BasicTool = Tool.extend(function() {
@@ -114,7 +92,7 @@ var BasicTool = Tool.extend(function() {
     this.connect = function(left_tool, left_out_socket, right_in_socket) {
 	// rudimentary sanity check
 	if (this.inputs[right_in_socket]) {
-	    console.error("Disconnect socket "+right_in_socket+" of "+this.id+" first"); return;
+	    console.error("Disconnect socket "+right_in_socket+" first"); return;
 	}
 	this.inputs[right_in_socket] = [left_tool, left_out_socket];
     }
@@ -128,7 +106,7 @@ var BasicTool = Tool.extend(function() {
 
     this.tie = function(left_tool, left_out_socket, right_out_socket) {
 	if (this.ties[right_out_socket]) {
-	    console.error("Untie socket "+right_out_socket+" of "+this.id+" first"); return;
+	    console.error("Untie socket "+right_out_socket+" first"); return;
 	}
 	if (this.outputs[right_out_socket].type != "point" ||
 	    left_tool.get_output(left_out_socket).type != "point") { 
@@ -144,7 +122,7 @@ var BasicTool = Tool.extend(function() {
 
     this.untie = function(socket) {
 	if (!this.ties[socket]) {
-	    console.error("Attempt to untie an untied socket, "+socket+" of "+this.id); return;
+	    console.error("Attempt to untie an untied socket, "+socket); return;
 	}
 	this.ties[socket] = undefined;
 	this.create_output(socket);
@@ -152,7 +130,7 @@ var BasicTool = Tool.extend(function() {
 
     this.create_output = function(socket) {
 	if (this.outputs[socket]) {
-	    console.error("Attempt to create an output at socket "+socket+" of "+this.id+", but it already exists");
+	    console.error("Attempt to create an output at socket "+socket+", but it already exists");
 	    return;
 	}
 	this.outputs[socket] = this.create_output_gizmo(socket);
@@ -165,7 +143,7 @@ var BasicTool = Tool.extend(function() {
 	this.outputs = [];
 	if (this.sprites) {
 	    for (var i=0; i<this.sprites.length; i++) {
-		this.remove_sprite(i);
+		if (this.sprites[i]) this.remove_sprite(i);
 	    }
 	}
     }
@@ -174,7 +152,7 @@ var BasicTool = Tool.extend(function() {
     // Deletes ties, sprites and outputs at one fell swoop
     this.delete_output = function(socket) {
 	if (!this.outputs[socket] && !this.ties[socket]) { 
-	    console.error("Attempt to delete nonexisting output/tie at socket "+socket+" of "+this.id);
+	    console.error("Attempt to delete nonexisting output/tie at socket "+socket);
 	    return;
 	}
 	if (this.sprites)      this.remove_sprite(socket);
@@ -183,15 +161,15 @@ var BasicTool = Tool.extend(function() {
     }
 
     this.add_sprite = function(socket) {
-	if (!this.sprites) { console.error("Call add_graphics first on tool "+this.id); return;	}
-	if (this.sprites[socket]) { console.error("There already is a sprite at socket "+socket+" of "+this.id); return; }
-	if (!this.outputs[socket]) { console.error("Cannot create sprite without gizmo at socket "+socket+" of "+this.id); return; }
+	if (!this.sprites) { console.error("Call add_graphics first"); return;	}
+	if (this.sprites[socket]) { console.error("There already is a sprite at socket "+socket); return; }
+	if (!this.outputs[socket]) { console.error("Cannot create sprite without gizmo at socket "+socket); return; }
 	this.sprites[socket] = this.outputs[socket].create_sprite(socket);
     }
 
     this.remove_sprite = function(socket) {
-	if (!this.sprites) { console.error("No graphics on tool "+this.id); return;	}
-	if (!this.sprites[socket]) { console.error("There was no sprite at socket "+socket+" of "+this.id); return; }
+	if (!this.sprites) { console.error("No graphics"); return;	}
+	if (!this.sprites[socket]) { console.error("There was no sprite at socket "+socket); return; }
 	this.sprites[socket].destroy();
 	this.sprites[socket] = undefined;
     }
@@ -235,9 +213,9 @@ var BasicTool = Tool.extend(function() {
     this.get_sprite = function(socket) {
 	if (!this.sprites || !this.sprites[socket]) { 
 	    if (this.get_tie(socket)) {
-		console.error("Attempted to get sprite for socket "+socket+" of "+this.id+", which is tied");
+		console.error("Attempted to get sprite for socket "+socket+", which is tied");
 	    } else {
-		console.error("Sprite expected for output "+socket+" of "+this.id);
+		console.error("Sprite expected for output "+socket);
 	    }
 	    return undefined;
 	}
@@ -262,6 +240,8 @@ var ControlPointTool = BasicTool.extend(function() {
 	this.outputs[socket].pos = pos;
 	return socket;
     }
+
+    this.recalculate = function() { }
 
     this.create_output_gizmo = function(socket) { return ControlPoint.create(); }
 

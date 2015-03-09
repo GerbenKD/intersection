@@ -27,7 +27,6 @@ var State = new function() {
 
     function step_one() {
 	var frame = UNDO_BUFFER[UNDO_INDEX];
-	console.log("stepping, frame="+frame+" INDEX="+UNDO_INDEX+" frame length="+frame.length);
 	for (var i=0; i<frame.length; i++) {
 	    CT.perform(frame[i]);
 	}
@@ -53,7 +52,6 @@ var State = new function() {
 	    if (i_target > UNDO_BUFFER.length) i_target = UNDO_BUFFER.length;
 	}
 	while (UNDO_INDEX < i_target) {
-	    console.log("*** stepping, INDEX="+UNDO_INDEX+" target="+i_target);
 	    step_one.call(this);
 	}
     }
@@ -69,7 +67,7 @@ var State = new function() {
 	CP = ControlPointTool.create();
 	CP.add_graphics();
 
-	CT.CP = CP; // TODO THIS IS TEMPORARY!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	CT.add_tool(CP); // TODO THIS IS TEMPORARY!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 	// override some CT methods related to graphics
 
@@ -94,8 +92,6 @@ var State = new function() {
 
     }
 
-
-    /* -------------- Stuff that used to be in main but is now temporarily dumped here ---------- */
 
     // This creates an action (by putting all arguments in an array) and performs it
 
@@ -122,8 +118,8 @@ var State = new function() {
 	CP.get_output(cp_out_socket).pos = pos; // hack this directly because it ain't gonna be no event
     }
 
-    this.snap = function(cp_out_socket, left_tool, left_out_socket) {
-	State.change("snap", cp_out_socket, left_tool, left_out_socket);
+    this.snap = function(cp_out_socket, left_tool_id, left_out_socket) {
+	State.change("snap", cp_out_socket, left_tool_id, left_out_socket);
     }
 
     this.release_controlpoint = function(cp_out_socket, pos) {
@@ -131,59 +127,40 @@ var State = new function() {
     }
 
 
-    /* -------------- Stuff that used to be in main but is now temporarily dumped here ---------- */
-
-
     this.redraw = function() {
-	CP.update_graphics();
 	CT.recalculate();
 	CT.update_graphics();
     }
 
     this.get_controlpoints = function() {
-	return select_outputs([CP], function() { return true; }); // all controlpoints
+	return CT.select_outputs([0], function() { return true; }); // all controlpoints
     }
 
 
     this.get_controlpoint_targets = function(cp_out_socket) {
-	var T = CT.separate(CP, cp_out_socket);
-	var dep_tools = T[1];
-	var cpl = Tool.get_listeners(CP, cp_out_socket, dep_tools);
+	var T = CT.split_tools(cp_out_socket);
+	var dep_tool_ids = T[1];
+	var cpl = CT.get_listener_ids(0, cp_out_socket, dep_tool_ids);
 
 	// first find all point outputs connected to the same tool as the one being dragged...
 	var disqualified_outputs = {};
 	for (var i=0; i<cpl.length; i++) {
-	    var t = cpl[i][2]; // this tool is attached to the control point, via a tie or an input
-	    var connections = t.incoming_connections();
+	    var t_id = cpl[i][2]; // this tool is attached to the control point, via a tie or an input
+	    var connections = CT.incoming_connection_ids(t_id);
 	    for (var j=0; j<connections.length; j++) {
 		var conn = connections[j];
-		var id = conn[0].id;
-		if (!disqualified_outputs[id]) disqualified_outputs[id] = {};
-		disqualified_outputs[id][conn[1]] = true;
+		if (!disqualified_outputs[conn[0]]) disqualified_outputs[conn[0]] = {};
+		disqualified_outputs[conn[0]][conn[1]] = true;
 	    }
 	}
 
-	var indep_tools = T[0];
-	indep_tools.push(CP);
+	var indep_tool_ids = T[0];
+	indep_tool_ids.push(0);
 
-	return select_outputs(indep_tools, function(tool,socket,gizmo,sprite) { 
-	    if (gizmo.type != "point" || tool.get_tie(socket)) return false;
-	    return !((tool.id in disqualified_outputs) && 
-		     disqualified_outputs[tool.id][socket]);
+	return CT.select_outputs(indep_tool_ids, function(tool_id,socket,gizmo,sprite,tie) { 
+	    if (tie || !gizmo || gizmo.type != "point") return false;
+	    return !((tool_id in disqualified_outputs) && disqualified_outputs[tool_id][socket]);
 	});
     }
-};
 
-function select_outputs(tools, func) {
-    var res = [];
-    for (var i=0; i<tools.length; i++) {
-	var t = tools[i];
-	for (var j=0; j<t.max_output_socket(); j++) {
-	    var gizmo = t.get_output(j);
-	    if (!gizmo) continue;
-	    var sprite = t.has_graphics() && !t.get_tie(j) ? t.get_sprite(j) : undefined;
-	    if (func(t,j,gizmo,sprite)) res.push([t, j, gizmo, sprite]);
-	}
-    }
-    return res;
-}
+};
