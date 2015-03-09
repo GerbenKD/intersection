@@ -149,13 +149,12 @@ var State = new function() {
 	    var connections = CT.incoming_connection_ids(t_id);
 	    for (var j=0; j<connections.length; j++) {
 		var conn = connections[j];
-		if (!disqualified_outputs[conn[0]]) disqualified_outputs[conn[0]] = {};
+		if (!(conn[0] in disqualified_outputs)) disqualified_outputs[conn[0]] = {};
 		disqualified_outputs[conn[0]][conn[1]] = true;
 	    }
 	}
 
 	var indep_tool_ids = T[0];
-	indep_tool_ids.push(0);
 
 	return CT.select_outputs(indep_tool_ids, function(tool_id,socket,gizmo,sprite,tie) { 
 	    if (tie || !gizmo || gizmo.type != "point") return false;
