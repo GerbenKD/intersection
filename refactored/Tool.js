@@ -45,12 +45,37 @@ var Tool = new function() {
 	constr.prototype = this;
 	return new constr();
     };
+    
 
+    this.create_output = function(socket) {
+	this.add_gizmo(socket);
+	if (this.has_graphics()) this.add_sprite(socket);
+    }
+
+    this.get_output = function(socket) { 
+	var tie = this.get_tie(socket);
+	return tie ? tie[0].get_output(tie[1]) : this.get_gizmo(socket);
+    }
+
+    this.remove_output = function(socket) {
+	if (this.get_tie(socket)) this.untie(socket);
+	if (this.has_graphics() && this.get_sprite(socket)) this.remove_sprite(socket);
+	if (this.get_gizmo(socket)) this.remove_gizmo(socket);
+    }
+    
     // return the Gizmo at the given input
     this.listen = function(socket) {
 	var connection = this.get_input(socket);
 	return connection[0].get_output(connection[1]);
     }
+
+    this.destroy = function() {
+	for (var i=0; i<this.max_output_socket(); i++) {
+	    this.remove_output(i);
+	}
+	this.inputs = [];
+    }
+
 
     this.get_matching_outputs = function(gizmo) {
 	var matches = [];
@@ -78,16 +103,24 @@ var Tool = new function() {
     }
 };
 
+
+
 var BasicTool = Tool.extend(function() {
 
     this.create = function(fields) {
 	return this.extend(function() {
 	    this.inputs   = [];
-	    this.outputs  = [];
+	    this.gizmos  = [];
 	    this.ties     = [];
 	    for (var key in fields) { this[key] = fields[key]; }
 	});
     }
+
+    // --------------------------------- inputs ----------------------------------
+
+    this.max_input_socket = function() { return this.inputs.length; }
+
+    this.get_input = function(socket) { return this.inputs[socket]; }
 
     this.connect = function(left_tool, left_out_socket, right_in_socket) {
 	// rudimentary sanity check
@@ -104,15 +137,17 @@ var BasicTool = Tool.extend(function() {
 	this.inputs[right_in_socket] = undefined;
     }
 
+    // ----------------------------------- ties ----------------------------------
+
     this.tie = function(left_tool, left_out_socket, right_out_socket) {
 	if (this.ties[right_out_socket]) {
 	    console.error("Untie socket "+right_out_socket+" first"); return;
 	}
-	if (this.outputs[right_out_socket].type != "point" ||
+	if (this.gizmos[right_out_socket].type != "point" ||
 	    left_tool.get_output(left_out_socket).type != "point") { 
 	    console.error("I'm very surprised that you are not tieing two points");
 	}
-	this.delete_output(right_out_socket);
+	this.remove_output(right_out_socket);
 	this.ties[right_out_socket] = [left_tool, left_out_socket];
     }
 
@@ -120,51 +155,69 @@ var BasicTool = Tool.extend(function() {
 	return this.ties[right_out_socket];
     }
 
-    this.untie = function(socket) {
+    this.destroy_tie = function(socket) {
 	if (!this.ties[socket]) {
-	    console.error("Attempt to untie an untied socket, "+socket); return;
+	    console.error("Attempt to destroy a tie in an untied socket, "+socket); return;
 	}
 	this.ties[socket] = undefined;
+
+    }
+
+    this.untie = function(socket) {
+	this.destroy_tie(socket);
 	this.create_output(socket);
     }
 
-    this.create_output = function(socket) {
-	if (this.outputs[socket]) {
-	    console.error("Attempt to create an output at socket "+socket+", but it already exists");
+    // ----------------------------------- gizmos --------------------------------------------
+
+    this.max_output_socket = function() { return this.gizmos.length; }
+
+    this.add_gizmo = function(socket) {
+	if (this.gizmos[socket]) {
+	    console.error("Attempt to create a gizmo at socket "+socket+", but it already exists");
 	    return;
 	}
-	this.outputs[socket] = this.create_output_gizmo(socket);
-	if (this.sprites) this.add_sprite(socket);
+	this.gizmos[socket] = this.create_output_gizmo(socket);
     }
 
-    this.destroy = function() {
-	this.ties = [];
-	this.inputs = [];
-	this.outputs = [];
-	if (this.sprites) {
-	    for (var i=0; i<this.sprites.length; i++) {
-		if (this.sprites[i]) this.remove_sprite(i);
+    this.get_gizmo = function(socket) { return this.gizmos[socket]; }
+
+    this.remove_gizmo = function(socket) {
+	if (!this.gizmos[socket]) {
+	    console.error("Attempt to remove a gizmo at socket "+socket+", but there is none");
+	    return;
+	}
+	this.gizmos[socket] = undefined;
+    }
+
+    this.first_free_output = function() {
+	var socket;
+	for (socket = 0; socket < this.max_output_socket(); socket++) {
+	    if (!this.gizmos[socket]) {
+		break;
 	    }
 	}
+	return socket;
     }
 
-    // Warning, any listeners may still refer to this output!
-    // Deletes ties, sprites and outputs at one fell swoop
-    this.delete_output = function(socket) {
-	if (!this.outputs[socket] && !this.ties[socket]) { 
-	    console.error("Attempt to delete nonexisting output/tie at socket "+socket);
-	    return;
-	}
-	if (this.sprites)      this.remove_sprite(socket);
-	this.ties[socket]    = undefined;
-	this.outputs[socket] = undefined;
-    }
+    // ----------------------------------- sprites -------------------------------------------
 
     this.add_sprite = function(socket) {
-	if (!this.sprites) { console.error("Call add_graphics first"); return;	}
+	if (!this.has_graphics()) { console.error("Call add_graphics first"); return;	}
+	if (!this.sprites) this.sprites = [];
 	if (this.sprites[socket]) { console.error("There already is a sprite at socket "+socket); return; }
-	if (!this.outputs[socket]) { console.error("Cannot create sprite without gizmo at socket "+socket); return; }
-	this.sprites[socket] = this.outputs[socket].create_sprite(socket);
+	if (!this.gizmos[socket]) { console.error("Cannot create sprite without gizmo at socket "+socket); return; }
+	this.sprites[socket] = this.gizmos[socket].create_sprite(socket);
+    }
+
+    this.get_sprite = function(socket) {
+	if (!this.has_graphics() || !this.sprites[socket]) { 
+	    if (this.get_tie(socket)) {
+		console.error("Attempted to get sprite for socket "+socket+", which is tied");
+	    }
+	    return undefined;
+	}
+	return this.sprites[socket];
     }
 
     this.remove_sprite = function(socket) {
@@ -176,116 +229,36 @@ var BasicTool = Tool.extend(function() {
 
     // create sprites for all connected outputs
     this.add_graphics = function() {
-	if (this.sprites) { console.error("Attempt to add sprites to a tool that already has them"); return; }
-	this.sprites = [];
-	for (var i=0; i<this.outputs.length; i++) {
+	if (this.has_graphics()) { console.error("Attempt to add graphics to a tool that already has them"); return; }
+	this.i_have_graphics = true;
+	for (var i=0; i<this.max_output_socket(); i++) {
 	    this.add_sprite(i);
 	}
     }
 
+    this.has_graphics = function() { return this.i_have_graphics; }
+
+    this.remove_graphics = function() {
+	for (var i=0; i<this.max_output_socket; i++) {
+	    this.remove_sprite(i);
+	}
+	delete this.i_have_graphics;
+    }
+
     this.update_graphics = function() {
 	if (!this.sprites) return;
-	for (var i=0; i<this.outputs.length; i++) {
-	    var output = this.outputs[i];
-	    if (output) output.update_sprite(this.sprites[i]);
+	for (var i=0; i<this.gizmos.length; i++) {
+	    var gizmo = this.gizmos[i];
+	    if (gizmo) gizmo.update_sprite(this.sprites[i]);
 	}
     }
-
-    this.first_free_output = function() {
-	var socket;
-	for (socket = 0; socket < this.outputs.length; socket++) {
-	    if (!this.outputs[socket]) {
-		break;
-	    }
-	}
-	return socket;
-    }
-
-    this.max_input_socket = function() { return this.inputs.length; }
-    this.max_output_socket = function() { return this.outputs.length; }
-
-    this.get_input = function(socket) { return this.inputs[socket]; }
-
-    this.get_output = function(socket) { 
-	return this.ties[socket] ? this.ties[socket][0].get_output(this.ties[socket][1]) : this.outputs[socket];
-    }
-
-    this.get_sprite = function(socket) {
-	if (!this.sprites || !this.sprites[socket]) { 
-	    if (this.get_tie(socket)) {
-		console.error("Attempted to get sprite for socket "+socket+", which is tied");
-	    } else {
-		console.error("Sprite expected for output "+socket);
-	    }
-	    return undefined;
-	}
-	return this.sprites[socket];
-    }
-
-    this.has_graphics = function() { return this.sprites ? 1 : 0; } // returns graphics level
-
-    this.highlight = function(socket, value) {
-	if (!this.sprites || !this.sprites[socket]) { console.error("Bad attempt to highlight"); return; }
-	var g = this.get_sprite(socket);
-	if (value) g.add_class("highlighted"); else g.remove_class("highlighted"); 
-    }
-
 });
-
-var ControlPointTool = BasicTool.extend(function() {
-
-    this.add = function(pos) {
-	var socket = this.first_free_output();
-	this.create_output(socket);
-	this.outputs[socket].pos = pos;
-	return socket;
-    }
-
-    this.recalculate = function() { }
-
-    this.create_output_gizmo = function(socket) { return ControlPoint.create(); }
-
-    this.find_closest = function(pos) {
-	var i_best=-1, d_best = Infinity;
-	for (var i=0; i<this.outputs.length; i++) {
-	    var d = this.outputs[i].distance_to_c(pos);
-	    if (d < d_best) { d_best = d; i_best = i; }
-	}
-	return [i_best, d_best];
-    }
-
-
-    this.get_state = function() {
-	var state = [];
-	for (var i=0; i<this.outputs.length; i++) {
-	    var gizmo = this.outputs[i];
-	    if (gizmo) state[i] = gizmo.dup();
-	}
-	return state;
-    }
-
-    this.restore_state = function(state) {
-	for (var i=0; i<state.length; i++) {
-	    var pos = state[i];
-	    if (pos) this.outputs[i].pos = pos;
-	}
-    }
-
-    this.randomize = function() {
-	for (var i=0; i<this.outputs.length; i++) {
-	    var gizmo = this.outputs[i];
-	    if (gizmo) gizmo.pos = [100*Math.random(), 100*Math.random() ];
-	}
-    }
-
-});
-
 
 var LineTool = BasicTool.extend(function() {
 
     this.recalculate = function() {
 	var point1 = this.listen(0), point2 = this.listen(1);
-	var line = this.outputs[0];
+	var line = this.gizmos[0];
 	line.valid = point1.valid && point2.valid;
 	if (line.valid) {
 	    line.p1 = point1.dup();
@@ -308,7 +281,7 @@ var CircleTool = BasicTool.extend(function() {
 
     this.recalculate = function() {
 	var center = this.listen(0), border = this.listen(1);
-	var circle = this.outputs[0];
+	var circle = this.gizmos[0];
 	circle.valid = center.valid && border.valid;
 	if (circle.valid) {
 	    circle.center = center.dup();
@@ -340,19 +313,19 @@ var CCI_Tool = BasicTool.extend(function() {
 
     this.mark_valid = function(v) {
 	for (var i=0; i!=2; i++) {
-	    if (!this.ties[i]) this.outputs[i].valid = v;
+	    if (!this.ties[i]) this.gizmos[i].valid = v;
 	}
     }
 
     this.solutions = function(p1, p2) {
 	var i = this.ties[0] ? 0 : this.ties[1] ? 1 : -1;
 	if (i==-1) {
-	    this.outputs[0].pos = p1;
-	    this.outputs[1].pos = p2;
+	    this.gizmos[0].pos = p1;
+	    this.gizmos[1].pos = p2;
 	} else {
 	    var tie = this.ties[i];
 	    var tied_output = tie[0].get_output(tie[1]);
-	    this.outputs[1-i].pos = Point.distance_cc(p1, tied_output.pos) < SMALL ? p2 : p1;
+	    this.gizmos[1-i].pos = Point.distance_cc(p1, tied_output.pos) < SMALL ? p2 : p1;
 	}
     }
 
@@ -433,19 +406,19 @@ var LCI_Tool = BasicTool.extend(function() {
 
     this.mark_valid = function(v) {
 	for (var i=0; i!=2; i++) {
-	    if (!this.ties[i]) this.outputs[i].valid = v;
+	    if (!this.ties[i]) this.gizmos[i].valid = v;
 	}
     }
 
     this.solutions = function(p1, p2) {
 	var i = this.ties[0] ? 0 : this.ties[1] ? 1 : -1;
 	if (i==-1) {
-	    this.outputs[0].pos = p1;
-	    this.outputs[1].pos = p2;
+	    this.gizmos[0].pos = p1;
+	    this.gizmos[1].pos = p2;
 	} else {
 	    var tie = this.ties[i];
 	    var tied_output = tie[0].get_output(tie[1]);
-	    this.outputs[1-i].pos = Point.distance_cc(p1, tied_output.pos) < SMALL ? p2 : p1;
+	    this.gizmos[1-i].pos = Point.distance_cc(p1, tied_output.pos) < SMALL ? p2 : p1;
 	}
     }
 
@@ -510,7 +483,7 @@ var LLI_Tool = BasicTool.extend(function() {
     this.create_output_gizmo = function(socket) { return ConstructedPoint.create(); }
 
     this.mark_valid = function(v) {
-	if (!this.ties[0]) this.outputs[0].valid = v;
+	if (!this.ties[0]) this.gizmos[0].valid = v;
     }
 
 
@@ -524,7 +497,7 @@ var LLI_Tool = BasicTool.extend(function() {
 	    v = xy && isFinite(xy[0]) && isFinite(xy[1]);
 	}
 	this.mark_valid(v);
-	if (v) this.outputs[0].pos = xy;
+	if (v) this.gizmos[0].pos = xy;
     }
 
 });

@@ -1,89 +1,53 @@
 "use strict";
 
-/*
-  =============================== CompoundTool: ===============================
-  hidden fields:
-  - ct.input_interface
-  - ct.output_interface
-  - ct.tools             - [ tool, tool, ... ] - in topological sorted order
-
-  additional methods:
-  - ct.add_tool(tool)                  - add a new tool to the compound tool
-  - ct.get_tools(num_indep, dependent) - returns all dependent / independent tools given the number of independents
-*/
-
-
-var InterfaceTool = BasicTool.extend(function() {
-
-    this.create_output_gizmo = function(socket) { return this.listen(socket); } // this is teh shit
-
-    this.connect = function(src_tool, src_socket, dst_socket) {
-	BasicTool.connect.call(this, src_tool, src_socket, dst_socket);
-	this.create_output(dst_socket);
-    }
-    
-    this.disconnect = function(socket) {
-	BasicTool.disconnect.call(this, socket);
-	this.delete_output(socket);
-    }
-    
-    // by copying over the inputs every recalculation we ensure that tools can change their output gizmos
-    // if they want
-    this.recalculate = function() {
-	for (var i = 0; i < this.inputs.length; i++) {
-	    if (this.inputs[i] && this.tied[i]) {
-		this.outputs[i] = this.listen(i);
-	    }
-	}
-    }
-    
-});
-
-
 var CompoundTool = Tool.extend(function() {
 
     this.create = function() {
 	return this.extend(function() {
-	    this.input_interface  = InterfaceTool.create();
-	    this.output_interface = InterfaceTool.create();
 	    this.tools = [];
 	    this.id2tool = [];
 	});
     }
 
     this.connect = function(src_tool, src_socket, dst_socket) {
-	this.input_interface.connect(src_tool, src_socket, dst_socket);
+	this.id2tool[0].connect(src_tool, src_socket, dst_socket);
     }
 
     this.disconnect = function(dst_socket) {
-	this.input_interface.disconnect(dst_socket);
+	this.id2tool[0].disconnect(dst_socket);
     }
 
     this.tie = function(left_tool, left_out_socket, right_out_socket) {
-	this.output_interface.tie(left_tool, left_out_socket, right_out_socket);
+	// this.output_interface.tie(left_tool, left_out_socket, right_out_socket);
+	console.error("Cannot tie a compoundtool yet");
     }
 
     this.untie = function(right_out_socket) {
-	this.output_interface.untie(right_out_socket);
+	console.error("Cannot untie a compoundtool yet");
+	// this.output_interface.untie(right_out_socket);
     }
     
     this.recalculate = function() {
-	this.input_interface.recalculate();
 	for (var i = 0; i < this.tools.length; i++) {
 	    this.tools[i].recalculate();
 	}
-	this.output_interface.recalculate();
     }
 
-    this.destroy = function() { this.output_interface.destroy(); }
-    this.has_graphics = function() { return this.output_interface.has_graphics(); }
-    this.add_graphics = function() { this.output_interface.add_graphics(); }
-    this.update_graphics = function() { this.output_interface.update_graphics(); }
+    this.destroy = function() {
+	for (var i=0; i<this.id2tool.length; i++) {
+	    this.id2tool[i].destroy();
+	}
+    }
+
+
+    this.has_graphics = function() { console.error("Not implemented"); return true; } // this.output_interface.has_graphics(); }
+    this.add_graphics = function() { console.error("Not implemented"); } // this.output_interface.add_graphics(); }
+    this.update_graphics = function() { console.error("Not implemented"); } // this.output_interface.update_graphics(); }
 
 
     this.add_tool = function(tool) { 
 	tool.id = this.id2tool.length;
-	this.id2tool.push(tool)
+	this.id2tool.push(tool);
 	this.tools.push(tool); 
     }
 
@@ -120,12 +84,7 @@ var CompoundTool = Tool.extend(function() {
 	}
     }
 
-     
-    this.get_input  = function(socket) { return this.input_interface.get_input(socket);   }
-    this.get_output = function(socket) { return this.output_interface.get_output(socket); }
-    this.get_sprite = function(socket) { return this.output_interface.get_sprite(socket); }
-    this.max_output_socket = function() { return this.output_interface.max_output_socket(); }
-    this.max_input_socket = function() { return this.input_interface.max_input_socket(); }
+    this.max_output_socket = function() { return this.id2tools[0].max_output_socket(); }
 
     // invariant: every tool's inputs/ties refer to tools earlier in the tools array, or to the controlpoint tool
     function separate(tool, socket) {
@@ -300,7 +259,8 @@ var CompoundTool = Tool.extend(function() {
 	var cp = cpl[0]; // get any connection from CP and the right output socket
 
 	// destroy controlpoint
-	cp[0].delete_output(cp[1]);
+	console.log("Destroying socket "+cp[1]+" of the CPT");
+	cp[0].remove_output(cp[1]);
 
 	this.recalculate();
 	// CT.find_duplicates(CP)
@@ -383,14 +343,14 @@ var CompoundTool = Tool.extend(function() {
     }
 
     this.select_outputs = function(tool_ids, func) {
+	var res = [];
 	for (var i=0; i<tool_ids.length; i++) {
 	    var tool_id = tool_ids[i];
 	    var t = this.id2tool[tool_id];
-	    var res = [];
 	    for (var j=0; j<t.max_output_socket(); j++) {
 		var gizmo, sprite;
 		var tie = t.get_tie(j);
-		if (!tie) { gizmo = t.get_output(j); if (t.has_graphics() && gizmo) sprite = t.get_sprite(j); }
+		if (!tie) { gizmo = t.get_gizmo(j); if (t.has_graphics() && gizmo) sprite = t.get_sprite(j); }
 		if (gizmo || tie) {
 		    var info = [tool_id, j, gizmo, sprite, tie];
 		    if (func.apply(undefined, info)) res.push(info);

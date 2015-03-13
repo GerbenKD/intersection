@@ -60,14 +60,9 @@ var State = new function() {
 
     function initialize() {
 
+
 	if (CT) CT.destroy();
 	CT = CompoundTool.create();
-
-	if (CP) CP.destroy();
-	CP = ControlPointTool.create();
-	CP.add_graphics();
-
-	CT.add_tool(CP); // TODO THIS IS TEMPORARY!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 	// override some CT methods related to graphics
 
@@ -84,11 +79,9 @@ var State = new function() {
 	    CompoundTool.add_tool.call(this, tool);
 	}
 
-	CT.destroy = function() {
-	    for (var i=0; i<this.tools.length; i++) {
-		this.tools[i].destroy();
-	    }
-	}
+	CP = ControlPointTool.create();
+	CT.add_tool(CP);
+
 
     }
 
