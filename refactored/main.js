@@ -94,7 +94,7 @@ function main() {
     window.onmousemove = function(e) {
 	MOUSE = Graphics.e2coord(e);
 	if (DRAGGING) {
-	    State.drag_controlpoint(DRAGGING[1], [MOUSE[0]+DRAGGING[2], MOUSE[1]+DRAGGING[3]]);
+	    State.drag_controlpoint([MOUSE[0]+DRAGGING[2], MOUSE[1]+DRAGGING[3]]);
 	    State.redraw();
 	}
 	highlight();
@@ -119,7 +119,7 @@ function main() {
 
     window.onmousedown = function(e) {
 	if (!HIGHLIGHTED) return;
-	HIGHLIGHT_TARGETS = State.get_controlpoint_targets(HIGHLIGHTED[1]);
+	HIGHLIGHT_TARGETS = State.pick_up_controlpoint(HIGHLIGHTED[1]);
 	sparkle();
 	var cp = HIGHLIGHTED[2];
 	DRAGGING = [HIGHLIGHTED[0], HIGHLIGHTED[1], cp.pos[0] - MOUSE[0], cp.pos[1] - MOUSE[1]];

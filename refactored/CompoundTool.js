@@ -84,39 +84,7 @@ var CompoundTool = Tool.extend(function() {
 	}
     }
 
-    this.max_output_socket = function() { return this.id2tools[0].max_output_socket(); }
-
-    // invariant: every tool's inputs/ties refer to tools earlier in the tools array, or to the controlpoint tool
-    function separate(tool, socket) {
-	var dependent = []; // maps dependent tools that have been seen
-	var dependent_tools = [];
-
-	var i_wr = 0;
-	for (var i_rd=0; i_rd<this.tools.length; i_rd++) {
-	    var t = this.tools[i_rd];
-	    if (check_dependent(t)) {
-		dependent_tools.push(t);
-		dependent[t.id] = true;
-	    } else {
-		this.tools[i_wr++] = t;
-	    }
-	}
-	if (i_rd-i_wr != dependent_tools.length) console.error("This should not happen");
-	for (var i=0; i<i_rd-i_wr; i++) { this.tools[i_wr+i] = dependent_tools[i]; }
-
-	return [this.tools.slice(0, i_wr), this.tools.slice(i_wr)];
-
-	// tool is dependent on the controlpoint if its inputs or its ties refer to either another dependent tool, or
-	// to the controlpoint tool with the correct socket
-	function check_dependent(t) {
-	    var connections = t.incoming_connections();
-	    for (var i=0; i<connections.length; i++) {
-		var conn = connections[i];
-		if ((conn[0]==tool && conn[1]==socket) || dependent[conn[0].id]) return true;
-	    }
-	    return false;
-	}
-    }
+    this.max_input_socket = function() { return this.id2tools[0].max_output_socket(); }
    
 
     /* Assumes the main compoundtool to have been recalculated.
@@ -129,7 +97,7 @@ var CompoundTool = Tool.extend(function() {
 
 	var candidates = initialise_candidates(this.tools);
 	report("Initialised candidates", candidates);
-	var cpt = this.id2tool[0]; // TODO that's temporarily where the CPT is
+	var cpt = this.id2tool[0];
 	var state = cpt.get_state();
 	for (var tst=0; tst<5; tst++) {
 	    cpt.randomize();
@@ -231,43 +199,6 @@ var CompoundTool = Tool.extend(function() {
 	}
     }
 
-    /* ----------------------------------- State change objects  -------------------------------- */ 
-
-    /* cpl is list of connections from the controlpoint being snapped.
-     * Each of them has to be rewired.
-     *
-     * target is the snap target [tool, output_socket]
-     */
-    function snap(cpl, target) {
-	if (cpl.length==0) return;
-
-	// rewire
-	for (var i=0; i<cpl.length; i++) {
-	    var conn = cpl[i]; // contains dst_tool and dst_socket
-	    // conn = [CP, cp_out_socket, right_tool, right_socket, is_tie]
-	    var right_tool = conn[2];
-	    if (conn[4]) {
-		right_tool.untie(conn[3]);
-		right_tool.tie(target[0], target[1], conn[3]);
-	    } else {
-		right_tool.disconnect(conn[3]);
-		right_tool.connect(target[0], target[1], conn[3]);
-	    }
-	}
-
-	// figure out the controlpointtool and relevant output socket
-	var cp = cpl[0]; // get any connection from CP and the right output socket
-
-	// destroy controlpoint
-	console.log("Destroying socket "+cp[1]+" of the CPT");
-	cp[0].remove_output(cp[1]);
-
-	this.recalculate();
-	// CT.find_duplicates(CP)
-	tie_em_up.call(this, find_duplicates.call(this, this.id2tool[0])); // Give CPT to find_duplicates
-    }
-
-
     // map[left_tool_id + ":" + left_out_socket][right_tool_id] = info
     // info = [left_tool, right_tool, left_out_socket, left_index, right_index]
     function tie_em_up(map) {
@@ -302,44 +233,55 @@ var CompoundTool = Tool.extend(function() {
     function tools2ids(tools) { return tools.map(function(tool) { return tool.id; }); }
     function ids2tools(ids)   { var id2tool = this.id2tool; return ids.map(function(id) { return id2tool[id]; }); }
 
-    // returns all connections from the given tool output to any tool /inside/ this compoundtool.
-    function get_listeners(tool, output_socket, tools) {
-	var res = [];
-	for (var i=0; i<tools.length; i++) {
-	    var t = tools[i];
-	    var connections = t.incoming_connections();
-	    for (var j=0; j<connections.length; j++) {
-		var conn = connections[j];
-		if (conn[0]===tool && conn[1]==output_socket) res.push(conn);
-	    }
-	}
-	return res;
-    }
+    /* ------------------------------- Used from State ----------------------------------------- */ 
 
-    function connection_tools_to_ids(connections) {
+    this.incoming_connection_ids = function(id) {
+	var incoming = this.id2tool[id].incoming_connections();
 	var res = [];
-	for (var i=0; i<connections.length; i++) {
-	    var c = connections[i];
+	for (var i=0; i<incoming.length; i++) {
+	    var c = incoming[i];
 	    res.push([c[0].id, c[1], c[2].id, c[3], c[4]]);
 	}
 	return res;
     }
 
-
-    /* ------------------------------- Used from State ----------------------------------------- */ 
-
-    this.incoming_connection_ids = function(id) {
-	return connection_tools_to_ids(this.id2tool[id].incoming_connections());
+    this.foreach_listener = function(tool_id, output_socket, tool_ids, func) {
+	for (var i=0; i<tool_ids.length; i++) {
+	    var connections = this.incoming_connection_ids(tool_ids[i]);
+	    for (var j=0; j<connections.length; j++) {
+		var conn = connections[j];
+		if (conn[0]===tool_id && conn[1]==output_socket) func(conn);
+	    }
+	}
     }
 
-    this.split_tools = function(cp_out_socket) {
-	var T = separate.call(this, this.id2tool[0], cp_out_socket);
-	return [tools2ids(T[0]), tools2ids(T[1])];
-    }
+    this.separate = function(socket) {
+	var tool = this.id2tool[0];
+	var dependent = {}; // maps dependent tools that have been seen
+	var dependent_tools = [], independent_tools = [];
 
-    this.get_listener_ids = function(tool_id, output_socket, tool_ids) {
-	var cpl = get_listeners(this.id2tool[tool_id], output_socket, ids2tools.call(this,tool_ids));
-	return connection_tools_to_ids(cpl);
+	for (var i=0; i<this.tools.length; i++) {
+	    var t = this.tools[i];
+	    if (check_dependent(t)) {
+		dependent_tools.push(t.id);
+		dependent[t.id] = true;
+	    } else {
+		independent_tools.push(t.id);
+	    }
+	}
+
+	return [independent_tools, dependent_tools];
+
+	// tool is dependent on the controlpoint if its inputs or its ties refer to either another dependent tool, or
+	// to the controlpoint tool with the correct socket
+	function check_dependent(t) {
+	    var connections = t.incoming_connections();
+	    for (var i=0; i<connections.length; i++) {
+		var conn = connections[i];
+		if ((conn[0]==tool && conn[1]==socket) || dependent[conn[0].id]) return true;
+	    }
+	    return false;
+	}
     }
 
     this.select_outputs = function(tool_ids, func) {
@@ -360,7 +302,7 @@ var CompoundTool = Tool.extend(function() {
 	return res;
     }
 
-    this.perform = function(change) {
+    this.change = function(change) {
 	var fn = change[0];
 	var fu = eval("C_"+fn);
 	if (!fu) { console.error("Unknown change: '"+fn+"'"); return; }
@@ -371,41 +313,81 @@ var CompoundTool = Tool.extend(function() {
 
     /* --------------------------------------- Changes ------------------------------------------- */ 
 
-    // returns tool id
-    function C_create_line() {
-	var out_socket1 = this.id2tool[0].add([0,0]);
-	var out_socket2 = this.id2tool[0].add([0,0]);
-	var line = LineTool.create();
-	line.connect(this.id2tool[0], out_socket1, 0);
-	line.connect(this.id2tool[0], out_socket2, 1);
-	this.add_tool_with_intersections(line);
-	return [out_socket1, out_socket2];
-    }
-
-    // returns tool id
-    function C_create_circle() {
-	var out_socket1 = this.id2tool[0].add([0,0]);
-	var out_socket2 = this.id2tool[0].add([0,0]);
-	var circle = CircleTool.create();
-	circle.connect(this.id2tool[0], out_socket1, 0);
-	circle.connect(this.id2tool[0], out_socket2, 1);
-	this.add_tool_with_intersections(circle);
-	return [out_socket1, out_socket2];
-    }
-
-    function C_load_tool(filename) {
+    // returns socket
+    function C_create_controlpoint(pos) {
+	return this.id2tool[0].add(pos);
     }
 
     function C_move_controlpoint(cp_out_socket, pos) {
 	this.id2tool[0].get_output(cp_out_socket).pos = [pos[0], pos[1]];
     }
 
-    // Todo, the get listeners forces everything to ids, here we immediately convert everything back. Sucky!
-    function C_snap(cp_out_socket, left_tool_id, left_out_socket) {
-	var T = separate.call(this, this.id2tool[0], cp_out_socket);
-	var id2tool = this.id2tool;
-	var cpl = get_listeners.call(this, this.id2tool[0], cp_out_socket, T[1]);
-	snap.call(this, cpl, [this.id2tool[left_tool_id], left_out_socket]);
+    function C_remove_controlpoint(cp_out_socket) {
+	this.id2tool[0].remove_output(cp_out_socket);
+    }
+
+    // returns tool id
+    function C_create_line(left_out_socket1, left_out_socket2) {
+	var line = LineTool.create();
+	line.connect(this.id2tool[0], left_out_socket1, 0);
+	line.connect(this.id2tool[0], left_out_socket2, 1);
+	this.add_tool_with_intersections(line);
+    }
+
+    // returns tool id
+    function C_create_circle(left_out_socket1, left_out_socket2) {
+	var circle = CircleTool.create();
+	circle.connect(this.id2tool[0], left_out_socket1, 0);
+	circle.connect(this.id2tool[0], left_out_socket2, 1);
+	this.add_tool_with_intersections(circle);
+    }
+
+    // removes the tool with the given id and all later tools (intersections) in the tools array
+    function C_remove_tool(id) {
+	var i;
+	for (i=this.tools.length-1; i>=0; i--) {
+	    var t = this.tools[i];
+	    var id = t.id;
+	    t.destroy();
+	    if (t.id==id) break;
+	}
+	if (i<0) console.error("Cannot find the tool with the given id "+id+" in C_remove_tool");
+    }
+
+    function C_shuffle_tools(ids) {
+	var res = [];
+	for (var i=0; i<ids.length; i++) {
+	    res.push(this.tools[i].id);
+	    this.tools[i] = this.id2tool[ids[i]];
+	}
+	return res;
+    }
+
+    function C_load_tool(filename) {
+    }
+
+    // before doing any redirections, use shuffle_tools to make sure the new target is to the left
+    // of the right_tool in the connection
+    function C_redirect(connection, new_target) {
+	var right_tool = this.id2tool[connection[2]];
+	var new_target_tool = this.id2tool[new_target[0]];
+	if (connection[4]) {
+	    right_tool.untie(connection[3]);
+	    right_tool.tie(new_target[0], new_target[1], connection[3]);
+	} else {
+	    right_tool.disconnect(connection[3]);
+	    right_tool.connect(new_target_tool, new_target[1], connection[3]);
+	}
+    }
+
+    // before doing any ties, use shuffle_tools to make sure the new target is to the left
+    // of the right_tool in the connection
+    function C_tie(left_id, left_out_socket, right_id, right_out_socket) {
+	this.id2tool[right_id].tie(this.id2tool[left_id], left_out_socket, right_out_socket);
+    }
+
+    function C_untie(right_id, right_out_socket) {
+	this.id2tool[right_id].untie(right_out_socket);
     }
 
 });
