@@ -30,13 +30,13 @@ function main() {
 	    highlight();
 	    break;
 	case 122: // Z, undo
-	    State.step(-1);
+	    State.undo();
 	    State.redraw();
 	    HIGHLIGHT_TARGETS = State.get_controlpoints();
 	    highlight();
 	    break;
 	case 120: // X, redo
-	    State.step(+1);
+	    State.redo();
 	    State.redraw();
 	    HIGHLIGHT_TARGETS = State.get_controlpoints();
 	    highlight();

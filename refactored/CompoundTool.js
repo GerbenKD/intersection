@@ -306,7 +306,7 @@ var CompoundTool = Tool.extend(function() {
 	var fn = change[0];
 	var fu = eval("C_"+fn);
 	if (!fu) { console.error("Unknown change: '"+fn+"'"); return; }
-	console.log("Performing "+fn);
+	console.log("Performing change "+JSON.stringify(change));
 	return fu.apply(this, change.slice(1));
     }
 
@@ -332,6 +332,7 @@ var CompoundTool = Tool.extend(function() {
 	line.connect(this.id2tool[0], left_out_socket1, 0);
 	line.connect(this.id2tool[0], left_out_socket2, 1);
 	this.add_tool_with_intersections(line);
+	return line.id;
     }
 
     // returns tool id
@@ -340,18 +341,20 @@ var CompoundTool = Tool.extend(function() {
 	circle.connect(this.id2tool[0], left_out_socket1, 0);
 	circle.connect(this.id2tool[0], left_out_socket2, 1);
 	this.add_tool_with_intersections(circle);
+	return circle.id;
     }
 
     // removes the tool with the given id and all later tools (intersections) in the tools array
     function C_remove_tool(id) {
-	var i;
-	for (i=this.tools.length-1; i>=0; i--) {
-	    var t = this.tools[i];
-	    var id = t.id;
+	while (this.tools.length > 0) {
+	    var t = this.tools.pop();
+	    this.id2tool.pop();
+	    var t_id = t.id;
 	    t.destroy();
-	    if (t.id==id) break;
+	    console.log("Destroyed tool with id="+t_id+", looking for "+id+", #left="+this.tools.length);
+	    if (t_id==id) return;
 	}
-	if (i<0) console.error("Cannot find the tool with the given id "+id+" in C_remove_tool");
+	console.error("Cannot find the tool with the given id "+id+" in C_remove_tool");
     }
 
     function C_shuffle_tools(ids) {

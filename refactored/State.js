@@ -15,50 +15,71 @@ var State = new function() {
     var CP, CT, DRAG_START;
 
     initialize();
-
-    /* The global state maintains a single selected controlpoint. For that controlpoint,
-       the listeners are available and it can be snapped. This state is transparent to the
-       outside.
-     */
  
-    var UNDO_BUFFER = []; // list of undo frames. An undo frame is itself a list of changes.
+    var UNDO_BUFFER = []; // list of undo frames. An undo frame is itself a list of [forward_change,backward_change]
     var UNDO_CURRENT = [];
+    var UNDO_CURRENT_STORED = [];
     var UNDO_INDEX = 0; // points to the first frame that can be redone
 
-    function step_one(which) {
-	var frame = UNDO_BUFFER[UNDO_INDEX];
-	for (var i=0; i<frame.length; i++) {
-	    CT.change(frame[i][which]);
-	}
-	UNDO_INDEX++;
-    }
-
-
     this.create_undo_frame = function() {
-	UNDO_BUFFER.splice(UNDO_INDEX, UNDO_BUFFER.length - UNDO_INDEX, UNDO_CURRENT);
-	UNDO_CURRENT = [];
-	UNDO_INDEX++;
+	if (UNDO_CURRENT.length>0) {
+	    UNDO_BUFFER.splice(UNDO_INDEX, UNDO_BUFFER.length - UNDO_INDEX, UNDO_CURRENT);
+	    UNDO_CURRENT = [];
+	    UNDO_INDEX++;
+	    UNDO_CURRENT_STORED = [];
+	}
     }
 
-    this.step = function(steps) {
-	var i_target = UNDO_INDEX + steps;
-	if (steps<0) {
-	    if (UNDO_CURRENT.length > 0) create_undo_frame();
-	    initialize(); 
-	    if (i_target<0) i_target = 0;
-	    UNDO_INDEX = 0;
+    this.undo = function() {
+
+	// figure out what undo frame we're dealing with and handle administration
+	var frame;
+	if (UNDO_INDEX == UNDO_BUFFER.length && UNDO_CURRENT.length > 0) {
+	    UNDO_CURRENT_STORED = UNDO_CURENT;
+	    frame = UNDO_CURRENT;
+	    UNDO_CURRENT = [];
 	} else {
-	    if (UNDO_CURRENT.length > 0) UNDO_CURRENT = []; // flush current frame if we're redoing!!!
-	    if (i_target > UNDO_BUFFER.length) i_target = UNDO_BUFFER.length;
+	    if (UNDO_INDEX>0) {
+		frame = UNDO_BUFFER[UNDO_INDEX-1];
+		UNDO_INDEX--;
+	    }
 	}
-	while (UNDO_INDEX < i_target) {
-	    step_one.call(this, 0);
+
+	// actually undo all the changes
+	if (frame) {
+	    for (var i=frame.length-1; i>=0; i--) {
+		var change = frame[i][1];
+		CT.change(change);
+	    }
+	}
+
+    }
+
+    this.redo = function() {
+
+	// figure out what undo frame we're dealing with and handle administration
+	var frame;
+	if (UNDO_INDEX == UNDO_BUFFER.length && UNDO_CURRENT_STORED.length > 0) {
+	    UNDO_CURRENT = UNDO_CURRENT_STORED;
+	    frame = UNDO_CURRENT_STORED;
+	    UNDO_CURRENT_STORED = [];
+	} else {
+	    if (UNDO_INDEX < UNDO_BUFFER.length) {
+		frame = UNDO_BUFFER[UNDO_INDEX];
+		UNDO_INDEX++;
+	    }
+	}
+
+	// actually undo all the changes
+	if (frame) {
+	    for (var i=0; i<frame.length; i++) {
+		var change = frame[i][0];
+		CT.change(change);
+	    }
 	}
     }
 
     function initialize() {
-
-
 	if (CT) CT.destroy();
 	CT = CompoundTool.create();
 
@@ -179,8 +200,9 @@ var State = new function() {
 	});
 
 	cf = ["remove_controlpoint", cp_out_socket];
-	cb = ["create_controlpoint", CP.get_output(cp_out_socket).pos];
+	cb = ["create_controlpoint", DRAG_START[1]];
 	CT.change(cf);
+
 	register_change(cf, cb);
 
 	// TODO add ties for duplicate points:
