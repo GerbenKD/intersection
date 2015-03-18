@@ -89,7 +89,7 @@ var CompoundTool = Tool.extend(function() {
 
     /* Assumes the main compoundtool to have been recalculated.
      * candidates[left_tool_id + ":" + left_out_socket][right_tool_id] = 
-                                        [left_tool, right_tool, left_out_socket, left_index, right_index]
+                                        [left_tool_id, right_tool_id, left_out_socket, left_index, right_index]
      * if src_tool has an output that is equal to dst_tool at dst_socket
      */
     function find_duplicates() {
@@ -161,10 +161,10 @@ var CompoundTool = Tool.extend(function() {
 			    ? [ list_i[0], list_k[0], list_i[3], list_i[1], list_k[1] ]  // i is destination
 			    : [ list_k[0], list_i[0], list_k[3], list_k[1], list_i[1] ];
 			// info is [left_tool, right_tool, left_out_socket, left_index, right_index]
-			var left_key = info[0].id+":"+info[2];
+			var left_key = info[0]+":"+info[2];
 			var right_hash = map[left_key];
 			if (!right_hash) { right_hash = {}; map[left_key] = right_hash; }
-			right_hash[info[1].id] = info;
+			right_hash[info[1]] = info;
 		    }
 		}
 	    }
@@ -194,14 +194,21 @@ var CompoundTool = Tool.extend(function() {
 			if (deleted == right_tool_ids.length) delete candidates[left_key];
 		    }
 		}
-
 	    }
 	}
     }
 
-    // map[left_tool_id + ":" + left_out_socket][right_tool_id] = info
-    // info = [left_tool, right_tool, left_out_socket, left_index, right_index]
-    function tie_em_up(map) {
+    function tools2ids(tools) { return tools.map(function(tool) { return tool.id; }); }
+    function ids2tools(ids)   { var id2tool = this.id2tool; return ids.map(function(id) { return id2tool[id]; }); }
+
+    /* ------------------------------- Used from State ----------------------------------------- */ 
+
+    // Constructs a list of ties for all duplicate tools. The list consists of the suggested connections.
+    this.foreach_tie = function(func) {
+	this.recalculate();
+	var map = find_duplicates.call(this);
+	// map[left_tool_id + ":" + left_out_socket][right_tool_id] = info
+	// info = [left_tool, right_tool, left_out_socket, left_index, right_index]
 
 	var entries = [];
 	for (var left_key in map) {
@@ -212,8 +219,7 @@ var CompoundTool = Tool.extend(function() {
 	    }
 	}
 	entries.sort(function(a,b) { return (a[3]-b[3]) || (a[4]-b[4]); });
-
-	var tied = 0;
+	
 	for (var i=0; i!=entries.length; i++) {
 	    var info = entries[i]; 
 	    var right_out_sockets = info[1].get_matching_outputs(info[0].get_output(info[2]));
@@ -221,19 +227,11 @@ var CompoundTool = Tool.extend(function() {
 	    for (var j=0; j<right_out_sockets.length; j++) {
 		var right_out_socket = right_out_sockets[j];
 		if (!info[1].get_tie(right_out_socket)) {
-		    info[1].tie(info[0], info[2], right_out_socket);
-		    tied++;
+		    func([info[0].id, info[2], info[1].id, right_out_socket, true]);
 		}
 	    }
 	}
-	console.log("Tied "+tied+" points together");
     }
-
-
-    function tools2ids(tools) { return tools.map(function(tool) { return tool.id; }); }
-    function ids2tools(ids)   { var id2tool = this.id2tool; return ids.map(function(id) { return id2tool[id]; }); }
-
-    /* ------------------------------- Used from State ----------------------------------------- */ 
 
     this.incoming_connection_ids = function(id) {
 	var incoming = this.id2tool[id].incoming_connections();
@@ -348,7 +346,8 @@ var CompoundTool = Tool.extend(function() {
     function C_remove_tool(id) {
 	while (this.tools.length > 0) {
 	    var t = this.tools.pop();
-	    this.id2tool.pop();
+	    var t2 = this.id2tool.pop();
+	    if (t!==t2) { console.error("remove_tool can only remove tools that have not been shuffled yet"); return; }
 	    var t_id = t.id;
 	    t.destroy();
 	    console.log("Destroyed tool with id="+t_id+", looking for "+id+", #left="+this.tools.length);

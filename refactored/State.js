@@ -205,11 +205,13 @@ var State = new function() {
 
 	register_change(cf, cb);
 
-	// TODO add ties for duplicate points:
-	// this.recalculate();
-	// CT.find_duplicates(CP)
-	// tie_em_up.call(this, find_duplicates.call(this, this.id2tool[0])); // Give CPT to find_duplicates
-
+	// The next step is to look for new dupicate points and tie them together
+	CT.foreach_tie(function(connection) {
+	    var cf = ["tie",   connection[0], connection[1], connection[2], connection[3]];
+	    var cb = ["untie", connection[2], connection[3]];
+	    CT.change(cf);
+	    register_change(cf, cb);
+	});
     }
 
     this.get_controlpoints = function() {
