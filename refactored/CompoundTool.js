@@ -300,11 +300,11 @@ var CompoundTool = Tool.extend(function() {
 	return res;
     }
 
-    this.change = function(change) {
+    this.change = function(change, suppress_log) {
 	var fn = change[0];
 	var fu = eval("C_"+fn);
 	if (!fu) { console.error("Unknown change: '"+fn+"'"); return; }
-	console.log("Performing change "+JSON.stringify(change));
+	if (!suppress_log) console.log("Performing change "+JSON.stringify(change));
 	return fu.apply(this, change.slice(1));
     }
 

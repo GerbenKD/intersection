@@ -30,12 +30,56 @@ var State = new function() {
 	}
     }
 
-    this.undo = function() {
+    function animate_controlpoints(displacements, continuation) {
+	var iter = 0, numiter=25;
+	requestAnimationFrame(animate);
 
+	function animate() {
+	    var f = iter / numiter;
+	    iter++;
+	    for (var cp_out_socket in displacements) {
+		var d = displacements[cp_out_socket];
+		var pos = [ d[0][0]*f + d[1][0]*(1-f),
+			    d[0][1]*f + d[1][1]*(1-f) ];
+		CT.change(["move_controlpoint", cp_out_socket, pos], true);
+		CT.recalculate();
+		CT.update_graphics();
+	    }
+	    if (iter < numiter) requestAnimationFrame(animate); else continuation();
+	}
+    }
+
+    function perform_frame(frame, direction, continuation) {
+	if (frame.length==0) { continuation(); return; }
+	var num_moves = 0;
+	while (num_moves < frame.length && frame[num_moves][direction][0] == "move_controlpoint") {
+	    num_moves++;
+	}
+	if (num_moves==0) {
+	    CT.change(frame[0][direction]);
+	    perform_frame(frame.slice(1), direction, continuation);
+	} else {
+	    var displacements = {};
+	    for (var i=0; i<num_moves; i++) {
+		var fw = frame[i][1-direction], bw = frame[i][direction];
+		var cp_out_socket = fw[1];
+		if (!(cp_out_socket in displacements)) {
+		    displacements[cp_out_socket] = [bw[2], fw[2]];
+		} else {
+		    displacements[cp_out_socket][1] = fw[2];
+		}
+	    }
+	    animate_controlpoints(displacements, 
+				  function() { perform_frame(frame.slice(num_moves), direction, continuation); });
+	}
+    }
+
+    // continuation is executed once undo animation has completed
+    this.undo = function(continuation) {
 	// figure out what undo frame we're dealing with and handle administration
 	var frame;
 	if (UNDO_INDEX == UNDO_BUFFER.length && UNDO_CURRENT.length > 0) {
-	    UNDO_CURRENT_STORED = UNDO_CURENT;
+	    UNDO_CURRENT_STORED = UNDO_CURRENT;
 	    frame = UNDO_CURRENT;
 	    UNDO_CURRENT = [];
 	} else {
@@ -46,17 +90,11 @@ var State = new function() {
 	}
 
 	// actually undo all the changes
-	if (frame) {
-	    for (var i=frame.length-1; i>=0; i--) {
-		var change = frame[i][1];
-		CT.change(change);
-	    }
-	}
-
+	if (frame) perform_frame(frame.slice().reverse(), 1, continuation); else continuation();
     }
 
-    this.redo = function() {
-
+    // continuation is executed once redo animation has completed
+    this.redo = function(continuation) {
 	// figure out what undo frame we're dealing with and handle administration
 	var frame;
 	if (UNDO_INDEX == UNDO_BUFFER.length && UNDO_CURRENT_STORED.length > 0) {
@@ -71,12 +109,7 @@ var State = new function() {
 	}
 
 	// actually undo all the changes
-	if (frame) {
-	    for (var i=0; i<frame.length; i++) {
-		var change = frame[i][0];
-		CT.change(change);
-	    }
-	}
+	if (frame) perform_frame(frame, 0, continuation); else continuation();
     }
 
     function initialize() {
@@ -116,6 +149,12 @@ var State = new function() {
 	UNDO_CURRENT.push([change_forward, change_backward]);
     }
 
+
+    this.last_change_was_a_move = function() {
+	if (UNDO_CURRENT.length == 0) return false;
+	var change = UNDO_CURRENT[UNDO_CURRENT.length-1];
+	return change[0][0] == "move_controlpoint";
+    }
 
     this.create_line = function(pos1, pos2) {
 	var cf1 = ["create_controlpoint", pos1];
@@ -200,12 +239,13 @@ var State = new function() {
 	});
 
 	cf = ["remove_controlpoint", cp_out_socket];
-	cb = ["create_controlpoint", DRAG_START[1]];
+	cb = ["create_controlpoint", CP.get_output(cp_out_socket).pos];
 	CT.change(cf);
 
 	register_change(cf, cb);
 
 	// The next step is to look for new dupicate points and tie them together
+
 	CT.foreach_tie(function(connection) {
 	    var cf = ["tie",   connection[0], connection[1], connection[2], connection[3]];
 	    var cb = ["untie", connection[2], connection[3]];

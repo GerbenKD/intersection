@@ -7,6 +7,8 @@ function main() {
     var HIGHLIGHT_TARGETS;
     var DRAGGING;               // [tool, output #, dx(mouse-origin), dy(mouse-origin)]. Tool should be ControlPointTool
     var MOUSE;                  // [x,y]
+    var ANIMATING = false;
+
 
     Graphics.BODY.oncontextmenu = function() { return false; } // disable right click menu
 
@@ -14,38 +16,33 @@ function main() {
     window.onkeypress = function(e) {
 	var key = e.keyCode || e.charCode;
 
-	switch (key) {
-	case 49: // 1, line
-	    State.create_line([MOUSE[0]-100, MOUSE[1]], [MOUSE[0]+100,MOUSE[1]]);
-	    State.create_undo_frame();
-	    State.redraw();
-	    HIGHLIGHT_TARGETS = State.get_controlpoints();
-	    highlight();
-	    break;
-	case 50: // 2, circle
-	    State.create_circle([MOUSE[0], MOUSE[1]], [MOUSE[0]+100,MOUSE[1]]);
-	    State.create_undo_frame();
-	    State.redraw();
-	    HIGHLIGHT_TARGETS = State.get_controlpoints();
-	    highlight();
-	    break;
-	case 122: // Z, undo
-	    State.undo();
-	    State.redraw();
-	    HIGHLIGHT_TARGETS = State.get_controlpoints();
-	    highlight();
-	    break;
-	case 120: // X, redo
-	    State.redo();
-	    State.redraw();
-	    HIGHLIGHT_TARGETS = State.get_controlpoints();
-	    highlight();
-	    break;
-	default:
-	    console.log("Pressed unknown key with keycode "+key);
+	if (!ANIMATING) {
+	    switch (key) {
+	    case 49: // 1, line
+		State.create_undo_frame();
+		State.create_line([MOUSE[0]-100, MOUSE[1]], [MOUSE[0]+100,MOUSE[1]]);
+		post_animation();
+		break;
+	    case 50: // 2, circle
+		State.create_undo_frame();
+		State.create_circle([MOUSE[0], MOUSE[1]], [MOUSE[0]+100,MOUSE[1]]);
+		post_animation();
+		break;
+	    case 122: // Z, undo
+		ANIMATING = true;
+		State.undo(post_animation);
+		break;
+	    case 120: // X, redo
+		ANIMATING = true;
+		State.redo(post_animation);
+		break;
+	    default:
+		console.log("Pressed unknown key with keycode "+key);
+	    }
 	}
-	
     }
+
+    function post_animation() { State.redraw(); HIGHLIGHT_TARGETS = State.get_controlpoints(); highlight(); ANIMATING = false; }
 
     // A highlight target is [tool, socket, gizmo, sprite]. But we should not use that too much as it
     // should be private to State!
@@ -104,13 +101,14 @@ function main() {
 	if (!DRAGGING) return;
 	unsparkle();
 	if (HIGHLIGHTED) {
+	    State.create_undo_frame();
+	    State.release_controlpoint(DRAGGING[1], [MOUSE[0]+DRAGGING[2], MOUSE[1]+DRAGGING[3]]);
 	    State.snap(DRAGGING[1], HIGHLIGHTED[0], HIGHLIGHTED[1]);
 	    State.redraw();
 	} else {
+	    if (!State.last_change_was_a_move()) State.create_undo_frame();
 	    State.release_controlpoint(DRAGGING[1], [MOUSE[0]+DRAGGING[2], MOUSE[1]+DRAGGING[3]]);
-	    // TODO could consider not creating an undo frame in this case!
 	}
-	State.create_undo_frame();
 	DRAGGING = null;
 	HIGHLIGHT_TARGETS = State.get_controlpoints();
 	highlight();
