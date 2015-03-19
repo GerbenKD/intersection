@@ -3,61 +3,168 @@ body {
     margin: 0px 0px 0px 0px;
 }
 
-body.delete_mode {
-    background-color: #808080;
-}
-
-body.inspect_mode {
-    background-color: #ffe0c0;
-}
-
-body.hide_mode {
-    background-color: #ff8080;
-}
-
 .line,.circle {
     fill: none;
     stroke: orange; 
     stroke-width: 1px;
+    pointer-events: none;
 }
 
 .line.highlighted, .circle.highlighted {
     stroke-width: 5px;
 }
 
-.line.hidden, .circle.hidden {
-    stroke: #d0d0d0;
+.line.sparkly, .circle.sparkly {
+    stroke: #ffff80;
 }
 
 
-.controlpoint,.toolcontrolpoint {
-    stroke: black;
-    stroke-width: 2px;
+.hidden {
+    visibility: hidden;
 }
+
 
 .controlpoint {
-    fill: blue;
+    pointer-events: none;
+    fill: #0000b0;
 }
 
-.toolcontrolpoint {
-    fill: cyan;
-}
-
-.controlpoint.highlighted, .toolcontrolpoint.highlighted {
+.controlpoint.highlighted {
+    stroke: black;
     stroke-width: 5px;
 }
 
+.controlpoint.sparkly {
+    
+    -webkit-animation: cp_sparkle 1.3s linear infinite;
+       -moz-animation: cp_sparkle 1.3s linear infinite;
+            animation: cp_sparkle 1.3s linear infinite;
+}
+
+@-webkit-keyframes cp_sparkle {
+    0%   { fill: #0000b0; }
+    50%  { fill: white;   }
+    100% { fill: #0000b0; }
+}
+
+@-moz-keyframes cp_sparkle {
+    0%   { fill: #0000b0; }
+    50%  { fill: white;   }
+    100% { fill: #0000b0; }
+}
+
+@keyframes cp_sparkle {
+    0%   { fill: #0000b0; }
+    50%  { fill: white;   }
+    100% { fill: #0000b0; }
+}
+
+
 .intersectionpoint {
-    stroke: orange;
-    stroke-width: 1px;
-    fill: orange;
+    pointer-events: none;
+    fill: #00b000;
 }
 
 .intersectionpoint.highlighted {
+    stroke: black;
     stroke-width: 3;
 }
 
-.intersectionpoint.hidden {
-    stroke-width: 0;
-    fill: #a0a0a0;
+
+.intersectionpoint.sparkly {
+    
+    -webkit-animation: isp_sparkle 1.3s linear infinite;
+       -moz-animation: isp_sparkle 1.3s linear infinite;
+            animation: isp_sparkle 1.3s linear infinite;
+}
+
+
+@-webkit-keyframes isp_sparkle {
+    0%   { fill: #00b000; }
+    50%  { fill: white;   }
+    100% { fill: #00b000; }
+}
+
+@-moz-keyframes isp_sparkle {
+    0%   { fill: #00b000; }
+    50%  { fill: white;   }
+    100% { fill: #00b000; }
+}
+
+@keyframes isp_sparkle {
+    0%   { fill: #00b000; }
+    50%  { fill: white;   }
+    100% { fill: #00b000; }
+}
+
+
+.intersectionpoint0 {
+    fill: red;
+}
+
+.intersectionpoint0.highlighted {
+    stroke: black;
+    stroke-width: 3;
+}
+
+.intersectionpoint0.sparkly {
+    
+    -webkit-animation: isp_sparkle0 1.3s linear infinite;
+       -moz-animation: isp_sparkle0 1.3s linear infinite;
+            animation: isp_sparkle0 1.3s linear infinite;
+}
+
+
+@-webkit-keyframes isp_sparkle0 {
+    0%   { fill: red; }
+    50%  { fill: white;   }
+    100% { fill: red; }
+}
+
+@-moz-keyframes isp_sparkle0 {
+    0%   { fill: red; }
+    50%  { fill: white;   }
+    100% { fill: red; }
+}
+
+@keyframes isp_sparkle0 {
+    0%   { fill: red; }
+    50%  { fill: white;   }
+    100% { fill: red; }
+}
+
+
+.intersectionpoint1 {
+    fill: blue;
+}
+
+.intersectionpoint1.highlighted {
+    stroke: black;
+    stroke-width: 3;
+}
+
+.intersectionpoint1.sparkly {
+    
+    -webkit-animation: isp_sparkle2 1.3s linear infinite;
+       -moz-animation: isp_sparkle2 1.3s linear infinite;
+            animation: isp_sparkle2 1.3s linear infinite;
+}
+
+
+@-webkit-keyframes isp_sparkle1 {
+    0%   { fill: blue; }
+    50%  { fill: white;   }
+    100% { fill: blue; }
+}
+
+@-moz-keyframes isp_sparkle1 {
+    0%   { fill: blue; }
+    50%  { fill: white;   }
+    100% { fill: blue; }
+}
+
+@keyframes isp_sparkle1 {
+    0%   { fill: blue; }
+    50%  { fill: white;   }
+    100% { fill: blue; }
 }

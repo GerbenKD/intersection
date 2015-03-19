@@ -30,12 +30,19 @@ var State = new function() {
 	}
     }
 
+    function bounded_sigmoid(x, a) {
+	return 1.0 / (1.0 + Math.pow(1.0 / x - 1.0, a));
+
+    }
+
+    // animation is controlled by "numiter", which determines the speed, and
+    // alpha, which controls the sharpness of the sigmoid function.
     function animate_controlpoints(displacements, continuation) {
-	var iter = 0, numiter=25;
+	var iter = 0, numiter=30, alpha = 2;
 	requestAnimationFrame(animate);
 
 	function animate() {
-	    var f = iter / numiter;
+	    var f = bounded_sigmoid(iter / (numiter-1), alpha);
 	    iter++;
 	    for (var cp_out_socket in displacements) {
 		var d = displacements[cp_out_socket];
