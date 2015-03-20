@@ -2,11 +2,12 @@
 
 var ControlPointTool = BasicTool.extend(function() {
 
-    this.add = function(pos) {
-	var socket = this.first_free_output();
+    this.add = function(socket, pos) {
+	if (this.gizmos[socket] || this.ties[socket]) {
+	    console.err("Attempt to add a controlpoint at a used socket"); return;
+	}
 	this.create_output(socket);
 	this.gizmos[socket].pos = pos;
-	return socket;
     }
 
     this.recalculate = function() { }

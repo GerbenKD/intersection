@@ -30,10 +30,7 @@ var State = new function() {
 	}
     }
 
-    function bounded_sigmoid(x, a) {
-	return 1.0 / (1.0 + Math.pow(1.0 / x - 1.0, a));
-
-    }
+    function bounded_sigmoid(x, a) { return 1 / (1+Math.pow((1-x)/x, a)); }
 
     // animation is controlled by "numiter", which determines the speed, and
     // alpha, which controls the sharpness of the sigmoid function.
@@ -164,12 +161,14 @@ var State = new function() {
     }
 
     this.create_line = function(pos1, pos2) {
-	var cf1 = ["create_controlpoint", pos1];
-	var cp1 = CT.change(cf1);
+	var cp1 = CP.first_free_output();
+	var cf1 = ["create_controlpoint", cp1, pos1];
+	CT.change(cf1);
 	register_change(cf1, ["remove_controlpoint", cp1]);
 
-	var cf2 = ["create_controlpoint", pos2];
-	var cp2 = CT.change(cf2);
+	var cp2 = CP.first_free_output();
+	var cf2 = ["create_controlpoint", cp2, pos2];
+	CT.change(cf2);
 	register_change(cf2, ["remove_controlpoint", cp2]);
 
 	var cf3 = ["create_line", cp1, cp2];
@@ -178,12 +177,14 @@ var State = new function() {
     }
 
     this.create_circle = function(pos_centre, pos_border) {
-	var cf_centre = ["create_controlpoint", pos_centre];
-	var cp_centre = CT.change(cf_centre);
+	var cp_centre = CP.first_free_output();
+	var cf_centre = ["create_controlpoint", cp_centre, pos_centre];
+	CT.change(cf_centre);
 	register_change(cf_centre, ["remove_controlpoint", cp_centre]);
 
-	var cf_border = ["create_controlpoint", pos_border];
-	var cp_border = CT.change(cf_border);
+	var cp_border = CP.first_free_output();
+	var cf_border = ["create_controlpoint", cp_border, pos_border];
+	CT.change(cf_border);
 	register_change(cf_border, ["remove_controlpoint", cp_border]);
 
 	var cf_circle = ["create_circle", cp_centre, cp_border];
@@ -230,6 +231,7 @@ var State = new function() {
     }
 
     this.snap = function(cp_out_socket, left_tool_id, left_out_socket) {
+	// Step 1: reorder the tools array
 	var separated = CT.separate(cp_out_socket);
 	var new_tool_ids = separated[0].concat(separated[1]);
 	var cf = ["shuffle_tools", new_tool_ids];
@@ -237,6 +239,15 @@ var State = new function() {
 	var cb = ["shuffle_tools", old_tool_ids];
 	register_change(cf, cb);
 
+	// Step 2: create a change that moves the controlpoint onto the target
+	var old_pos = DRAG_START[1];
+	var new_pos = CT.get_output_for_id(left_tool_id, left_out_socket).dup();
+	// I could call CT.change here, but it is not necessary as the controlpoint is removed in step 4 anyway
+	register_change(["move_controlpoint", cp_out_socket, new_pos],
+			["move_controlpoint", cp_out_socket, old_pos]);
+	
+
+	// Step 3: redirect all edges
 	CT.foreach_listener(0, cp_out_socket, new_tool_ids, function(connection) {
 	    var cf = ["redirect", connection, [left_tool_id, left_out_socket]];
 	    var cb = ["redirect", [left_tool_id, left_out_socket, connection[2], connection[3], connection[4]],
@@ -245,14 +256,13 @@ var State = new function() {
 	    register_change(cf, cb);
 	});
 
+	// Step 4: remove the old controlpoint
 	cf = ["remove_controlpoint", cp_out_socket];
-	cb = ["create_controlpoint", CP.get_output(cp_out_socket).pos];
+	cb = ["create_controlpoint", cp_out_socket, CT.get_output_for_id(left_tool_id, left_out_socket).dup()];
 	CT.change(cf);
-
 	register_change(cf, cb);
 
-	// The next step is to look for new dupicate points and tie them together
-
+	// Step 5: look for new dupicate points and tie them together
 	CT.foreach_tie(function(connection) {
 	    var cf = ["tie",   connection[0], connection[1], connection[2], connection[3]];
 	    var cb = ["untie", connection[2], connection[3]];

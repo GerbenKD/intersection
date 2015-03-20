@@ -253,6 +253,10 @@ var CompoundTool = Tool.extend(function() {
 	}
     }
 
+    this.get_output_for_id = function(tool_id, output_socket) {
+	return this.id2tool[tool_id].get_output(output_socket);
+    }
+
     this.separate = function(socket) {
 	var tool = this.id2tool[0];
 	var dependent = {}; // maps dependent tools that have been seen
@@ -312,8 +316,8 @@ var CompoundTool = Tool.extend(function() {
     /* --------------------------------------- Changes ------------------------------------------- */ 
 
     // returns socket
-    function C_create_controlpoint(pos) {
-	return this.id2tool[0].add(pos);
+    function C_create_controlpoint(cp_out_socket, pos) {
+	this.id2tool[0].add(cp_out_socket, pos);
     }
 
     function C_move_controlpoint(cp_out_socket, pos) {

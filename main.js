@@ -102,7 +102,7 @@ function main() {
 	unsparkle();
 	if (HIGHLIGHTED) {
 	    State.create_undo_frame();
-	    State.release_controlpoint(DRAGGING[1], [MOUSE[0]+DRAGGING[2], MOUSE[1]+DRAGGING[3]]);
+	    // State.release_controlpoint(DRAGGING[1], [MOUSE[0]+DRAGGING[2], MOUSE[1]+DRAGGING[3]]);
 	    State.snap(DRAGGING[1], HIGHLIGHTED[0], HIGHLIGHTED[1]);
 	    State.redraw();
 	} else {
