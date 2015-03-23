@@ -30,21 +30,22 @@ var State = new function() {
 	}
     }
 
-    function bounded_sigmoid(x, a) { return 1 / (1+Math.pow((1-x)/x, a)); }
+    // alternative sigmoid function
+    // function bounded_sigmoid(x, a) { return 1 / (1+Math.pow((1-x)/x, a)); }
 
-    // animation is controlled by "numiter", which determines the speed, and
-    // alpha, which controls the sharpness of the sigmoid function.
+    // animation is controlled by "numiter", which determines the speed.
     function animate_controlpoints(displacements, continuation) {
-	var iter = 0, numiter=30, alpha = 2;
+	var iter = 0, numiter=20;
 	requestAnimationFrame(animate);
 
 	function animate() {
-	    var f = bounded_sigmoid(iter / (numiter-1), alpha);
+	    var x = iter/(numiter-1);
+	    var f = x < 0.5 ? 2*x*x : 1-2*(1-x)*(1-x);
 	    iter++;
 	    for (var cp_out_socket in displacements) {
 		var d = displacements[cp_out_socket];
-		var pos = [ d[0][0]*f + d[1][0]*(1-f),
-			    d[0][1]*f + d[1][1]*(1-f) ];
+		var pos = [ d[0][0]*(1-f) + d[1][0]*f,
+			    d[0][1]*(1-f) + d[1][1]*f ];
 		CT.change(["move_controlpoint", cp_out_socket, pos], true);
 		CT.recalculate();
 		CT.update_graphics();
@@ -65,14 +66,20 @@ var State = new function() {
 	} else {
 	    var displacements = {};
 	    for (var i=0; i<num_moves; i++) {
-		var fw = frame[i][1-direction], bw = frame[i][direction];
-		var cp_out_socket = fw[1];
+		var fw = frame[i][direction], bw = frame[i][1-direction];
+		var cp_out_socket = bw[1];
 		if (!(cp_out_socket in displacements)) {
 		    displacements[cp_out_socket] = [bw[2], fw[2]];
 		} else {
 		    displacements[cp_out_socket][1] = fw[2];
 		}
 	    }
+	    console.log("Animating controlpoints:");
+	    for (var key in displacements) {
+		console.log(key+": "+JSON.stringify(displacements[key][0])+" -> "+JSON.stringify(displacements[key][1]));
+	    }
+
+
 	    animate_controlpoints(displacements, 
 				  function() { perform_frame(frame.slice(num_moves), direction, continuation); });
 	}
@@ -86,8 +93,10 @@ var State = new function() {
 	    UNDO_CURRENT_STORED = UNDO_CURRENT;
 	    frame = UNDO_CURRENT;
 	    UNDO_CURRENT = [];
+	    console.log("Undoing current frame");
 	} else {
 	    if (UNDO_INDEX>0) {
+		console.log("Undoing frame "+(UNDO_INDEX-1));
 		frame = UNDO_BUFFER[UNDO_INDEX-1];
 		UNDO_INDEX--;
 	    }
@@ -103,10 +112,12 @@ var State = new function() {
 	var frame;
 	if (UNDO_INDEX == UNDO_BUFFER.length && UNDO_CURRENT_STORED.length > 0) {
 	    UNDO_CURRENT = UNDO_CURRENT_STORED;
+	    console.log("Redoing current frame");
 	    frame = UNDO_CURRENT_STORED;
 	    UNDO_CURRENT_STORED = [];
 	} else {
 	    if (UNDO_INDEX < UNDO_BUFFER.length) {
+		console.log("Redoing frame "+(UNDO_INDEX));
 		frame = UNDO_BUFFER[UNDO_INDEX];
 		UNDO_INDEX++;
 	    }
@@ -150,6 +161,12 @@ var State = new function() {
     // This creates an action (by putting all arguments in an array) and performs it
 
     function register_change(change_forward, change_backward) {
+	if (UNDO_INDEX < UNDO_BUFFER.length || UNDO_CURRENT_STORED.length > 0) {
+	    if (UNDO_INDEX < UNDO_FRAMES.length) console.log("Killing frames "+UNDO_INDEX+"-"+(UNDO_BUFFER.length-1));
+	    if (UNDO_CURRENT_STORED.length>0) console.log("Killing current frame");
+	    UNDO_BUFFER.splice(UNDO_INDEX);
+	    UNDO_CURRENT_STORED = [];
+	}
 	UNDO_CURRENT.push([change_forward, change_backward]);
     }
 
@@ -229,6 +246,18 @@ var State = new function() {
 	register_change(cf, cb); 
 	DRAG_START = undefined;
     }
+
+
+    /*** TODO
+
+	 Er is nu een probleem met snap: op de een of andere manier kunnen de socket nummers
+	 er nog steeds door in de war raken. Heeft het te maken met het feit dat find_duplicates niet
+	 deterministisch is? :-$
+
+     ***/
+
+
+
 
     this.snap = function(cp_out_socket, left_tool_id, left_out_socket) {
 	// Step 1: reorder the tools array
