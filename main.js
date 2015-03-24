@@ -6,11 +6,12 @@ function main() {
     var HIGHLIGHTED;            // [tool, output #]
     var HIGHLIGHT_TARGETS;
     var DRAGGING;               // [tool, output #, dx(mouse-origin), dy(mouse-origin)]. Tool should be ControlPointTool
-    var MOUSE;                  // [x,y]
+    var MOUSE = [0,0];          // [x,y]
     var ANIMATING = false;
 
-
     Graphics.BODY.oncontextmenu = function() { return false; } // disable right click menu
+
+    State.restore_state(post_animation);
 
     // Assume the user is not currently dragging. Keypresses during a drag are allowed to go wrong
     window.onkeypress = function(e) {
@@ -18,12 +19,32 @@ function main() {
 
 	if (!ANIMATING) {
 	    switch (key) {
-	    case 49: // 1, line
+	    case 48: load(0); break;
+	    case 49: load(1); break;
+	    case 50: load(2); break;
+	    case 51: load(3); break;
+	    case 52: load(4); break;
+	    case 53: load(5); break;
+	    case 54: load(6); break;
+	    case 55: load(7); break;
+	    case 56: load(8); break;
+	    case 57: load(9); break;
+	    case 41: save(0); break;
+	    case 33: save(1); break;
+	    case 64: save(2); break;
+	    case 35: save(3); break;
+	    case 36: save(4); break;
+	    case 37: save(5); break;
+	    case 94: save(6); break;
+	    case 38: save(7); break;
+	    case 42: save(8); break;
+	    case 40: save(9); break;
+	    case 108: // 'l', line
 		State.create_undo_frame();
 		State.create_line([MOUSE[0]-100, MOUSE[1]], [MOUSE[0]+100,MOUSE[1]]);
 		post_animation();
 		break;
-	    case 50: // 2, circle
+	    case 99: // 'c', circle
 		State.create_undo_frame();
 		State.create_circle([MOUSE[0], MOUSE[1]], [MOUSE[0]+100,MOUSE[1]]);
 		post_animation();
@@ -37,12 +58,34 @@ function main() {
 		State.redo(post_animation);
 		break;
 	    default:
-		console.log("Pressed unknown key with keycode "+key);
+		if (key >=48 && key<=57) {
+		    console.log("loading!");
+		    State.load("file_"+(key-48))
+		    post_animation();
+		} else {
+		    console.log("Pressed unknown key with keycode "+key);
+		}
 	    }
 	}
     }
 
-    function post_animation() { State.redraw(); HIGHLIGHT_TARGETS = State.get_controlpoints(); highlight(); ANIMATING = false; }
+    function load(slot) {
+	console.log("Loading slot "+slot);
+	State.load("file_"+slot, post_animation);
+    }
+
+    function save(slot) {
+	console.log("Saving slot "+slot);
+	State.save("file_"+slot);
+    }
+
+
+    function post_animation() {
+	State.redraw(); 
+	HIGHLIGHT_TARGETS = State.get_controlpoints(); 
+	highlight(); 
+	ANIMATING = false; 
+    }
 
     // A highlight target is [tool, socket, gizmo, sprite]. But we should not use that too much as it
     // should be private to State!

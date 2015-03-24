@@ -1,32 +1,113 @@
 "use strict";
 
-/*
- * - The State object contains all game state as well as undo information and supports load/save
- * - All actions refer to objects by their ID
- * - Actions can have a return value, but that's just for convenience of the caller. Redoing a sequence
- *   of actions yields the correct state regardless of how the return values are used.
- * - All tools are identified by their IDs. The correct tools are located 
- */
-
 var State = new function() {
+
+    var UNDO;
+
+    /* --------------------------------------- Load/save --------------------------------------- */ 
+
+    /* Load/save design:
+
+       localState has the following structure:
+
+       current_slot    : name of the currently edited file
+       tool_<id>       : saved tool with given id
+       references_<id> : number of references to this tool
+       map             : { name: id }
+
+       Example: user loads a file.
+
+       1. First, the id of this file is found in the map. The right tool is loaded.
+       2. The tool is edited. During editing, a new tool is included by file name.
+       This load action is stored in the undo buffer by id.
+       3. The tool is saved. This operation is complex, as the reference counts have to stay consistent.
+       * Add one to the reference count of all ids referenced by the new file
+       * Add one to the reference count of the id of the new file itself (it is "referenced" by being visible)
+       * UNLINK old file:
+       - Decrease the reference count of the old id by one.
+       - If it hits zero, find all referenced objects, recursively UNLINK them, then delete this id from localStorage.
+    */
+
+    this.restore_state = function(continuation) {
+
+	// get or create filename
+	if (!("current_slot" in localStorage)) {
+	    console.log("Creating current slot 'file_0'");
+	    localStorage.current_slot = "file_0";
+	}
+	var fn = localStorage.current_slot;
+
+	// get or create map
+	if (!("map" in localStorage)) {
+	    console.log("Creating map");
+	    localStorage.map = JSON.stringify({});
+	}
+	var map = JSON.parse(localStorage.map);
+
+	// get or create file id
+	if (!(fn in map)) {
+	    console.log("Setting id of '"+fn+"' to 0 in map");
+	    map[fn] = 0;
+	    localStorage.map = JSON.stringify(map);
+	}
+	var id = map[fn];
+
+	// get or create the file
+	var tool_name = "tool_"+id;
+	if (!(tool_name in localStorage)) {
+	    console.log("Creating empty tool '"+tool_name+"'");
+	    localStorage[tool_name] = JSON.stringify({
+		buffer:  [],
+		current: [],
+		current_stored: [],
+		index: 0
+	    });
+	}
+	var tool = JSON.parse(localStorage[tool_name]);
+	initialize.call(this, tool, continuation);
+    }
+    
+    this.load = function(name, continuation) {
+	var map = JSON.parse(localStorage.map);
+	if (!(name in map)) return false;
+	var tool_name = "tool_"+map[name];
+	if (!(tool_name in localStorage)) return false;
+	var tool = JSON.parse(localStorage[tool_name]);
+	initialize.call(this, tool, continuation);
+	return true;
+    }
+
+    function first_free_id() {
+	var i = 0;
+	while (("tool_"+i) in localStorage) i++;
+	return i;
+    }
+
+    // this one is complicated, but for the time being always map to the same tool
+    this.save = function(name) {
+	var map = JSON.parse(localStorage.map)
+	var tool_name;
+	if (!(name in map)) {
+	    var id = first_free_id();
+	    tool_name = "tool_"+id;
+	    map[name] = tool_name;
+	    localStorage.map = JSON.stringify(map);
+	} else {
+	    tool_name = "tool_"+map[name];
+	}
+	localStorage[tool_name] = JSON.stringify(UNDO);
+    }
 
     /* --------------------------------------- Constructor ------------------------------------- */ 
 
     var CP, CT, DRAG_START;
 
-    initialize();
- 
-    var UNDO_BUFFER = []; // list of undo frames. An undo frame is itself a list of [forward_change,backward_change]
-    var UNDO_CURRENT = [];
-    var UNDO_CURRENT_STORED = [];
-    var UNDO_INDEX = 0; // points to the first frame that can be redone
-
     this.create_undo_frame = function() {
-	if (UNDO_CURRENT.length>0) {
-	    UNDO_BUFFER.splice(UNDO_INDEX, UNDO_BUFFER.length - UNDO_INDEX, UNDO_CURRENT);
-	    UNDO_CURRENT = [];
-	    UNDO_INDEX++;
-	    UNDO_CURRENT_STORED = [];
+	if (UNDO.current.length>0) {
+	    UNDO.buffer.splice(UNDO.index, UNDO.buffer.length - UNDO.index, UNDO.current);
+	    UNDO.current = [];
+	    UNDO.index++;
+	    UNDO.current_stored = [];
 	}
     }
 
@@ -54,7 +135,13 @@ var State = new function() {
 	}
     }
 
-    function perform_frame(frame, direction, continuation) {
+    function perform_frame(frame, direction) {
+	for (var i=0; i<frame.length; i++) {
+	    CT.change(frame[i][direction]);
+	}
+    }
+
+    function animate_frame(frame, direction, continuation) {
 	if (frame.length==0) { continuation(); return; }
 	var num_moves = 0;
 	while (num_moves < frame.length && frame[num_moves][direction][0] == "move_controlpoint") {
@@ -62,7 +149,7 @@ var State = new function() {
 	}
 	if (num_moves==0) {
 	    CT.change(frame[0][direction]);
-	    perform_frame(frame.slice(1), direction, continuation);
+	    animate_frame(frame.slice(1), direction, continuation);
 	} else {
 	    var displacements = {};
 	    for (var i=0; i<num_moves; i++) {
@@ -78,10 +165,8 @@ var State = new function() {
 	    for (var key in displacements) {
 		console.log(key+": "+JSON.stringify(displacements[key][0])+" -> "+JSON.stringify(displacements[key][1]));
 	    }
-
-
 	    animate_controlpoints(displacements, 
-				  function() { perform_frame(frame.slice(num_moves), direction, continuation); });
+				  function() { animate_frame(frame.slice(num_moves), direction, continuation); });
 	}
     }
 
@@ -89,45 +174,45 @@ var State = new function() {
     this.undo = function(continuation) {
 	// figure out what undo frame we're dealing with and handle administration
 	var frame;
-	if (UNDO_INDEX == UNDO_BUFFER.length && UNDO_CURRENT.length > 0) {
-	    UNDO_CURRENT_STORED = UNDO_CURRENT;
-	    frame = UNDO_CURRENT;
-	    UNDO_CURRENT = [];
+	if (UNDO.index == UNDO.buffer.length && UNDO.current.length > 0) {
+	    UNDO.current_stored = UNDO.current;
+	    frame = UNDO.current;
+	    UNDO.current = [];
 	    console.log("Undoing current frame");
 	} else {
-	    if (UNDO_INDEX>0) {
-		console.log("Undoing frame "+(UNDO_INDEX-1));
-		frame = UNDO_BUFFER[UNDO_INDEX-1];
-		UNDO_INDEX--;
+	    if (UNDO.index>0) {
+		console.log("Undoing frame "+(UNDO.index-1));
+		frame = UNDO.buffer[UNDO.index-1];
+		UNDO.index--;
 	    }
 	}
 
 	// actually undo all the changes
-	if (frame) perform_frame(frame.slice().reverse(), 1, continuation); else continuation();
+	if (frame) animate_frame(frame.slice().reverse(), 1, continuation); else continuation();
     }
 
     // continuation is executed once redo animation has completed
     this.redo = function(continuation) {
 	// figure out what undo frame we're dealing with and handle administration
 	var frame;
-	if (UNDO_INDEX == UNDO_BUFFER.length && UNDO_CURRENT_STORED.length > 0) {
-	    UNDO_CURRENT = UNDO_CURRENT_STORED;
+	if (UNDO.index == UNDO.buffer.length && UNDO.current_stored.length > 0) {
+	    UNDO.current = UNDO.current_stored;
 	    console.log("Redoing current frame");
-	    frame = UNDO_CURRENT_STORED;
-	    UNDO_CURRENT_STORED = [];
+	    frame = UNDO.current_stored;
+	    UNDO.current_stored = [];
 	} else {
-	    if (UNDO_INDEX < UNDO_BUFFER.length) {
-		console.log("Redoing frame "+(UNDO_INDEX));
-		frame = UNDO_BUFFER[UNDO_INDEX];
-		UNDO_INDEX++;
+	    if (UNDO.index < UNDO.buffer.length) {
+		console.log("Redoing frame "+(UNDO.index));
+		frame = UNDO.buffer[UNDO.index];
+		UNDO.index++;
 	    }
 	}
 
 	// actually undo all the changes
-	if (frame) perform_frame(frame, 0, continuation); else continuation();
+	if (frame) animate_frame(frame, 0, continuation); else continuation();
     }
 
-    function initialize() {
+    function initialize(tool, continuation) {
 	if (CT) CT.destroy();
 	CT = CompoundTool.create();
 
@@ -149,7 +234,13 @@ var State = new function() {
 	CP = ControlPointTool.create();
 	CT.add_tool(CP);
 
-
+	UNDO = tool;
+	for (var i=0; i<UNDO.buffer.length; i++) {
+	    perform_frame(UNDO.buffer[i], 0);
+	}
+	if (UNDO.current.length>0) perform_frame(UNDO.current, 0);
+	continuation();
+	console.log("index="+UNDO.index);
     }
 
 
@@ -161,19 +252,19 @@ var State = new function() {
     // This creates an action (by putting all arguments in an array) and performs it
 
     function register_change(change_forward, change_backward) {
-	if (UNDO_INDEX < UNDO_BUFFER.length || UNDO_CURRENT_STORED.length > 0) {
-	    if (UNDO_INDEX < UNDO_FRAMES.length) console.log("Killing frames "+UNDO_INDEX+"-"+(UNDO_BUFFER.length-1));
-	    if (UNDO_CURRENT_STORED.length>0) console.log("Killing current frame");
-	    UNDO_BUFFER.splice(UNDO_INDEX);
-	    UNDO_CURRENT_STORED = [];
+	if (UNDO.index < UNDO.buffer.length || UNDO.current_stored.length > 0) {
+	    if (UNDO.index < UNDO.buffer.length) console.log("Killing frames "+UNDO.index+"-"+(UNDO.buffer.length-1));
+	    if (UNDO.current_stored.length>0) console.log("Killing current frame");
+	    UNDO.buffer.splice(UNDO.index);
+	    UNDO.current_stored = [];
 	}
-	UNDO_CURRENT.push([change_forward, change_backward]);
+	UNDO.current.push([change_forward, change_backward]);
     }
 
 
     this.last_change_was_a_move = function() {
-	if (UNDO_CURRENT.length == 0) return false;
-	var change = UNDO_CURRENT[UNDO_CURRENT.length-1];
+	if (UNDO.current.length == 0) return false;
+	var change = UNDO.current[UNDO.current.length-1];
 	return change[0][0] == "move_controlpoint";
     }
 
@@ -246,17 +337,6 @@ var State = new function() {
 	register_change(cf, cb); 
 	DRAG_START = undefined;
     }
-
-
-    /*** TODO
-
-	 Er is nu een probleem met snap: op de een of andere manier kunnen de socket nummers
-	 er nog steeds door in de war raken. Heeft het te maken met het feit dat find_duplicates niet
-	 deterministisch is? :-$
-
-     ***/
-
-
 
 
     this.snap = function(cp_out_socket, left_tool_id, left_out_socket) {
