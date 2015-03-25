@@ -29,17 +29,21 @@ var State = new function() {
 	var file2tool = JSON.parse(localStorage.file2tool);
 	var filename = localStorage.current_file;
 	var toolname = file2tool[filename];
-	var tool;
 	if (toolname in localStorage) {
-	    tool = JSON.parse(localStorage[toolname]);
+	    var tool = JSON.parse(localStorage[toolname]);
+	    initialize.call(this, tool, continuation);
 	} else {
-	    console.log("Creating new construction");
-	    tool = { buffer:  [],
+	    this.clear();
+	}
+    }
+
+    this.clear = function(continuation) {
+	console.log("Creating new construction");
+	var tool = { buffer:  [],
 		     current: [],
 		     current_stored: [],
 		     index: 0
 		   };
-	}
 	initialize.call(this, tool, continuation);
     }
     
@@ -86,12 +90,14 @@ var State = new function() {
 	var refname = toolname+"_ref";
 	var nref = localStorage[refname];
 	if (nref>1) { localStorage[refname] = nref-1; return; }
-	var refs = get_references(JSON.parse(localStorage[toolname]));
-	for (var i=0; i<refs.length; i++) {
-	    remove_reference(refs[i]);
+	if (toolname in localStorage) {
+	    var refs = get_references(JSON.parse(localStorage[toolname]));
+	    for (var i=0; i<refs.length; i++) {
+		remove_reference(refs[i]);
+	    }
+	    delete localStorage[toolname];
 	}
 	delete localStorage[refname];
-	delete localStorage[toolname];
     }
 
     function add_reference(toolname) {

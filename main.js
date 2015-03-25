@@ -63,13 +63,17 @@ function main() {
 	}
     }
 
-    // TODO if !(filename in file2tool) create an empty file
     function switch_file(filename) {
+	console.log("switching to "+filename);
 	var current = localStorage.current_file;
 	var file2tool = JSON.parse(localStorage.file2tool);
-	if (filename==current || !(filename in file2tool)) return;
+	if (filename==current) return;
 	State.save(current);
-	State.load(filename, post_animation);
+	if (!(filename in file2tool)) { 
+	    State.clear(post_animation);
+	} else {
+	    State.load(filename, post_animation);
+	}
 	localStorage.current_file = filename;
     }
 

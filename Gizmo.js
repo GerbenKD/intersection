@@ -60,7 +60,7 @@ var ConstructedPoint = Point.extend(function() {
     this.create_sprite = function() { 
 	var sprite = Graphics.create("circle", "points");
 	sprite.add_class("intersectionpoint");
-	sprite.attrib({"r":"5"});
+	sprite.attrib({"r":"3"});
 	return sprite;
     }
 
@@ -75,7 +75,7 @@ var ControlPoint = Point.extend(function() {
     this.create_sprite = function() {
 	var sprite = Graphics.create("circle", "controlpoints");
 	sprite.add_class("controlpoint");
-	sprite.attrib({"r":"10"});
+	sprite.attrib({"r":"8"});
 	return sprite;
     }
 });
