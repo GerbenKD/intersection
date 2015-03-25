@@ -27,6 +27,9 @@ var Graphics = new function() {
     this.SVG.setAttribute("width",  this.XS);
     this.SVG.setAttribute("height", this.YS);
     
+    this.add_class    = function(elt, cls) { elt.classList.add(cls); }
+    this.remove_class = function(elt, cls) { elt.classList.remove(cls); }
+
      //converts a mouse event to screen coords
     this.e2coord = function(e) {
 	e = e || window.event;

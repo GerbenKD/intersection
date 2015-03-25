@@ -1,31 +1,25 @@
 "use strict";
 
+function Reset() {
+    for (var key in localStorage) {
+	if (key == "current_file" || key == "file2tool" || key.startsWith("tool_")) {
+	    delete localStorage[key];
+	}
+    }
+}
+
 var State = new function() {
 
     var UNDO;
 
     /* --------------------------------------- Load/save --------------------------------------- */ 
 
-    /* Load/save design:
+    /* localState has the following structure:
 
-       localState has the following structure:
-
-       current_slot    : name of the currently edited file
-       tool_<id>       : saved tool with given id
-       references_<id> : number of references to this tool
-       map             : { name: id }
-
-       Example: user loads a file.
-
-       1. First, the id of this file is found in the map. The right tool is loaded.
-       2. The tool is edited. During editing, a new tool is included by file name.
-       This load action is stored in the undo buffer by id.
-       3. The tool is saved. This operation is complex, as the reference counts have to stay consistent.
-       * Add one to the reference count of all ids referenced by the new file
-       * Add one to the reference count of the id of the new file itself (it is "referenced" by being visible)
-       * UNLINK old file:
-       - Decrease the reference count of the old id by one.
-       - If it hits zero, find all referenced objects, recursively UNLINK them, then delete this id from localStorage.
+       current_file    : name of the currently edited file
+       tool_<n>        : saved tool
+       tool_<n>_ref    : reference count of tool_<n>
+       file2tool       : { filename: toolname }
     */
 
     this.restore_state = function(continuation) {
@@ -92,7 +86,6 @@ var State = new function() {
 	var refname = toolname+"_ref";
 	var nref = localStorage[refname];
 	if (nref>1) { localStorage[refname] = nref-1; return; }
-	console.log("tool="+localStorage[toolname]);
 	var refs = get_references(JSON.parse(localStorage[toolname]));
 	for (var i=0; i<refs.length; i++) {
 	    remove_reference(refs[i]);
@@ -111,21 +104,20 @@ var State = new function() {
 	}
     }
 
-    // this one is complicated, but for the time being always map to the same tool
     this.save = function(filename) {
 	var file2tool = JSON.parse(localStorage.file2tool);
-	console.log("filename="+filename+", toolname="+file2tool[filename]);
-	if (filename in file2tool) remove_reference(file2tool[filename]);
+	var old_toolname = file2tool[filename];
 	var toolname = new_tool_name();
 	file2tool[filename] = toolname;
 	localStorage.file2tool = JSON.stringify(file2tool);
 	localStorage[toolname] = JSON.stringify(UNDO);
 	add_reference(toolname);
+	remove_reference(old_toolname);
     }
 
     /* --------------------------------------- Constructor ------------------------------------- */ 
 
-    var CP, CT, DRAG_START;
+    var CP, CO, CT, DRAG_START;
 
     this.create_undo_frame = function() {
 	if (UNDO.current.length>0) {
@@ -256,14 +248,28 @@ var State = new function() {
 	    CompoundTool.add_tool.call(this, tool);
 	}
 
+	CT.export_output = function(left_tool_id, left_out_socket) {
+	    var tool = this.id2tool[left_tool_id];
+	    tool.get_sprite(left_out_socket).add_class("output");
+	}
+	
+	CT.retract_output = function(left_tool_id, left_out_socket) { 
+	    var tool = this.id2tool[left_tool_id];
+	    tool.get_sprite(left_out_socket).remove_class("output");
+	}
+
 	CP = ControlPointTool.create();
 	CT.add_tool(CP);
 
+
+	CO = InterfaceTool.create();
+	CompoundTool.add_tool.call(CT, CO);
+
 	UNDO = tool;
-	for (var i=0; i<UNDO.buffer.length; i++) {
+	for (var i=0; i<UNDO.index; i++) {
 	    perform_frame(UNDO.buffer[i], 0);
 	}
-	if (UNDO.current.length>0) perform_frame(UNDO.current, 0);
+	if (UNDO.index == UNDO.buffer.length && UNDO.current.length>0) perform_frame(UNDO.current, 0);
 	continuation();
 	console.log("index="+UNDO.index);
     }
@@ -352,6 +358,12 @@ var State = new function() {
 	gizmo.pos = pos; // delay creating the event until drag end
     }
 
+    this.get_cool_outputs = function() {
+	return CT.select_outputs(CT.get_tool_ids(), function(tool_id,socket,gizmo,sprite,tie) {
+	    return tool_id!=0 && !tie; 
+	});
+    }
+
     this.release_controlpoint = function() {
 	var cp_out_socket = DRAG_START[0];
 	var gizmo = CP.get_output(cp_out_socket);
@@ -408,5 +420,23 @@ var State = new function() {
     this.get_controlpoints = function() {
 	return CT.select_outputs([0], function() { return true; }); // all controlpoints
     }
+
+    this.toggle_output = function(left_tool_id, left_out_socket) {
+	var cf, cb, right_in_socket;
+
+	CT.foreach_listener(left_tool_id, left_out_socket, [CO.id], function(conn) { right_in_socket = conn[3]; });
+
+	if (right_in_socket != undefined) {
+	    cf = ["disconnect_output", left_tool_id, left_out_socket, right_in_socket];
+	    cb = ["connect_output", left_tool_id, left_out_socket, right_in_socket];
+	} else {
+	    right_in_socket = CO.first_free_output();
+	    cf = ["connect_output", left_tool_id, left_out_socket, right_in_socket];
+	    cb = ["disconnect_output", left_tool_id, left_out_socket, right_in_socket];
+	} 
+	CT.change(cf);
+	register_change(cf, cb);
+    }
+
 
 };

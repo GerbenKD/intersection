@@ -7,7 +7,7 @@ function main() {
     var HIGHLIGHT_TARGETS;
     var DRAGGING;               // [tool, output #, dx(mouse-origin), dy(mouse-origin)]. Tool should be ControlPointTool
     var MOUSE = [0,0];          // [x,y]
-    var ANIMATING = false;
+    var STATE = "normal";       // one of normal, dragging, selecting_outputs or animating
 
     Graphics.BODY.oncontextmenu = function() { return false; } // disable right click menu
 
@@ -17,7 +17,7 @@ function main() {
     window.onkeypress = function(e) {
 	var key = e.keyCode || e.charCode;
 
-	if (!ANIMATING) {
+	if (STATE == "normal") {
 	    switch (key) {
 	    case 48: switch_file("file_0"); break;
 	    case 49: switch_file("file_1"); break;
@@ -50,11 +50,11 @@ function main() {
 		post_animation();
 		break;
 	    case 122: // Z, undo
-		ANIMATING = true;
+		STATE = "animating";
 		State.undo(post_animation);
 		break;
 	    case 120: // X, redo
-		ANIMATING = true;
+		STATE = "animating";
 		State.redo(post_animation);
 		break;
 	    default:
@@ -63,6 +63,7 @@ function main() {
 	}
     }
 
+    // TODO if !(filename in file2tool) create an empty file
     function switch_file(filename) {
 	var current = localStorage.current_file;
 	var file2tool = JSON.parse(localStorage.file2tool);
@@ -85,7 +86,7 @@ function main() {
 	State.redraw(); 
 	HIGHLIGHT_TARGETS = State.get_controlpoints(); 
 	highlight(); 
-	ANIMATING = false; 
+	STATE = "normal";
     }
 
     // A highlight target is [tool, socket, gizmo, sprite]. But we should not use that too much as it
@@ -116,7 +117,7 @@ function main() {
 	for (var i=0; i<HIGHLIGHT_TARGETS.length; i++) {
 	    var gizmo = HIGHLIGHT_TARGETS[i][2];
 	    if (gizmo.valid) {
-		var affinity = gizmo.type != "point" ? 8 : gizmo.controlpoint ? 15 : 10;
+		var affinity = gizmo.type != "point" ? 8 : gizmo.controlpoint ? 25 : 20;
 		var d = gizmo.distance_to_c(MOUSE) - affinity;
 		if (d < d_best) {
 		    d_best = d;
@@ -134,15 +135,30 @@ function main() {
 
     window.onmousemove = function(e) {
 	MOUSE = Graphics.e2coord(e);
-	if (DRAGGING) {
+
+
+	if (STATE == "dragging") {
 	    State.drag_controlpoint([MOUSE[0]+DRAGGING[2], MOUSE[1]+DRAGGING[3]]);
 	    State.redraw();
 	}
+
+	else if (STATE=="normal" && e.ctrlKey) {
+	    STATE = "selecting_outputs";
+	    Graphics.add_class(Graphics.BODY, "select_outputs");
+	    HIGHLIGHT_TARGETS = State.get_cool_outputs();
+	}
+
+	else if (STATE == "selecting_outputs" && !e.ctrlKey) {
+	    STATE = "normal";
+	    Graphics.remove_class(Graphics.BODY, "select_outputs");
+	    HIGHLIGHT_TARGETS = State.get_controlpoints();
+	}
+
 	highlight();
     }
 
     window.onmouseup = function(e) {
-	if (!DRAGGING) return;
+	if (STATE != "dragging") return;
 	unsparkle();
 	if (HIGHLIGHTED) {
 	    State.create_undo_frame();
@@ -153,7 +169,8 @@ function main() {
 	    if (!State.last_change_was_a_move()) State.create_undo_frame();
 	    State.release_controlpoint(DRAGGING[1], [MOUSE[0]+DRAGGING[2], MOUSE[1]+DRAGGING[3]]);
 	}
-	DRAGGING = null;
+	DRAGGING = undefined;
+	STATE = "normal";
 	HIGHLIGHT_TARGETS = State.get_controlpoints();
 	highlight();
     }
@@ -161,10 +178,19 @@ function main() {
 
     window.onmousedown = function(e) {
 	if (!HIGHLIGHTED) return;
-	HIGHLIGHT_TARGETS = State.pick_up_controlpoint(HIGHLIGHTED[1]);
-	sparkle();
-	var cp = HIGHLIGHTED[2];
-	DRAGGING = [HIGHLIGHTED[0], HIGHLIGHTED[1], cp.pos[0] - MOUSE[0], cp.pos[1] - MOUSE[1]];
+	
+	if (STATE == "normal") {
+	    HIGHLIGHT_TARGETS = State.pick_up_controlpoint(HIGHLIGHTED[1]);
+	    sparkle();
+	    var cp = HIGHLIGHTED[2];
+	    DRAGGING = [HIGHLIGHTED[0], HIGHLIGHTED[1], cp.pos[0] - MOUSE[0], cp.pos[1] - MOUSE[1]];
+	    STATE = "dragging";
+	}
+
+	else if (STATE == "selecting_outputs") {
+	    State.create_undo_frame();
+	    State.toggle_output(HIGHLIGHTED[0], HIGHLIGHTED[1]);
+	}
 	highlight();
     }
 }

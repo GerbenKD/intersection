@@ -43,7 +43,8 @@ var CompoundTool = Tool.extend(function() {
     this.has_graphics = function() { console.error("Not implemented"); return true; } // this.output_interface.has_graphics(); }
     this.add_graphics = function() { console.error("Not implemented"); } // this.output_interface.add_graphics(); }
     this.update_graphics = function() { console.error("Not implemented"); } // this.output_interface.update_graphics(); }
-
+    this.export_output = function(left_tool_id, left_out_socket) { console.error("NI"); }
+    this.retract_output = function(left_tool_id, left_out_socket) { console.error("NI"); }
 
     this.add_tool = function(tool) { 
 	tool.id = this.id2tool.length;
@@ -198,10 +199,12 @@ var CompoundTool = Tool.extend(function() {
 	}
     }
 
-    function tools2ids(tools) { return tools.map(function(tool) { return tool.id; }); }
-    function ids2tools(ids)   { var id2tool = this.id2tool; return ids.map(function(id) { return id2tool[id]; }); }
 
     /* ------------------------------- Used from State ----------------------------------------- */ 
+
+    this.get_tool_ids = function() { 
+	return this.tools.map(function(tool) { return tool.id; });
+    }
 
     // Constructs a list of ties for all duplicate tools. The list consists of the suggested connections.
     this.foreach_tie = function(func) {
@@ -394,6 +397,18 @@ var CompoundTool = Tool.extend(function() {
 
     function C_untie(right_id, right_out_socket) {
 	this.id2tool[right_id].untie(right_out_socket);
+    }
+
+    function C_connect_output(left_tool_id, left_out_socket, right_in_socket) {
+	var output_interface = this.id2tool[1];
+	output_interface.connect(this.id2tool[left_tool_id], left_out_socket, right_in_socket);
+	this.export_output(left_tool_id, left_out_socket);
+    }
+
+    function C_disconnect_output(left_tool_id, left_out_socket, right_in_socket) {
+	var output_interface = this.id2tool[1];
+	output_interface.disconnect(right_in_socket);
+	this.retract_output(left_tool_id, left_out_socket);
     }
 
 });

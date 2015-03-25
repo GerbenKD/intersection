@@ -143,10 +143,6 @@ var BasicTool = Tool.extend(function() {
 	if (this.ties[right_out_socket]) {
 	    console.error("Untie socket "+right_out_socket+" first"); return;
 	}
-	if (this.gizmos[right_out_socket].type != "point" ||
-	    left_tool.get_output(left_out_socket).type != "point") { 
-	    console.error("I'm very surprised that you are not tieing two points");
-	}
 	this.remove_output(right_out_socket);
 	this.ties[right_out_socket] = [left_tool, left_out_socket];
     }
@@ -193,9 +189,7 @@ var BasicTool = Tool.extend(function() {
     this.first_free_output = function() {
 	var socket;
 	for (socket = 0; socket < this.max_output_socket(); socket++) {
-	    if (!this.gizmos[socket]) {
-		break;
-	    }
+	    if (!this.get_output(socket)) break;
 	}
 	return socket;
     }
