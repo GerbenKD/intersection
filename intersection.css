@@ -18,6 +18,11 @@ body {
     stroke: #ffff80;
 }
 
+.line.output, .circle.output {
+    stroke-width: 5px;
+    stroke: red;
+}
+
 
 .hidden {
     visibility: hidden;
@@ -68,6 +73,10 @@ body {
 .intersectionpoint.highlighted {
     stroke: black;
     stroke-width: 3;
+}
+
+.intersectionpoint.output {
+    fill: red;
 }
 
 

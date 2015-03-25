@@ -19,26 +19,26 @@ function main() {
 
 	if (!ANIMATING) {
 	    switch (key) {
-	    case 48: load(0); break;
-	    case 49: load(1); break;
-	    case 50: load(2); break;
-	    case 51: load(3); break;
-	    case 52: load(4); break;
-	    case 53: load(5); break;
-	    case 54: load(6); break;
-	    case 55: load(7); break;
-	    case 56: load(8); break;
-	    case 57: load(9); break;
-	    case 41: save(0); break;
-	    case 33: save(1); break;
-	    case 64: save(2); break;
-	    case 35: save(3); break;
-	    case 36: save(4); break;
-	    case 37: save(5); break;
-	    case 94: save(6); break;
-	    case 38: save(7); break;
-	    case 42: save(8); break;
-	    case 40: save(9); break;
+	    case 48: switch_file("file_0"); break;
+	    case 49: switch_file("file_1"); break;
+	    case 50: switch_file("file_2"); break;
+	    case 51: switch_file("file_3"); break;
+	    case 52: switch_file("file_4"); break;
+	    case 53: switch_file("file_5"); break;
+	    case 54: switch_file("file_6"); break;
+	    case 55: switch_file("file_7"); break;
+	    case 56: switch_file("file_8"); break;
+	    case 57: switch_file("file_9"); break;
+	    case 41: clone_file("file_0"); break;
+	    case 33: clone_file("file_1"); break;
+	    case 64: clone_file("file_2"); break;
+	    case 35: clone_file("file_3"); break;
+	    case 36: clone_file("file_4"); break;
+	    case 37: clone_file("file_5"); break;
+	    case 94: clone_file("file_6"); break;
+	    case 38: clone_file("file_7"); break;
+	    case 42: clone_file("file_8"); break;
+	    case 40: clone_file("file_9"); break;
 	    case 108: // 'l', line
 		State.create_undo_frame();
 		State.create_line([MOUSE[0]-100, MOUSE[1]], [MOUSE[0]+100,MOUSE[1]]);
@@ -58,27 +58,28 @@ function main() {
 		State.redo(post_animation);
 		break;
 	    default:
-		if (key >=48 && key<=57) {
-		    console.log("loading!");
-		    State.load("file_"+(key-48))
-		    post_animation();
-		} else {
-		    console.log("Pressed unknown key with keycode "+key);
-		}
+		console.log("Pressed unknown key with keycode "+key);
 	    }
 	}
     }
 
-    function load(slot) {
-	console.log("Loading slot "+slot);
-	State.load("file_"+slot, post_animation);
+    function switch_file(filename) {
+	var current = localStorage.current_file;
+	var file2tool = JSON.parse(localStorage.file2tool);
+	if (filename==current || !(filename in file2tool)) return;
+	State.save(current);
+	State.load(filename, post_animation);
+	localStorage.current_file = filename;
     }
 
-    function save(slot) {
-	console.log("Saving slot "+slot);
-	State.save("file_"+slot);
+    function clone_file(filename) {
+	var current = localStorage.current_file;
+	if (filename == current) return;
+	console.log("Cloning into '"+filename+"'");
+	State.save(current);
+	State.save(filename);
+	localStorage.current_file = filename;
     }
-
 
     function post_animation() {
 	State.redraw(); 

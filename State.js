@@ -29,73 +29,98 @@ var State = new function() {
     */
 
     this.restore_state = function(continuation) {
+	if (!("file2tool" in localStorage)) localStorage.file2tool = JSON.stringify({});
+	if (!("current_file" in localStorage)) localStorage.current_file = "file_0";
 
-	// get or create filename
-	if (!("current_slot" in localStorage)) {
-	    console.log("Creating current slot 'file_0'");
-	    localStorage.current_slot = "file_0";
+	var file2tool = JSON.parse(localStorage.file2tool);
+	var filename = localStorage.current_file;
+	var toolname = file2tool[filename];
+	var tool;
+	if (toolname in localStorage) {
+	    tool = JSON.parse(localStorage[toolname]);
+	} else {
+	    console.log("Creating new construction");
+	    tool = { buffer:  [],
+		     current: [],
+		     current_stored: [],
+		     index: 0
+		   };
 	}
-	var fn = localStorage.current_slot;
-
-	// get or create map
-	if (!("map" in localStorage)) {
-	    console.log("Creating map");
-	    localStorage.map = JSON.stringify({});
-	}
-	var map = JSON.parse(localStorage.map);
-
-	// get or create file id
-	if (!(fn in map)) {
-	    console.log("Setting id of '"+fn+"' to 0 in map");
-	    map[fn] = 0;
-	    localStorage.map = JSON.stringify(map);
-	}
-	var id = map[fn];
-
-	// get or create the file
-	var tool_name = "tool_"+id;
-	if (!(tool_name in localStorage)) {
-	    console.log("Creating empty tool '"+tool_name+"'");
-	    localStorage[tool_name] = JSON.stringify({
-		buffer:  [],
-		current: [],
-		current_stored: [],
-		index: 0
-	    });
-	}
-	var tool = JSON.parse(localStorage[tool_name]);
 	initialize.call(this, tool, continuation);
     }
     
-    this.load = function(name, continuation) {
-	var map = JSON.parse(localStorage.map);
-	if (!(name in map)) return false;
-	var tool_name = "tool_"+map[name];
-	if (!(tool_name in localStorage)) return false;
-	var tool = JSON.parse(localStorage[tool_name]);
+    this.load = function(filename, continuation) {
+	var file2tool = JSON.parse(localStorage.file2tool);
+	if (!(filename in file2tool)) return false;
+	var toolname = file2tool[filename];
+	if (!(toolname in localStorage)) return false;
+	var tool = JSON.parse(localStorage[toolname]);
 	initialize.call(this, tool, continuation);
 	return true;
     }
 
-    function first_free_id() {
+    function new_tool_name() {
 	var i = 0;
-	while (("tool_"+i) in localStorage) i++;
-	return i;
+	var name;
+	while (true) {
+	    name = "tool_"+i;
+	    if (!(name in localStorage)) return name;
+	    i++;
+	}
+    }
+
+    // returns a list of tools that are referenced by the given tool
+    function get_references(tool) {
+	var refs = {};
+	for (var i=0; i<tool.buffer.length; i++) {
+	    add_refs(tool.buffer[i]);
+	}
+	add_refs(tool.current);
+	add_refs(tool.current_stored);
+
+	return Object.keys(refs);
+
+	function add_refs(frame) {
+	    for (var i=0; i<frame.length; i++) {
+		var change = frame[i][0];
+		if (change[0]=="load") refs[change[1]] = true;
+	    }
+	}
+    }
+
+    function remove_reference(toolname) {
+	var refname = toolname+"_ref";
+	var nref = localStorage[refname];
+	if (nref>1) { localStorage[refname] = nref-1; return; }
+	console.log("tool="+localStorage[toolname]);
+	var refs = get_references(JSON.parse(localStorage[toolname]));
+	for (var i=0; i<refs.length; i++) {
+	    remove_reference(refs[i]);
+	}
+	delete localStorage[refname];
+	delete localStorage[toolname];
+    }
+
+    function add_reference(toolname) {
+	var refname = toolname+"_ref";
+	if (refname in localStorage) { localStorage[refname] = localStorage[refname]+1; return; }
+	localStorage[refname]=1;
+	var refs = get_references(JSON.parse(localStorage[toolname]));
+	for (var i=0; i<refs.length; i++) {
+	    add_reference(refs[i]);
+	}
     }
 
     // this one is complicated, but for the time being always map to the same tool
-    this.save = function(name) {
-	var map = JSON.parse(localStorage.map)
-	var tool_name;
-	if (!(name in map)) {
-	    var id = first_free_id();
-	    tool_name = "tool_"+id;
-	    map[name] = tool_name;
-	    localStorage.map = JSON.stringify(map);
-	} else {
-	    tool_name = "tool_"+map[name];
-	}
-	localStorage[tool_name] = JSON.stringify(UNDO);
+    this.save = function(filename) {
+	var file2tool = JSON.parse(localStorage.file2tool);
+	console.log("filename="+filename+", toolname="+file2tool[filename]);
+	if (filename in file2tool) remove_reference(file2tool[filename]);
+	var toolname = new_tool_name();
+	file2tool[filename] = toolname;
+	localStorage.file2tool = JSON.stringify(file2tool);
+	localStorage[toolname] = JSON.stringify(UNDO);
+	add_reference(toolname);
     }
 
     /* --------------------------------------- Constructor ------------------------------------- */ 
