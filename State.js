@@ -137,24 +137,37 @@ var State = new function() {
     // alternative sigmoid function
     // function bounded_sigmoid(x, a) { return 1 / (1+Math.pow((1-x)/x, a)); }
 
-    // animation is controlled by "numiter", which determines the speed.
+    /* t: current time, T: total time for moving that controlpoint,
+       X: total distance, f: fraction of total distance covered
+       Points are subject to acceleration 2a, so that x = a t^2.
+       From halfway, they decelerate with the same speed.
+       They reach halfway point when t = sqrt(0.5 X/a), so the transition takes twice that number of 
+       frames in total.
+
+
+     */
     function animate_controlpoints(displacements, continuation) {
-	var iter = 0, numiter=20;
+	var t = 0;
 	requestAnimationFrame(animate);
+	var a = 0.5;
 
 	function animate() {
-	    var x = iter/(numiter-1);
-	    var f = x < 0.5 ? 2*x*x : 1-2*(1-x)*(1-x);
-	    iter++;
+	    t++;
+	    var moving = 0;
 	    for (var cp_out_socket in displacements) {
 		var d = displacements[cp_out_socket];
+		var X = Point.distance_cc(d[0], d[1]);
+		var T = 2*Math.sqrt(0.5*X/a);
+		if (t > T) continue;
+		moving++; // this point is still moving
+		var f = 2*t > T ? 1 - a*(T-t)*(T-t)/X : (a * t * t)/X;
 		var pos = [ d[0][0]*(1-f) + d[1][0]*f,
 			    d[0][1]*(1-f) + d[1][1]*f ];
 		CT.change(["move_controlpoint", cp_out_socket, pos], true);
 		CT.recalculate();
 		CT.update_graphics();
 	    }
-	    if (iter < numiter) requestAnimationFrame(animate); else continuation();
+	    if (moving > 0) requestAnimationFrame(animate); else continuation();
 	}
     }
 

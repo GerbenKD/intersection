@@ -39,6 +39,16 @@ function main() {
 	    case 38: clone_file("file_7"); break;
 	    case 42: clone_file("file_8"); break;
 	    case 40: clone_file("file_9"); break;
+	    case 186: embed_file("file_0"); break;
+	    case 161: embed_file("file_1"); break;
+	    case 8482:embed_file("file_2"); break;
+	    case 163: embed_file("file_3"); break;
+	    case 162: embed_file("file_4"); break;
+	    case 8734:embed_file("file_5"); break;
+	    case 167: embed_file("file_6"); break;
+	    case 182: embed_file("file_7"); break;
+	    case 8226:embed_file("file_8"); break;
+	    case 170: embed_file("file_9"); break;
 	    case 108: // 'l', line
 		State.create_undo_frame();
 		State.create_line([MOUSE[0]-100, MOUSE[1]], [MOUSE[0]+100,MOUSE[1]]);
@@ -84,6 +94,12 @@ function main() {
 	State.save(current);
 	State.save(filename);
 	localStorage.current_file = filename;
+    }
+
+    function embed_file(filename) {
+	console.log("Embedding '"+filename+"'");
+	var ct = CompoundTool.create();
+	CT.add(ct);
     }
 
     function post_animation() {
