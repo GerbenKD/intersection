@@ -2,10 +2,26 @@
 
 var CompoundTool = Tool.extend(function() {
 
-    this.create = function() {
+    this.create = function(input_interface, output_interface, undobuffer) {
 	return this.extend(function() {
 	    this.tools = [];
 	    this.id2tool = [];
+
+	    this.add_tool(input_interface);
+	    this.add_tool(output_interface);
+
+	    function perform_frame(frame) {
+		for (var i=0; i<frame.length; i++) {
+		    this.change(frame[i][0]);
+		}
+	    }
+
+	    for (var i=0; i<undobuffer.index; i++) {
+		perform_frame.call(this, undobuffer.buffer[i]);
+	    }
+
+	    if (undobuffer.index == undobuffer.buffer.length && undobuffer.current.length>0) 
+		perform_frame.call(this, undobuffer.current);
 	});
     }
 
@@ -40,11 +56,28 @@ var CompoundTool = Tool.extend(function() {
     }
 
 
-    this.has_graphics = function() { console.error("Not implemented"); return true; } // this.output_interface.has_graphics(); }
-    this.add_graphics = function() { console.error("Not implemented"); } // this.output_interface.add_graphics(); }
-    this.update_graphics = function() { console.error("Not implemented"); } // this.output_interface.update_graphics(); }
-    this.export_output = function(left_tool_id, left_out_socket) { console.error("NI"); }
-    this.retract_output = function(left_tool_id, left_out_socket) { console.error("NI"); }
+    this.has_graphics = function() { return this.i_have_graphics; }
+
+    this.update_graphics = function() {
+	for (var i=0; i<this.tools.length; i++) {
+	    this.tools[i].update_graphics();
+	}
+    }
+
+    this.add_graphics = function(socket) {
+	if (this.i_have_graphics) return;
+	this.i_have_graphics = true;
+	var output_interface = this.id2tool[1];
+	if (socket) {
+	    var tie = output_interface.get_tie(socket);
+	    tie[0].add_graphics(tie[1]);
+	} else {
+	    for (var i=0; i<right_tool.max_output_socket(); i++) {
+		var tie = right_tool.get_tie(i);
+		tie[0].add_graphics(tie[1]);
+	    }
+	}
+    }
 
     this.add_tool = function(tool) { 
 	tool.id = this.id2tool.length;

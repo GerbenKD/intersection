@@ -2,7 +2,7 @@
 
 function Reset() {
     for (var key in localStorage) {
-	if (key == "current_file" || key == "file2tool" || key.startsWith("tool_")) {
+	if (key == "current_file" || key == "file2undobuffer" || key.lastIndexOf("undobuffer_",0)==0) {
 	    delete localStorage[key];
 	}
     }
@@ -16,109 +16,166 @@ var State = new function() {
 
     /* localState has the following structure:
 
-       current_file    : name of the currently edited file
-       tool_<n>        : saved tool
-       tool_<n>_ref    : reference count of tool_<n>
-       file2tool       : { filename: toolname }
+       current_file         : name of the currently edited file
+       undobuffer_<n>       : saved undobuffer
+       undobuffer_<n>_ref   : reference count of undobuffer_<n>
+       file2undobuffer      : { filename: undobuffername }
     */
 
-    this.restore_state = function(continuation) {
-	if (!("file2tool" in localStorage)) localStorage.file2tool = JSON.stringify({});
-	if (!("current_file" in localStorage)) localStorage.current_file = "file_0";
+    function p_haskey(name)        { return name in localStorage; }
+    function p_getstr(name)        { return name in localStorage ? localStorage[name] : null; }
+    function p_setstr(name, value) { localStorage[name] = value; }
+    function p_getobj(name)        { return name in localStorage ? JSON.parse(localStorage[name]) : null; }
+    function p_setobj(name, value) { localStorage[name] = JSON.stringify(value); }
+    function p_delete(name)        { delete localStorage[name]; }
+    function p_filename2undobuffername(filename) { 
+	var file2undobuffer = p_getobj("file2undobuffer");
+	return file2undobuffer ? file2undobuffer[filename] : null;
+    }
 
-	var file2tool = JSON.parse(localStorage.file2tool);
-	var filename = localStorage.current_file;
-	var toolname = file2tool[filename];
-	if (toolname in localStorage) {
-	    var tool = JSON.parse(localStorage[toolname]);
-	    initialize.call(this, tool, continuation);
+    function p_get_file(filename) {
+	var undobuffername = p_filename2undobuffername(filename);
+	return undobuffername ? p_getobj(undobuffername) : null;
+    }
+
+    this.restore_state = function(continuation) {
+	if (!p_haskey("file2undobuffer")) p_setobj("file2undobuffer", {});
+	if (!p_haskey("current_file")) p_setstr("current_file", "file_0");
+	var filename = p_getstr("current_file");
+	var undobuffer = p_get_file(filename);
+	if (undobuffer) {
+	    initialize.call(this, undobuffer);
+	    continuation();
 	} else {
-	    this.clear();
+	    this.clear(continuation);
 	}
     }
 
     this.clear = function(continuation) {
 	console.log("Creating new construction");
-	var tool = { buffer:  [],
+	var undobuffer = { buffer:  [],
 		     current: [],
 		     current_stored: [],
 		     index: 0
 		   };
-	initialize.call(this, tool, continuation);
+	initialize.call(this, undobuffer);
+	continuation();
     }
     
     this.load = function(filename, continuation) {
-	var file2tool = JSON.parse(localStorage.file2tool);
-	if (!(filename in file2tool)) return false;
-	var toolname = file2tool[filename];
-	if (!(toolname in localStorage)) return false;
-	var tool = JSON.parse(localStorage[toolname]);
-	initialize.call(this, tool, continuation);
+	var undobuffer = p_get_file(filename);
+	if (!undobuffer) return false;
+	initialize.call(this, undobuffer);
+	continuation();
 	return true;
     }
 
-    function new_tool_name() {
+    function new_undobuffer_name() {
 	var i = 0;
 	var name;
 	while (true) {
-	    name = "tool_"+i;
+	    name = "undobuffer_"+i;
 	    if (!(name in localStorage)) return name;
 	    i++;
 	}
     }
 
-    // returns a list of tools that are referenced by the given tool
-    function get_references(tool) {
+    // returns a list of undobuffers that are referenced by the given undobuffer
+    function get_references(undobuffer) {
 	var refs = {};
-	for (var i=0; i<tool.buffer.length; i++) {
-	    add_refs(tool.buffer[i]);
+	for (var i=0; i<undobuffer.buffer.length; i++) {
+	    add_refs(undobuffer.buffer[i]);
 	}
-	add_refs(tool.current);
-	add_refs(tool.current_stored);
+	add_refs(undobuffer.current);
+	add_refs(undobuffer.current_stored);
 
 	return Object.keys(refs);
 
 	function add_refs(frame) {
 	    for (var i=0; i<frame.length; i++) {
 		var change = frame[i][0];
-		if (change[0]=="load") refs[change[1]] = true;
+		if (change[0]=="embed") refs[change[1]] = true;
 	    }
 	}
     }
 
-    function remove_reference(toolname) {
-	var refname = toolname+"_ref";
-	var nref = localStorage[refname];
-	if (nref>1) { localStorage[refname] = nref-1; return; }
-	if (toolname in localStorage) {
-	    var refs = get_references(JSON.parse(localStorage[toolname]));
+    function remove_reference(undobuffername) {
+	var refname = undobuffername+"_ref";
+	var nref = p_getstr(refname);
+	if (nref>1) { p_setstr(refname, nref-1); return; }
+	var undobuffer = p_getobj(undobuffername);
+	if (undobuffer) {
+	    var refs = get_references(undobuffer);
 	    for (var i=0; i<refs.length; i++) {
 		remove_reference(refs[i]);
 	    }
-	    delete localStorage[toolname];
+	    p_delete(undobuffername);
 	}
-	delete localStorage[refname];
+	delete p_delete(refname);
     }
 
-    function add_reference(toolname) {
-	var refname = toolname+"_ref";
-	if (refname in localStorage) { localStorage[refname] = localStorage[refname]+1; return; }
-	localStorage[refname]=1;
-	var refs = get_references(JSON.parse(localStorage[toolname]));
+    function add_reference(undobuffername) {
+	var refname = undobuffername+"_ref";
+	var nref = p_getstr(refname);
+	if (nref != null) { p_setstr(refname, nref+1); return; }
+	p_setstr(refname, 1);
+	var refs = get_references(p_getobj(undobuffername));
 	for (var i=0; i<refs.length; i++) {
 	    add_reference(refs[i]);
 	}
     }
 
-    this.save = function(filename) {
-	var file2tool = JSON.parse(localStorage.file2tool);
-	var old_toolname = file2tool[filename];
-	var toolname = new_tool_name();
-	file2tool[filename] = toolname;
-	localStorage.file2tool = JSON.stringify(file2tool);
-	localStorage[toolname] = JSON.stringify(UNDO);
-	add_reference(toolname);
-	remove_reference(old_toolname);
+    function save(filename) {
+	var file2undobuffer = p_getobj("file2undobuffer");
+	var old_undobuffername = file2undobuffer[filename];
+	var undobuffername = new_undobuffer_name();
+	file2undobuffer[filename] = undobuffername;
+	p_setobj("file2undobuffer", file2undobuffer);
+	console.log("saving buffer as '"+undobuffername+"'");
+	p_setobj(undobuffername, UNDO);
+	add_reference(undobuffername);
+	remove_reference(old_undobuffername);
+    }
+
+    this.switch_file = function(filename, continuation) {
+	console.log("Switching to "+filename);
+	var current = p_getstr("current_file");
+	if (filename==current) return;
+	save(current);
+	var undobuffer = p_get_file(filename);
+	if (undobuffer) {
+	    initialize.call(this,undobuffer);
+	    continuation();
+	} else {
+	    this.clear(continuation);
+	}
+	p_setstr("current_file", filename);
+    }
+
+    this.clone_file = function(filename) {
+	var current = p_getstr("current_file");
+	if (filename == current) return;
+	console.log("Cloning into '"+filename+"'");
+	save(current);
+	save(filename);
+	p_setstr("current_file", filename);
+    }
+
+    this.embed_file = function(filename, continuation) {
+	// TODO this function is wrong, but should eventually do something like:
+	var ci = Interface.create();
+	var co = Interface.create();
+	var undobuffer = p_get_file(filename);
+	var ct = CompoundTool.create(ci, co, undobuffer);
+	this.add_tool(ct);
+    }
+
+
+    this.embed = function(filename) {
+	console.log("Embedding '"+filename+"'");
+	var undobuffer = p_get_file(filename);
+	var ct = CompoundTool.create(undobuffer);
+	CT.add(ct);
     }
 
     /* --------------------------------------- Constructor ------------------------------------- */ 
@@ -168,12 +225,6 @@ var State = new function() {
 		CT.update_graphics();
 	    }
 	    if (moving > 0) requestAnimationFrame(animate); else continuation();
-	}
-    }
-
-    function perform_frame(frame, direction) {
-	for (var i=0; i<frame.length; i++) {
-	    CT.change(frame[i][direction]);
 	}
     }
 
@@ -248,23 +299,26 @@ var State = new function() {
 	if (frame) animate_frame(frame, 0, continuation); else continuation();
     }
 
-    function initialize(tool, continuation) {
+    function initialize(undobuffer) {
+
+	CP = ControlPointTool.create();
+	CO = InterfaceTool.create();
+
 	if (CT) CT.destroy();
-	CT = CompoundTool.create();
+	CT = CompoundTool.create(CP, CO, undobuffer);
 
 	// override some CT methods related to graphics
-
-	CT.has_graphics = function() { return true; }
-
-	CT.update_graphics = function() {
+	
+	CT.add_graphics = function() {
 	    for (var i=0; i<this.tools.length; i++) {
-		this.tools[i].update_graphics();
+		this.tools[i].add_graphics();
 	    }
 	}
 
+
 	CT.add_tool = function(tool) {
+	    CompoundTool.add_tool.call(CT, tool);
 	    tool.add_graphics();
-	    CompoundTool.add_tool.call(this, tool);
 	}
 
 	CT.export_output = function(left_tool_id, left_out_socket) {
@@ -277,20 +331,10 @@ var State = new function() {
 	    tool.get_sprite(left_out_socket).remove_class("output");
 	}
 
-	CP = ControlPointTool.create();
-	CT.add_tool(CP);
+	CT.add_graphics();
 
+	UNDO = undobuffer;
 
-	CO = InterfaceTool.create();
-	CompoundTool.add_tool.call(CT, CO);
-
-	UNDO = tool;
-	for (var i=0; i<UNDO.index; i++) {
-	    perform_frame(UNDO.buffer[i], 0);
-	}
-	if (UNDO.index == UNDO.buffer.length && UNDO.current.length>0) perform_frame(UNDO.current, 0);
-	continuation();
-	console.log("index="+UNDO.index);
     }
 
 

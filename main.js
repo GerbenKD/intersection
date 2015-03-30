@@ -19,36 +19,36 @@ function main() {
 
 	if (STATE == "normal") {
 	    switch (key) {
-	    case 48: switch_file("file_0"); break;
-	    case 49: switch_file("file_1"); break;
-	    case 50: switch_file("file_2"); break;
-	    case 51: switch_file("file_3"); break;
-	    case 52: switch_file("file_4"); break;
-	    case 53: switch_file("file_5"); break;
-	    case 54: switch_file("file_6"); break;
-	    case 55: switch_file("file_7"); break;
-	    case 56: switch_file("file_8"); break;
-	    case 57: switch_file("file_9"); break;
-	    case 41: clone_file("file_0"); break;
-	    case 33: clone_file("file_1"); break;
-	    case 64: clone_file("file_2"); break;
-	    case 35: clone_file("file_3"); break;
-	    case 36: clone_file("file_4"); break;
-	    case 37: clone_file("file_5"); break;
-	    case 94: clone_file("file_6"); break;
-	    case 38: clone_file("file_7"); break;
-	    case 42: clone_file("file_8"); break;
-	    case 40: clone_file("file_9"); break;
-	    case 186: embed_file("file_0"); break;
-	    case 161: embed_file("file_1"); break;
-	    case 8482:embed_file("file_2"); break;
-	    case 163: embed_file("file_3"); break;
-	    case 162: embed_file("file_4"); break;
-	    case 8734:embed_file("file_5"); break;
-	    case 167: embed_file("file_6"); break;
-	    case 182: embed_file("file_7"); break;
-	    case 8226:embed_file("file_8"); break;
-	    case 170: embed_file("file_9"); break;
+	    case 48: State.switch_file("file_0", post_animation); break;
+	    case 49: State.switch_file("file_1", post_animation); break;
+	    case 50: State.switch_file("file_2", post_animation); break;
+	    case 51: State.switch_file("file_3", post_animation); break;
+	    case 52: State.switch_file("file_4", post_animation); break;
+	    case 53: State.switch_file("file_5", post_animation); break;
+	    case 54: State.switch_file("file_6", post_animation); break;
+	    case 55: State.switch_file("file_7", post_animation); break;
+	    case 56: State.switch_file("file_8", post_animation); break;
+	    case 57: State.switch_file("file_9", post_animation); break;
+	    case 41: State.clone_file("file_0", post_animation); break;
+	    case 33: State.clone_file("file_1", post_animation); break;
+	    case 64: State.clone_file("file_2", post_animation); break;
+	    case 35: State.clone_file("file_3", post_animation); break;
+	    case 36: State.clone_file("file_4", post_animation); break;
+	    case 37: State.clone_file("file_5", post_animation); break;
+	    case 94: State.clone_file("file_6", post_animation); break;
+	    case 38: State.clone_file("file_7", post_animation); break;
+	    case 42: State.clone_file("file_8", post_animation); break;
+	    case 40: State.clone_file("file_9", post_animation); break;
+	    case 186: State.embed_file("file_0", post_animation); break;
+	    case 161: State.embed_file("file_1", post_animation); break;
+	    case 8482:State.embed_file("file_2", post_animation); break;
+	    case 163: State.embed_file("file_3", post_animation); break;
+	    case 162: State.embed_file("file_4", post_animation); break;
+	    case 8734:State.embed_file("file_5", post_animation); break;
+	    case 167: State.embed_file("file_6", post_animation); break;
+	    case 182: State.embed_file("file_7", post_animation); break;
+	    case 8226:State.embed_file("file_8", post_animation); break;
+	    case 170: State.embed_file("file_9", post_animation); break;
 	    case 108: // 'l', line
 		State.create_undo_frame();
 		State.create_line([MOUSE[0]-100, MOUSE[1]], [MOUSE[0]+100,MOUSE[1]]);
@@ -71,35 +71,6 @@ function main() {
 		console.log("Pressed unknown key with keycode "+key);
 	    }
 	}
-    }
-
-    function switch_file(filename) {
-	console.log("switching to "+filename);
-	var current = localStorage.current_file;
-	var file2tool = JSON.parse(localStorage.file2tool);
-	if (filename==current) return;
-	State.save(current);
-	if (!(filename in file2tool)) { 
-	    State.clear(post_animation);
-	} else {
-	    State.load(filename, post_animation);
-	}
-	localStorage.current_file = filename;
-    }
-
-    function clone_file(filename) {
-	var current = localStorage.current_file;
-	if (filename == current) return;
-	console.log("Cloning into '"+filename+"'");
-	State.save(current);
-	State.save(filename);
-	localStorage.current_file = filename;
-    }
-
-    function embed_file(filename) {
-	console.log("Embedding '"+filename+"'");
-	var ct = CompoundTool.create();
-	CT.add(ct);
     }
 
     function post_animation() {
