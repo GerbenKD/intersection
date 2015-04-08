@@ -351,17 +351,17 @@ var CompoundTool = Tool.extend(function() {
 
     /* --------------------------------------- Changes ------------------------------------------- */ 
 
-    // returns socket
-    function C_create_controlpoint(cp_out_socket, pos) {
-	this.id2tool[0].add(cp_out_socket, pos);
+
+    function C_create_controlpoint(cp_socket, pos) {
+	this.id2tool[0].add(cp_socket, pos);
     }
 
-    function C_move_controlpoint(cp_out_socket, pos) {
-	this.id2tool[0].get_output(cp_out_socket).pos = [pos[0], pos[1]];
+    function C_move_controlpoint(cp_socket, pos) {
+	this.id2tool[0].get_output(cp_socket).pos = [pos[0], pos[1]];
     }
 
-    function C_remove_controlpoint(cp_out_socket) {
-	this.id2tool[0].remove_output(cp_out_socket);
+    function C_remove_controlpoint(cp_socket) {
+	this.id2tool[0].remove_output(cp_socket);
     }
 
     // returns tool id

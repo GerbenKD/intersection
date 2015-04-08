@@ -310,8 +310,9 @@ var State = new function() {
 	// override some CT methods related to graphics
 	
 	CT.add_graphics = function() {
-	    for (var i=0; i<this.tools.length; i++) {
-		this.tools[i].add_graphics();
+	    this.id2tool[0].add_graphics(); // TODO remove this!
+	    for (var i=2; i<this.id2tool.length; i++) {
+		this.id2tool[i].add_graphics();
 	    }
 	}
 
