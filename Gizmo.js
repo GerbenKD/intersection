@@ -6,19 +6,45 @@
 
 var Gizmo = new function() {
 
-    this.extend = function(constr) { 
-	constr.prototype = this;
-	return new constr();
-    };
+    this.extend = function() {
+	var id = 0;
+	return function(constr) { 
+	    constr.prototype = this;
+	    var instance = new constr();
+	    instance.id = id++;
+	    return instance;
+	};
+    }();
 
-    this.create = function() { return this.extend(function() {}); }
+    this.create = function() {
+	return this.extend(function() {
+	    this.classes = {};
+	}); 
+    }
 
-    this.update_sprite = function(sprite) {
-	if (this.valid) {
-	    this.move_sprite(sprite);
-	    if (sprite.hidden()) sprite.show();
-	} else {
-	    if (!sprite.hidden()) sprite.hide();
+    this.remove_sprite = function() {
+	if (this.sprite) { this.sprite.destroy(); delete this.sprite; }
+    }
+
+    this.draw = function() {
+	if (!this.sprite) {
+	    this.create_sprite();
+	    for (var cls in this.classes) {
+		if (this.classes[cls]) this.sprite.add_class(cls);
+	    }
+	}
+	this.set_class("hidden", !this.valid);
+	if (this.valid) this.move_sprite();
+    }
+
+    this.has_class = function(cls) { return this.classes[cls]; }
+
+    this.set_class = function(cls, value) {
+	if (this.classes[cls] ^ value) {
+	    this.classes[cls] = value;
+	    if (this.sprite) {
+		    if (value) this.sprite.add_class(cls); else this.sprite.remove_class(cls);
+	    }
 	}
     }
 
@@ -52,7 +78,7 @@ var Point = Gizmo.extend(function() {
 	return Point.distance_cc(this.pos, pos);
     }
 
-    this.move_sprite = function(sprite) { sprite.attrib({ "cx": this.pos[0], "cy": this.pos[1] }); }
+    this.move_sprite = function() { this.sprite.attrib({ "cx": this.pos[0], "cy": this.pos[1] }); }
 });
 
 var ConstructedPoint = Point.extend(function() {
@@ -61,22 +87,26 @@ var ConstructedPoint = Point.extend(function() {
 	var sprite = Graphics.create("circle", "points");
 	sprite.add_class("intersectionpoint");
 	sprite.attrib({"r":"3"});
-	return sprite;
+	this.sprite = sprite;
     }
 
 });
 
 var ControlPoint = Point.extend(function() {
-
     this.valid = true;
     this.controlpoint = true;
-    this.create = function(pos) { return this.extend(function() { this.pos = pos; }); }
+
+    this.create = function(pos) {
+	var instance = Point.create.call(this);
+	instance.pos = pos;
+	return instance;
+    }
 
     this.create_sprite = function() {
 	var sprite = Graphics.create("circle", "controlpoints");
 	sprite.add_class("controlpoint");
 	sprite.attrib({"r":"8"});
-	return sprite;
+	this.sprite = sprite;
     }
 });
 
@@ -88,7 +118,7 @@ var Line = Gizmo.extend(function() {
     this.create_sprite = function() {
 	var sprite = Graphics.create("line", "lines");
 	sprite.add_class("line");
-	return sprite;
+	this.sprite = sprite;
     }
 
     // computers the intersection of two given lines
@@ -125,7 +155,8 @@ var Line = Gizmo.extend(function() {
         return p ? Point.distance_cc(p, pos) : Infinity;
     }
 
-    this.move_sprite = function(sprite) {
+    this.move_sprite = function() {
+	var sprite = this.sprite;
 	var exit1 = extend(this.p1, this.p2);
 	var exit2 = extend(this.p2, this.p1);
 
@@ -163,7 +194,7 @@ var Circle = Gizmo.extend(function() {
     this.create_sprite = function() {
 	var sprite = Graphics.create("circle", "lines");
 	sprite.add_class("circle");
-	return sprite;
+	this.sprite = sprite;
     }
 
     this.radius = function() {
@@ -175,8 +206,8 @@ var Circle = Gizmo.extend(function() {
 	return Math.abs(this.radius() - Point.distance_cc(this.center, pos));
     }
 
-    this.move_sprite = function(sprite) {
-	sprite.attrib({"cx": this.center[0], "cy": this.center[1], "r": this.radius()});
+    this.move_sprite = function() {
+	this.sprite.attrib({"cx": this.center[0], "cy": this.center[1], "r": this.radius()});
     }
 });
 

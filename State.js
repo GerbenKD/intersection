@@ -1,8 +1,10 @@
 "use strict";
 
+
+
 function Reset() {
     for (var key in localStorage) {
-	if (key == "current_file" || key == "file2undobuffer" || key.lastIndexOf("undobuffer_",0)==0) {
+	if (key == "current_file" || key == "file2savestate" || key.lastIndexOf("savestate_",0)==0) {
 	    delete localStorage[key];
 	}
     }
@@ -17,34 +19,20 @@ var State = new function() {
     /* localState has the following structure:
 
        current_file         : name of the currently edited file
-       undobuffer_<n>       : saved undobuffer
-       undobuffer_<n>_ref   : reference count of undobuffer_<n>
-       file2undobuffer      : { filename: undobuffername }
+       savestate_<n>       : saved savestate
+       savestate_<n>_ref   : reference count of savestate_<n>
+       file2savestate      : { filename: savestatename }
     */
 
-    function p_haskey(name)        { return name in localStorage; }
-    function p_getstr(name)        { return name in localStorage ? localStorage[name] : null; }
-    function p_setstr(name, value) { localStorage[name] = value; }
-    function p_getobj(name)        { return name in localStorage ? JSON.parse(localStorage[name]) : null; }
-    function p_setobj(name, value) { localStorage[name] = JSON.stringify(value); }
-    function p_delete(name)        { delete localStorage[name]; }
-    function p_filename2undobuffername(filename) { 
-	var file2undobuffer = p_getobj("file2undobuffer");
-	return file2undobuffer ? file2undobuffer[filename] : null;
-    }
-
-    function p_get_file(filename) {
-	var undobuffername = p_filename2undobuffername(filename);
-	return undobuffername ? p_getobj(undobuffername) : null;
-    }
+ 
 
     this.restore_state = function(continuation) {
-	if (!p_haskey("file2undobuffer")) p_setobj("file2undobuffer", {});
-	if (!p_haskey("current_file")) p_setstr("current_file", "file_0");
-	var filename = p_getstr("current_file");
-	var undobuffer = p_get_file(filename);
-	if (undobuffer) {
-	    initialize.call(this, undobuffer);
+	if (!Storage.haskey("file2savestate")) Storage.setobj("file2savestate", {});
+	if (!Storage.haskey("current_file")) Storage.setstr("current_file", "file_0");
+	var filename = Storage.getstr("current_file");
+	var savestate = Storage.get_file(filename);
+	if (savestate) {
+	    initialize.call(this, savestate);
 	    continuation();
 	} else {
 	    this.clear(continuation);
@@ -53,35 +41,36 @@ var State = new function() {
 
     this.clear = function(continuation) {
 	console.log("Creating new construction");
-	var undobuffer = { buffer:  [],
-		     current: [],
-		     current_stored: [],
-		     index: 0
-		   };
-	initialize.call(this, undobuffer);
+	var savestate = [[], { buffer:  [],
+			       current: [],
+			       current_stored: [],
+			       index: 0
+			     }];
+	initialize.call(this, savestate);
 	continuation();
     }
     
     this.load = function(filename, continuation) {
-	var undobuffer = p_get_file(filename);
-	if (!undobuffer) return false;
-	initialize.call(this, undobuffer);
+	var savestate = Storage.get_file(filename);
+	if (!savestate) return false;
+	initialize.call(this, savestate);
 	continuation();
 	return true;
     }
 
-    function new_undobuffer_name() {
+    function new_savestate_name() {
 	var i = 0;
 	var name;
 	while (true) {
-	    name = "undobuffer_"+i;
+	    name = "savestate_"+i;
 	    if (!(name in localStorage)) return name;
 	    i++;
 	}
     }
 
-    // returns a list of undobuffers that are referenced by the given undobuffer
-    function get_references(undobuffer) {
+    // returns a list of savestates that are referenced by the given savestate
+    function get_references(savestate) {
+	var undobuffer = savestate[1];
 	var refs = {};
 	for (var i=0; i<undobuffer.buffer.length; i++) {
 	    add_refs(undobuffer.buffer[i]);
@@ -99,88 +88,71 @@ var State = new function() {
 	}
     }
 
-    function remove_reference(undobuffername) {
-	var refname = undobuffername+"_ref";
-	var nref = p_getstr(refname);
-	if (nref>1) { p_setstr(refname, nref-1); return; }
-	var undobuffer = p_getobj(undobuffername);
-	if (undobuffer) {
-	    var refs = get_references(undobuffer);
+    function remove_reference(savestatename) {
+	var refname = savestatename+"_ref";
+	var nref = Storage.getstr(refname);
+	if (nref>1) { Storage.setstr(refname, nref-1); return; }
+	var savestate = Storage.getobj(savestatename);
+	if (savestate) {
+	    var refs = get_references(savestate);
 	    for (var i=0; i<refs.length; i++) {
 		remove_reference(refs[i]);
 	    }
-	    p_delete(undobuffername);
+	    Storage.remove(savestatename);
 	}
-	delete p_delete(refname);
+	Storage.remove(refname);
     }
 
-    function add_reference(undobuffername) {
-	var refname = undobuffername+"_ref";
-	var nref = p_getstr(refname);
-	if (nref != null) { p_setstr(refname, nref+1); return; }
-	p_setstr(refname, 1);
-	var refs = get_references(p_getobj(undobuffername));
+    function add_reference(savestatename) {
+	var refname = savestatename+"_ref";
+	var nref = Storage.getstr(refname);
+	if (nref != null) { Storage.setstr(refname, nref+1); return; }
+	Storage.setstr(refname, 1);
+	var refs = get_references(Storage.getobj(savestatename));
 	for (var i=0; i<refs.length; i++) {
 	    add_reference(refs[i]);
 	}
     }
 
     function save(filename) {
-	var file2undobuffer = p_getobj("file2undobuffer");
-	var old_undobuffername = file2undobuffer[filename];
-	var undobuffername = new_undobuffer_name();
-	file2undobuffer[filename] = undobuffername;
-	p_setobj("file2undobuffer", file2undobuffer);
-	console.log("saving buffer as '"+undobuffername+"'");
-	p_setobj(undobuffername, UNDO);
-	add_reference(undobuffername);
-	remove_reference(old_undobuffername);
+	var file2savestate = Storage.getobj("file2savestate");
+	var old_savestatename = file2savestate[filename];
+	var savestatename = new_savestate_name();
+	file2savestate[filename] = savestatename;
+	Storage.setobj("file2savestate", file2savestate);
+	console.log("saving buffer as '"+savestatename+"'");
+	Storage.setobj(savestatename, [0, UNDO]);//CP.get_socket_list(), UNDO]);
+	add_reference(savestatename);
+	remove_reference(old_savestatename);
     }
 
     this.switch_file = function(filename, continuation) {
-	console.log("Switching to "+filename);
-	var current = p_getstr("current_file");
+	var current = Storage.getstr("current_file");
 	if (filename==current) return;
+	console.log("Switching to "+filename);
 	save(current);
-	var undobuffer = p_get_file(filename);
-	if (undobuffer) {
-	    initialize.call(this,undobuffer);
+	var savestate = Storage.get_file(filename);
+	if (savestate) {
+	    initialize.call(this,savestate);
 	    continuation();
 	} else {
 	    this.clear(continuation);
 	}
-	p_setstr("current_file", filename);
+	Storage.setstr("current_file", filename);
     }
 
     this.clone_file = function(filename) {
-	var current = p_getstr("current_file");
+	var current = Storage.getstr("current_file");
 	if (filename == current) return;
 	console.log("Cloning into '"+filename+"'");
 	save(current);
 	save(filename);
-	p_setstr("current_file", filename);
-    }
-
-    this.embed_file = function(filename, continuation) {
-	// TODO this function is wrong, but should eventually do something like:
-	var ci = Interface.create();
-	var co = Interface.create();
-	var undobuffer = p_get_file(filename);
-	var ct = CompoundTool.create(ci, co, undobuffer);
-	this.add_tool(ct);
-    }
-
-
-    this.embed = function(filename) {
-	console.log("Embedding '"+filename+"'");
-	var undobuffer = p_get_file(filename);
-	var ct = CompoundTool.create(undobuffer);
-	CT.add(ct);
+	Storage.setstr("current_file", filename);
     }
 
     /* --------------------------------------- Constructor ------------------------------------- */ 
 
-    var CP, CO, CT, DRAG_START;
+    var CP, CT, DRAG_START;
 
     this.create_undo_frame = function() {
 	if (UNDO.current.length>0) {
@@ -221,8 +193,7 @@ var State = new function() {
 		var pos = [ d[0][0]*(1-f) + d[1][0]*f,
 			    d[0][1]*(1-f) + d[1][1]*f ];
 		CT.change(["move_controlpoint", cp_out_socket, pos], true);
-		CT.recalculate();
-		CT.update_graphics();
+		State.redraw();
 	    }
 	    if (moving > 0) requestAnimationFrame(animate); else continuation();
 	}
@@ -298,50 +269,27 @@ var State = new function() {
 	// actually undo all the changes
 	if (frame) animate_frame(frame, 0, continuation); else continuation();
     }
+    
+    function initialize(savestate) {
+	
+	var undobuffer = savestate[1];
 
-    function initialize(undobuffer) {
-
+	if (CP) CP.destroy();
 	CP = ControlPointTool.create();
-	CO = InterfaceTool.create();
-
+	
 	if (CT) CT.destroy();
-	CT = CompoundTool.create(CP, CO, undobuffer);
+	CT = CompoundTool.create(null, CP);
 
-	// override some CT methods related to graphics
-	
-	CT.add_graphics = function() {
-	    this.id2tool[0].add_graphics(); // TODO remove this!
-	    for (var i=2; i<this.id2tool.length; i++) {
-		this.id2tool[i].add_graphics();
-	    }
-	}
-
-
-	CT.add_tool = function(tool) {
-	    CompoundTool.add_tool.call(CT, tool);
-	    tool.add_graphics();
-	}
-
-	CT.export_output = function(left_tool_id, left_out_socket) {
-	    var tool = this.id2tool[left_tool_id];
-	    tool.get_sprite(left_out_socket).add_class("output");
-	}
-	
-	CT.retract_output = function(left_tool_id, left_out_socket) { 
-	    var tool = this.id2tool[left_tool_id];
-	    tool.get_sprite(left_out_socket).remove_class("output");
-	}
-
-	CT.add_graphics();
-
+	CT.initialize(undobuffer);
 	UNDO = undobuffer;
-
     }
 
 
     this.redraw = function() {
 	CT.recalculate();
-	CT.update_graphics();
+	var list = [];
+	CT.build_draw_list_with_internals(list);
+	Graphics.redraw(list);
     }
 
     // This creates an action (by putting all arguments in an array) and performs it
@@ -377,6 +325,14 @@ var State = new function() {
 	var cf3 = ["create_line", cp1, cp2];
 	var id = CT.change(cf3);
 	register_change(cf3, ["remove_tool", id]);
+    }
+
+
+    this.embed_file = function(filename, pos) {
+	var savestatename = Storage.filename2savestatename(filename);
+	var embed_action = ["embed", savestatename];
+	var compound_id = CT.change(embed_action);
+	register_change(embed_action, ["remove_tool", compound_id]);
     }
 
     this.create_circle = function(pos_centre, pos_border) {
@@ -488,13 +444,13 @@ var State = new function() {
     this.toggle_output = function(left_tool_id, left_out_socket) {
 	var cf, cb, right_in_socket;
 
-	CT.foreach_listener(left_tool_id, left_out_socket, [CO.id], function(conn) { right_in_socket = conn[3]; });
+	CT.foreach_listener(left_tool_id, left_out_socket, [1], function(conn) { right_in_socket = conn[3]; });
 
 	if (right_in_socket != undefined) {
 	    cf = ["disconnect_output", left_tool_id, left_out_socket, right_in_socket];
 	    cb = ["connect_output", left_tool_id, left_out_socket, right_in_socket];
 	} else {
-	    right_in_socket = CO.first_free_output();
+	    right_in_socket = CT.get_output_interface().first_free_output();
 	    cf = ["connect_output", left_tool_id, left_out_socket, right_in_socket];
 	    cb = ["disconnect_output", left_tool_id, left_out_socket, right_in_socket];
 	} 

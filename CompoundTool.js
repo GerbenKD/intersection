@@ -2,28 +2,37 @@
 
 var CompoundTool = Tool.extend(function() {
 
-    this.create = function(input_interface, output_interface, undobuffer) {
+    this.create = function(parent, ii, oi) {
 	return this.extend(function() {
 	    this.tools = [];
 	    this.id2tool = [];
+	    this.parent = parent;
 
-	    this.add_tool(input_interface);
-	    this.add_tool(output_interface);
+	    if (!ii) ii = InterfaceTool.create();
+	    if (!oi) oi = InterfaceTool.create();
 
-	    function perform_frame(frame) {
-		for (var i=0; i<frame.length; i++) {
-		    this.change(frame[i][0]);
-		}
-	    }
-
-	    for (var i=0; i<undobuffer.index; i++) {
-		perform_frame.call(this, undobuffer.buffer[i]);
-	    }
-
-	    if (undobuffer.index == undobuffer.buffer.length && undobuffer.current.length>0) 
-		perform_frame.call(this, undobuffer.current);
+	    this.add_tool(ii);
+	    this.add_tool(oi);
 	});
     }
+
+    this.initialize = function(undobuffer) {
+	function perform_frame(frame) {
+	    for (var i=0; i<frame.length; i++) {
+		this.change(frame[i][0]);
+	    }
+	}
+
+	for (var i=0; i<undobuffer.index; i++) {
+	    perform_frame.call(this, undobuffer.buffer[i]);
+	}
+
+	if (undobuffer.index == undobuffer.buffer.length && undobuffer.current.length>0) 
+	    perform_frame.call(this, undobuffer.current);
+    }
+
+    this.get_input_interface = function() { return this.id2tool[0]; }
+    this.get_output_interface = function() { return this.id2tool[1]; }
 
     this.connect = function(src_tool, src_socket, dst_socket) {
 	this.id2tool[0].connect(src_tool, src_socket, dst_socket);
@@ -34,7 +43,7 @@ var CompoundTool = Tool.extend(function() {
     }
 
     this.tie = function(left_tool, left_out_socket, right_out_socket) {
-	// this.output_interface.tie(left_tool, left_out_socket, right_out_socket);
+	this.output_interface.tie(left_tool, left_out_socket, right_out_socket);
 	console.error("Cannot tie a compoundtool yet");
     }
 
@@ -55,30 +64,13 @@ var CompoundTool = Tool.extend(function() {
 	}
     }
 
-
-    this.has_graphics = function() { return this.i_have_graphics; }
-
-    this.update_graphics = function() {
+    // alternative to build_draw_list for when you wanna see everything
+    this.build_draw_list_with_internals = function(list) {
 	for (var i=0; i<this.tools.length; i++) {
-	    this.tools[i].update_graphics();
+	    this.tools[i].build_draw_list(list);
 	}
     }
-
-    this.add_graphics = function(socket) {
-	if (this.i_have_graphics) return;
-	this.i_have_graphics = true;
-	var output_interface = this.id2tool[1];
-	if (socket) {
-	    var tie = output_interface.get_tie(socket);
-	    tie[0].add_graphics(tie[1]);
-	} else {
-	    for (var i=0; i<right_tool.max_output_socket(); i++) {
-		var tie = right_tool.get_tie(i);
-		tie[0].add_graphics(tie[1]);
-	    }
-	}
-    }
-
+	
     this.add_tool = function(tool) { 
 	tool.id = this.id2tool.length;
 	this.id2tool.push(tool);
@@ -106,7 +98,7 @@ var CompoundTool = Tool.extend(function() {
 	for (var j=0; j<tool.max_output_socket(); j++) {
 	    var gizmo = tool.get_output(j);
 	    if (!gizmo || gizmo.type == "point") continue;
-	    for (var i=0; i<n_existing_tools; i++) {
+	    for (var i=0; i<n_existing_tools; i++) { // TODO skip interfaces??
 		var test_tool = this.tools[i];
 		for (var k=0; k<test_tool.max_output_socket(); k++) {
 		    var test_gizmo = test_tool.get_output(k);
@@ -118,9 +110,9 @@ var CompoundTool = Tool.extend(function() {
 	}
     }
 
-    this.max_input_socket = function() { return this.id2tools[0].max_output_socket(); }
-   
-
+    this.max_input_socket = function()  { return this.id2tool[0].max_output_socket(); }
+    this.max_output_socket = function() { return this.id2tool[1].max_output_socket(); }
+    
     /* Assumes the main compoundtool to have been recalculated.
      * candidates[left_tool_id + ":" + left_out_socket][right_tool_id] = 
                                         [left_tool_id, right_tool_id, left_out_socket, left_index, right_index]
@@ -328,13 +320,9 @@ var CompoundTool = Tool.extend(function() {
 	    var tool_id = tool_ids[i];
 	    var t = this.id2tool[tool_id];
 	    for (var j=0; j<t.max_output_socket(); j++) {
-		var gizmo, sprite;
 		var tie = t.get_tie(j);
-		if (!tie) { gizmo = t.get_gizmo(j); if (t.has_graphics() && gizmo) sprite = t.get_sprite(j); }
-		if (gizmo || tie) {
-		    var info = [tool_id, j, gizmo, sprite, tie];
-		    if (func.apply(undefined, info)) res.push(info);
-		}
+		var info = tie ? [tool_id, j, undefined, tie] : [tool_id, j, t.get_gizmo(j), undefined];
+		if (info[2] && func.apply(undefined, info)) res.push(info);
 	    }
 	}
 	return res;
@@ -349,11 +337,21 @@ var CompoundTool = Tool.extend(function() {
     }
 
 
+    this.create_controlpoint = function(socket, pos) {
+	if (this.parent) {
+	    var left_out_socket = this.parent.id2tool[0].first_free_output();
+	    this.parent.create_controlpoint(left_out_socket, pos);
+	    this.id2tool[0].tie(this.parent.id2tool[0], left_out_socket, socket);
+	} else {
+	    this.id2tool[0].create_controlpoint(socket, pos);
+	}
+    }
+
     /* --------------------------------------- Changes ------------------------------------------- */ 
 
 
-    function C_create_controlpoint(cp_socket, pos) {
-	this.id2tool[0].add(cp_socket, pos);
+    function C_create_controlpoint(socket, pos) {
+	this.create_controlpoint(socket, pos);
     }
 
     function C_move_controlpoint(cp_socket, pos) {
@@ -369,15 +367,21 @@ var CompoundTool = Tool.extend(function() {
 	var line = LineTool.create();
 	line.connect(this.id2tool[0], left_out_socket1, 0);
 	line.connect(this.id2tool[0], left_out_socket2, 1);
+	// line.initialize(undobuffer)
 	this.add_tool_with_intersections(line);
 	return line.id;
     }
 
     // returns tool id
     function C_create_circle(left_out_socket1, left_out_socket2) {
-	var circle = CircleTool.create();
+	
+	var circle = CircleTool.create(); // OF andere constructie
+	
 	circle.connect(this.id2tool[0], left_out_socket1, 0);
 	circle.connect(this.id2tool[0], left_out_socket2, 1);
+
+	// initialisatie
+
 	this.add_tool_with_intersections(circle);
 	return circle.id;
     }
@@ -405,7 +409,17 @@ var CompoundTool = Tool.extend(function() {
 	return res;
     }
 
-    function C_load_tool(filename) {
+    /* We are the container for the new compoundtool.
+       The container_sockets are the output sockets in our input interface that will be
+       connected to the new compoundtool.
+    */
+    function C_embed(savestatename) {
+	var savestate = Storage.getobj(savestatename);
+	if (!savestate) { console.error("Error in embedding: cannot obtain savestate"); return;	}
+	var new_ct = CompoundTool.create(this);
+	new_ct.initialize(savestate[1]); // TODO remove socket array from savestate
+	this.add_tool_with_intersections(new_ct); // new_ct is now given the right id
+	return new_ct.id;
     }
 
     // before doing any redirections, use shuffle_tools to make sure the new target is to the left
@@ -435,13 +449,11 @@ var CompoundTool = Tool.extend(function() {
     function C_connect_output(left_tool_id, left_out_socket, right_in_socket) {
 	var output_interface = this.id2tool[1];
 	output_interface.connect(this.id2tool[left_tool_id], left_out_socket, right_in_socket);
-	this.export_output(left_tool_id, left_out_socket);
     }
 
     function C_disconnect_output(left_tool_id, left_out_socket, right_in_socket) {
 	var output_interface = this.id2tool[1];
 	output_interface.disconnect(right_in_socket);
-	this.retract_output(left_tool_id, left_out_socket);
     }
 
 });

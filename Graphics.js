@@ -44,22 +44,18 @@ var Graphics = new function() {
     var Sprite = new function() {
 	this.extend = function(constr) { constr.prototype = this; return new constr(); }
 
-	this.add_class    = function(cls)    { this.svg.classList.add(cls); this.classes[cls] = true;   }
-	this.remove_class = function(cls)    { this.svg.classList.remove(cls); delete this.classes[cls]; }
-	this.has_class    = function(cls)    { return this.classes[cls]; }
-	this.attrib       = function(attrib) { for (var key in attrib) { this.svg.setAttribute(key, attrib[key]); } }
-	this.destroy      = function ()      { this.group.removeChild(this.svg); }
+	this.add_class = function(cls) { this.svg.classList.add(cls); }
+	this.remove_class = function(cls) { this.svg.classList.remove(cls); }
 
-	this.lift         = function(group) {
+	this.attrib = function(attrib) { for (var key in attrib) { this.svg.setAttribute(key, attrib[key]); } }
+	this.destroy = function () { this.group.removeChild(this.svg); }
+
+	this.lift = function(group) {
 	    var grp = Graphics.groups[group];
 	    this.group.removeChild(this.svg);
 	    grp.appendChild(this.svg)
 	    this.group = grp;
 	}
-	
-	this.hide = function()   { this.add_class("hidden"); }
-	this.show = function()   { this.remove_class("hidden"); }
-	this.hidden = function() { return this.has_class("hidden"); }
     }
 
     //	Start out hidden. Show upon recalculate_check_valid
@@ -69,12 +65,31 @@ var Graphics = new function() {
 	var sprite = Sprite.extend(function() {
 	    this.svg = svg;
 	    this.group = grp;
-	    this.classes = {};
 	});
-	sprite.add_class("hidden");
 	grp.appendChild(svg);
 	return sprite;
     }
+
+    this.redraw = function() {
+	var previous = []; // gizmo
+	return function(gizmo_list) {
+
+	    var hash = {};
+	    for (var i=0; i<gizmo_list.length; i++) {
+		var gizmo = gizmo_list[i];
+		hash[gizmo.id] = gizmo;
+		gizmo.draw();
+	    }
+
+	    // kill sprites that are no longer used
+	    for (var i=0; i<previous.length; i++) {
+		var gizmo = previous[i];
+		if (!(gizmo.id in hash)) gizmo.remove_sprite();
+	    }
+	    previous = gizmo_list;
+	};
+    }();
+
 
 
 }

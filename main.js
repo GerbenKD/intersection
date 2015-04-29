@@ -39,16 +39,16 @@ function main() {
 	    case 38: State.clone_file("file_7", post_animation); break;
 	    case 42: State.clone_file("file_8", post_animation); break;
 	    case 40: State.clone_file("file_9", post_animation); break;
-	    case 186: State.embed_file("file_0", post_animation); break;
-	    case 161: State.embed_file("file_1", post_animation); break;
-	    case 8482:State.embed_file("file_2", post_animation); break;
-	    case 163: State.embed_file("file_3", post_animation); break;
-	    case 162: State.embed_file("file_4", post_animation); break;
-	    case 8734:State.embed_file("file_5", post_animation); break;
-	    case 167: State.embed_file("file_6", post_animation); break;
-	    case 182: State.embed_file("file_7", post_animation); break;
-	    case 8226:State.embed_file("file_8", post_animation); break;
-	    case 170: State.embed_file("file_9", post_animation); break;
+	    case 186: State.embed_file("file_0"); post_animation(); break;
+	    case 161: State.embed_file("file_1"); post_animation(); break;
+	    case 8482:State.embed_file("file_2"); post_animation(); break;
+	    case 163: State.embed_file("file_3"); post_animation(); break;
+	    case 162: State.embed_file("file_4"); post_animation(); break;
+	    case 8734:State.embed_file("file_5"); post_animation(); break;
+	    case 167: State.embed_file("file_6"); post_animation(); break;
+	    case 182: State.embed_file("file_7"); post_animation(); break;
+	    case 8226:State.embed_file("file_8"); post_animation(); break;
+	    case 170: State.embed_file("file_9"); post_animation(); break;
 	    case 108: // 'l', line
 		State.create_undo_frame();
 		State.create_line([MOUSE[0]-100, MOUSE[1]], [MOUSE[0]+100,MOUSE[1]]);
@@ -89,13 +89,13 @@ function main() {
     */
     function sparkle() {
 	for (var i=0; i<HIGHLIGHT_TARGETS.length; i++) {
-	    HIGHLIGHT_TARGETS[i][3].add_class("sparkly");
+	    HIGHLIGHT_TARGETS[i][2].set_class("sparkly", true);
 	}
     }
     
     function unsparkle() {
 	for (var i=0; i<HIGHLIGHT_TARGETS.length; i++) {
-	    HIGHLIGHT_TARGETS[i][3].remove_class("sparkly");
+	    HIGHLIGHT_TARGETS[i][2].set_class("sparkly", false);
 	}
     }
         
@@ -119,8 +119,8 @@ function main() {
 	if (d_best<=0) item = HIGHLIGHT_TARGETS[i_best];
 
 	var changed = HIGHLIGHTED && item && !(item[0]===HIGHLIGHTED[0] && item[1]==HIGHLIGHTED[1]);
-	if (HIGHLIGHTED && (!item || changed))        HIGHLIGHTED[3].remove_class("highlighted");
-	if (item        && (!HIGHLIGHTED || changed)) item[3].add_class("highlighted");
+	if (HIGHLIGHTED && (!item || changed))        HIGHLIGHTED[2].set_class("highlighted", false);
+	if (item        && (!HIGHLIGHTED || changed)) item[2].set_class("highlighted", true);
 	HIGHLIGHTED = item;
     }
 

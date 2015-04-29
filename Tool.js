@@ -9,32 +9,25 @@
   - abstract tool.connect(src_tool, src_socket, dst_socket)
   - abstract tool.disconnect(dst_socket)
   - abstract tool.recalculate(num_indep) - update the outputs and the valid status of the tool, skipping independents
-  - abstract tool.add_graphics(level)  - make this tool visible. Level 1 - show outputs, 2 - show everything
-  - abstract tool.update_graphics(num_indep) - bring sprite up to date, skipping independent tools
   - abstract tool.max_input_socket()   - returns a number greater than all used input socket numbers
   - abstract tool.max_output_socket()  - returns a number greater than all used output socket numbers
   - abstract tool.get_input(socket)    - returns [input_tool, output_socket]
   - abstract tool.get_output(socket)   - returns output gizmo at that socket
-  - abstract tool.get_sprite(socket)   - returns sprite object or an error
-  - abstract tool.has_graphics()       - returns graphics level
   - abstract tool.tie(src_socket, dst_tool, dst_socket) - fix and mirror dst_tool's output at src_socket
   - abstract tool.untie(socket)        - untie the tool, upon recalculate will reconstruct its own output
-  - abstract tool.create_output(socket)- create an uninitialized output gizmo at given socket, and possibly graphics
-  - abstract tool.delete_output(socket)- delete an output gizmo at given socket, and possibly graphics
-  - abstract tool.add_graphics(socket) - add graphics object at given socket, requires output gizmo
-  - abstract tool.remove_graphics(socket) - reverse of the above
+  - abstract tool.create_output(socket)- create an uninitialized output gizmo at given socket
+  - abstract tool.delete_output(socket)- delete an output gizmo at given socket
   - tool.listen(socket)                - get gizmo at an input
   - tool.get_matching_outputs(gizmo)   - get output sockets that match the gizmo
   ================================ BasicTool: =================================
   hidden fields:
   - bt.inputs    - [ [src_tool, src_socket], ... ]
   - bt.outputs   - [ gizmo, ... ]
-  - bt.sprites   - if it exists, [ sprite, ... ] one for each output
 
   additional methods:
 
-  - bt.add_output    - add an output gizmo to a tool and create its sprite if necessary
-  - bt.remove_output - remove an output gizmo, deleting its sprite if necessary
+  - bt.add_output    - add an output gizmo to a tool
+  - bt.remove_output - remove an output gizmo
 */
 
 
@@ -47,11 +40,6 @@ var Tool = new function() {
     };
     
 
-    this.create_output = function(socket) {
-	this.add_gizmo(socket);
-	if (this.has_graphics()) this.add_sprite(socket);
-    }
-
     this.get_output = function(socket) { 
 	var tie = this.get_tie(socket);
 	return tie ? tie[0].get_output(tie[1]) : this.get_gizmo(socket);
@@ -59,10 +47,17 @@ var Tool = new function() {
 
     this.remove_output = function(socket) {
 	if (this.get_tie(socket)) this.untie(socket);
-	if (this.has_graphics() && this.get_sprite(socket)) this.remove_sprite(socket);
 	if (this.get_gizmo(socket)) this.remove_gizmo(socket);
     }
     
+    this.first_free_output = function() {
+	var socket;
+	for (socket = 0; socket < this.max_output_socket(); socket++) {
+	    if (!this.get_output(socket)) break;
+	}
+	return socket;
+    }
+
     // return the Gizmo at the given input
     this.listen = function(socket) {
 	var connection = this.get_input(socket);
@@ -101,6 +96,14 @@ var Tool = new function() {
 	}
 	return res;
     }
+
+    this.build_draw_list = function(list) {
+	for (var i=0; i<this.max_output_socket(); i++) {
+	    var gizmo = this.get_output(i);
+	    if (gizmo) list.push(gizmo);
+	}
+    }
+
 };
 
 
@@ -166,9 +169,14 @@ var BasicTool = Tool.extend(function() {
 
     // ----------------------------------- gizmos --------------------------------------------
 
-    this.max_output_socket = function() { return this.gizmos.length; }
+    this.max_output_socket = function() { 
+	var max = 0;
+	if (this.gizmos) max=this.gizmos.length;
+	if (this.ties) { var len = this.ties.length; if (len>max) max=len; }
+	return max;
+    }
 
-    this.add_gizmo = function(socket) {
+    this.create_output = function(socket) {
 	if (this.gizmos[socket]) {
 	    console.error("Attempt to create a gizmo at socket "+socket+", but it already exists");
 	    return;
@@ -186,66 +194,6 @@ var BasicTool = Tool.extend(function() {
 	this.gizmos[socket] = undefined;
     }
 
-    this.first_free_output = function() {
-	var socket;
-	for (socket = 0; socket < this.max_output_socket(); socket++) {
-	    if (!this.get_output(socket)) break;
-	}
-	return socket;
-    }
-
-    // ----------------------------------- sprites -------------------------------------------
-
-    this.add_sprite = function(socket) {
-	if (!this.has_graphics()) { console.error("Call add_graphics first"); return;	}
-	if (!this.sprites) this.sprites = [];
-	if (this.sprites[socket]) { console.error("There already is a sprite at socket "+socket); return; }
-	if (!this.gizmos[socket]) { console.error("Cannot create sprite without gizmo at socket "+socket); return; }
-	this.sprites[socket] = this.gizmos[socket].create_sprite(socket);
-    }
-
-    this.get_sprite = function(socket) {
-	if (!this.has_graphics() || !this.sprites[socket]) { 
-	    if (this.get_tie(socket)) {
-		console.error("Attempted to get sprite for socket "+socket+", which is tied");
-	    }
-	    return undefined;
-	}
-	return this.sprites[socket];
-    }
-
-    this.remove_sprite = function(socket) {
-	if (!this.sprites) { console.error("No graphics"); return;	}
-	if (!this.sprites[socket]) { console.error("There was no sprite at socket "+socket); return; }
-	this.sprites[socket].destroy();
-	this.sprites[socket] = undefined;
-    }
-
-    // create sprites for all connected outputs
-    this.add_graphics = function() {
-	if (this.has_graphics()) { console.error("Attempt to add graphics to a tool that already has them"); return; }
-	this.i_have_graphics = true;
-	for (var i=0; i<this.max_output_socket(); i++) {
-	    this.add_sprite(i);
-	}
-    }
-
-    this.has_graphics = function() { return this.i_have_graphics; }
-
-    this.remove_graphics = function() {
-	for (var i=0; i<this.max_output_socket; i++) {
-	    this.remove_sprite(i);
-	}
-	delete this.i_have_graphics;
-    }
-
-    this.update_graphics = function() {
-	if (!this.sprites) return;
-	for (var i=0; i<this.gizmos.length; i++) {
-	    var gizmo = this.gizmos[i];
-	    if (gizmo) gizmo.update_sprite(this.sprites[i]);
-	}
-    }
 });
 
 var LineTool = BasicTool.extend(function() {
@@ -368,22 +316,6 @@ var CCI_Tool = BasicTool.extend(function() {
 	    this.solutions([xs+xt, ys+yt], [xs-xt, ys-yt]);
 	}
     }
-
-    if (false) {
-	this.add_graphics = function() {
-	    BasicTool.add_graphics.call(this);
-	    for (var i=0; i<this.max_output_socket(); i++) {
-		var sprite = this.get_sprite(i);
-		if (sprite) {
-		    sprite.remove_class("intersectionpoint");
-		    sprite.add_class("intersectionpoint"+i);
-		    sprite.lift("controlpoints");
-		}
-	    }
-	}
-    }
-
-
 });
 
 
@@ -448,22 +380,6 @@ var LCI_Tool = BasicTool.extend(function() {
 	}
     }
 
-
-    if (false) {
-	this.add_graphics = function() {
-	    BasicTool.add_graphics.call(this);
-	    for (var i=0; i<this.max_output_socket(); i++) {
-		var sprite = this.get_sprite(i);
-		if (sprite) {
-		    sprite.remove_class("intersectionpoint");
-		    sprite.add_class("intersectionpoint"+i);
-		    sprite.lift("controlpoints");
-		}
-	    }
-	}
-    }
-
-
 });
 
 var LLI_Tool = BasicTool.extend(function() {
@@ -493,30 +409,4 @@ var LLI_Tool = BasicTool.extend(function() {
 	this.mark_valid(v);
 	if (v) this.gizmos[0].pos = xy;
     }
-
-});
-
-
-/* Connect the ArcTool as follows:
-   - create the CircleTool first, either with or without graphics.
-   - connect input 0 to the CircleTool.
-   - connect inputs 1 and 2 to a CCI_Tool or LCI_Tool, which intersect the correct Circle
-
-   Upon recalculate, the Arc gizmo is supplied with the coordinates of central and two border points.
-   Recalculate also checks that the intersections both have the correct Circle as parent.
-
-   Note that the UI for ArcTools is different than for other Tools.
-   It is combined with marking circles as outputs.
-   There are no loose controlpoints
-*/
-var ArcTool = BasicTool.extend(function() {
-	
-    this.create = function() {
-	
-    }
-    /*
-  - abstract tool.recalculate(num_indep) - update the outputs and the valid status of the tool, skipping independents
-  - abstract tool.add_graphics(level)  - make this tool visible. Level 1 - show outputs, 2 - show everything
-  - abstract tool.update_graphics(num_indep) - bring sprite up to date, skipping independent tools
-    */
 });

@@ -2,7 +2,7 @@
 
 var ControlPointTool = BasicTool.extend(function() {
 
-    this.add = function(socket, pos) {
+    this.create_controlpoint = function(socket, pos) {
 	if (this.gizmos[socket] || this.ties[socket]) {
 	    console.error("Attempt to add a controlpoint at a used socket"); return;
 	}
@@ -22,7 +22,6 @@ var ControlPointTool = BasicTool.extend(function() {
 	}
 	return [i_best, d_best];
     }
-
 
     this.get_state = function() {
 	var state = [];
@@ -53,8 +52,6 @@ var ControlPointTool = BasicTool.extend(function() {
 
 
 var InterfaceTool = BasicTool.extend(function() {
-
-    this.max_output_socket = function() { return this.ties.length; }
 
     this.create_output = function() {} // we never own any gizmos, sprites or inputs!
 
