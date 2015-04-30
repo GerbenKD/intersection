@@ -277,8 +277,20 @@ var State = new function() {
 	if (CP) CP.destroy();
 	CP = ControlPointTool.create();
 	
+	// override "connect" and "disconnect" methods in the Interface tool to add/remove the
+	// "output" class from the connected gizmo.
+	var OI = InterfaceTool.create();
+	OI.connect = function(left_tool, left_output_socket, right_in_socket) {
+	    InterfaceTool.connect.call(this, left_tool, left_output_socket, right_in_socket);
+	    left_tool.get_output(left_output_socket).set_class("output", true);
+	}
+	OI.disconnect = function(right_in_socket) {
+	    this.get_output(right_in_socket).set_class("output", false);
+	    InterfaceTool.disconnect.call(this, right_in_socket);
+	}
+	
 	if (CT) CT.destroy();
-	CT = CompoundTool.create(null, CP);
+	CT = CompoundTool.create(null, CP, OI);
 
 	CT.initialize(undobuffer);
 	UNDO = undobuffer;
@@ -287,9 +299,9 @@ var State = new function() {
 
     this.redraw = function() {
 	CT.recalculate();
-	var list = [];
-	CT.build_draw_list_with_internals(list);
-	Graphics.redraw(list);
+	var set = {};
+	CT.build_draw_set_with_internals(set);
+	Graphics.redraw(set);
     }
 
     // This creates an action (by putting all arguments in an array) and performs it
@@ -367,7 +379,7 @@ var State = new function() {
 	    }
 	});
 
-	return CT.select_outputs(separated[0], function(tool_id,socket,gizmo,sprite,tie) { 
+	return CT.select_outputs(separated[0], function(tool_id,socket,gizmo,tie) { 
 	    if (tie || !gizmo || gizmo.type != "point") return false;
 	    return !((tool_id in disqualified_outputs) && disqualified_outputs[tool_id][socket]);
 	});
@@ -379,7 +391,7 @@ var State = new function() {
     }
 
     this.get_cool_outputs = function() {
-	return CT.select_outputs(CT.get_tool_ids(), function(tool_id,socket,gizmo,sprite,tie) {
+	return CT.select_outputs(CT.get_tool_ids(), function(tool_id,socket,gizmo,tie) {
 	    return tool_id!=0 && !tie; 
 	});
     }
@@ -397,6 +409,7 @@ var State = new function() {
 
 
     this.snap = function(cp_out_socket, left_tool_id, left_out_socket) {
+
 	// Step 1: reorder the tools array
 	var separated = CT.separate(cp_out_socket);
 	var new_tool_ids = separated[0].concat(separated[1]);

@@ -34,6 +34,10 @@ var CompoundTool = Tool.extend(function() {
     this.get_input_interface = function() { return this.id2tool[0]; }
     this.get_output_interface = function() { return this.id2tool[1]; }
 
+    this.get_input = function(right_in_socket) {
+	return this.id2tool[0].get_input(right_in_socket);
+    }
+
     this.connect = function(src_tool, src_socket, dst_socket) {
 	this.id2tool[0].connect(src_tool, src_socket, dst_socket);
     }
@@ -43,13 +47,15 @@ var CompoundTool = Tool.extend(function() {
     }
 
     this.tie = function(left_tool, left_out_socket, right_out_socket) {
-	this.output_interface.tie(left_tool, left_out_socket, right_out_socket);
-	console.error("Cannot tie a compoundtool yet");
+	this.id2tool[1].tie(left_tool, left_out_socket, right_out_socket);
     }
 
     this.untie = function(right_out_socket) {
-	console.error("Cannot untie a compoundtool yet");
-	// this.output_interface.untie(right_out_socket);
+	this.id2tool[1].untie(right_out_socket);
+    }
+
+    this.get_tie = function(right_out_socket) {
+	return this.id2tool[1].get_tie(right_out_socket);
     }
     
     this.recalculate = function() {
@@ -65,9 +71,9 @@ var CompoundTool = Tool.extend(function() {
     }
 
     // alternative to build_draw_list for when you wanna see everything
-    this.build_draw_list_with_internals = function(list) {
+    this.build_draw_set_with_internals = function(set) {
 	for (var i=0; i<this.tools.length; i++) {
-	    this.tools[i].build_draw_list(list);
+	    this.tools[i].build_draw_set(set);
 	}
     }
 	

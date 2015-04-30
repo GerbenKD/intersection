@@ -71,22 +71,16 @@ var Graphics = new function() {
     }
 
     this.redraw = function() {
-	var previous = []; // gizmo
-	return function(gizmo_list) {
-
-	    var hash = {};
-	    for (var i=0; i<gizmo_list.length; i++) {
-		var gizmo = gizmo_list[i];
-		hash[gizmo.id] = gizmo;
-		gizmo.draw();
+	var previous = {}; // id -> gizmo
+	return function(set) {
+	    for (var id in set) { 
+		set[id].draw(); 
 	    }
-
 	    // kill sprites that are no longer used
-	    for (var i=0; i<previous.length; i++) {
-		var gizmo = previous[i];
-		if (!(gizmo.id in hash)) gizmo.remove_sprite();
+	    for (var id in previous) {
+		if (!(id in set)) previous[id].remove_sprite();
 	    }
-	    previous = gizmo_list;
+	    previous = set;
 	};
     }();
 

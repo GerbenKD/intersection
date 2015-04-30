@@ -83,7 +83,9 @@ var Tool = new function() {
 	return matches;
     }
 
-    // returns all incoming connections, including ties.
+    // returns all incoming connections, including tie chains. For a tie chain, the intermediate steps
+    // are omitted, so the connection contains the left tool where the chain ends up, its output socket,
+    // and the right tool and its input socket.
     this.incoming_connections = function() {
 	var res = [];
 	for (var i=0; i<this.max_input_socket(); i++) {
@@ -91,16 +93,23 @@ var Tool = new function() {
 	    if (conn) res.push([conn[0], conn[1], this, i, false]);
 	}
 	for (var i=0; i<this.max_output_socket(); i++) {
-	    var conn = this.get_tie(i);
-	    if (conn) res.push([conn[0], conn[1], this, i, true]);
+	    var pos = this.get_tie(i);
+	    if (!pos) continue;
+	    // found tie chain: follow it and report end target
+	    while (true) {
+		var newpos = pos[0].get_tie(pos[1]);
+		if (!newpos) break;
+		pos = newpos;
+	    }
+	    res.push([pos[0], pos[1], this, i, true]);
 	}
 	return res;
     }
 
-    this.build_draw_list = function(list) {
+    this.build_draw_set = function(set) {
 	for (var i=0; i<this.max_output_socket(); i++) {
 	    var gizmo = this.get_output(i);
-	    if (gizmo) list.push(gizmo);
+	    if (gizmo) set[gizmo.id] = gizmo;
 	}
     }
 
