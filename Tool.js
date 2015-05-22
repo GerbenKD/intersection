@@ -39,7 +39,6 @@ var Tool = new function() {
 	return new constr();
     };
     
-
     this.get_output = function(socket) { 
 	var tie = this.get_tie(socket);
 	return tie ? tie[0].get_output(tie[1]) : this.get_gizmo(socket);
@@ -47,7 +46,12 @@ var Tool = new function() {
 
     this.remove_output = function(socket) {
 	if (this.get_tie(socket)) this.untie(socket);
-	if (this.get_gizmo(socket)) this.remove_gizmo(socket);
+	if (this.get_gizmo(socket)) { 
+	    var r = this.get_gizmo(socket);
+	    console.log("here, I get a gizmo, namely "+r);
+	    this.remove_gizmo(socket);
+	    console.log("done");
+	}
     }
     
     this.first_free_output = function() {
@@ -61,16 +65,8 @@ var Tool = new function() {
     // return the Gizmo at the given input
     this.listen = function(socket) {
 	var connection = this.get_input(socket);
-	return connection[0].get_output(connection[1]);
+	return connection && connection[0].get_output(connection[1]);
     }
-
-    this.destroy = function() {
-	for (var i=0; i<this.max_output_socket(); i++) {
-	    this.remove_output(i);
-	}
-	this.inputs = [];
-    }
-
 
     this.get_matching_outputs = function(gizmo) {
 	var matches = [];
@@ -83,9 +79,7 @@ var Tool = new function() {
 	return matches;
     }
 
-    // returns all incoming connections, including tie chains. For a tie chain, the intermediate steps
-    // are omitted, so the connection contains the left tool where the chain ends up, its output socket,
-    // and the right tool and its input socket.
+    // returns all incoming connections, including ties.
     this.incoming_connections = function() {
 	var res = [];
 	for (var i=0; i<this.max_input_socket(); i++) {
@@ -95,11 +89,15 @@ var Tool = new function() {
 	for (var i=0; i<this.max_output_socket(); i++) {
 	    var pos = this.get_tie(i);
 	    if (!pos) continue;
-	    // found tie chain: follow it and report end target
-	    while (true) {
-		var newpos = pos[0].get_tie(pos[1]);
-		if (!newpos) break;
-		pos = newpos;
+	    /* Uncomment to follow tie chains (I currently think this should not be necessary)
+	       while (true) {
+	         var newpos = pos[0].get_tie(pos[1]);
+		 if (!newpos) break;
+		 pos = newpos;
+	       }
+	    */
+	    if (this.id==8) {
+		console.log("incoming connections: "+pos[0].id+":"+pos[1]+" at input "+i);
 	    }
 	    res.push([pos[0], pos[1], this, i, true]);
 	}
@@ -126,6 +124,14 @@ var BasicTool = Tool.extend(function() {
 	    this.ties     = [];
 	    for (var key in fields) { this[key] = fields[key]; }
 	});
+    }
+
+
+    this.destroy = function() {
+	for (var i=0; i<this.max_output_socket(); i++) {
+	    this.remove_output(i);
+	}
+	this.inputs = [];
     }
 
     // --------------------------------- inputs ----------------------------------
@@ -196,7 +202,7 @@ var BasicTool = Tool.extend(function() {
     this.get_gizmo = function(socket) { return this.gizmos[socket]; }
 
     this.remove_gizmo = function(socket) {
-	if (!this.gizmos[socket]) {
+	if (!(this.gizmos[socket])) {
 	    console.error("Attempt to remove a gizmo at socket "+socket+", but there is none");
 	    return;
 	}

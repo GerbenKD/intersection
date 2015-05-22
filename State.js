@@ -152,7 +152,7 @@ var State = new function() {
 
     /* --------------------------------------- Constructor ------------------------------------- */ 
 
-    var CP, CT, DRAG_START;
+    var CT_II, CT, DRAG_START;
 
     this.create_undo_frame = function() {
 	if (UNDO.current.length>0) {
@@ -274,12 +274,18 @@ var State = new function() {
 	
 	var undobuffer = savestate[1];
 
-	if (CP) CP.destroy();
-	CP = ControlPointTool.create();
+	if (CompoundTool.ControlPoints) {
+	    CompoundTool.ControlPoints.destroy();
+	}
+	CompoundTool.ControlPoints = ControlPointTool.create();
 	
+	if (CT) CT.destroy();
+	CT = CompoundTool.create();
+	CT_II = CT.get_input_interface();
+
 	// override "connect" and "disconnect" methods in the Interface tool to add/remove the
 	// "output" class from the connected gizmo.
-	var OI = InterfaceTool.create();
+	var OI = CT.get_output_interface();
 	OI.connect = function(left_tool, left_output_socket, right_in_socket) {
 	    InterfaceTool.connect.call(this, left_tool, left_output_socket, right_in_socket);
 	    left_tool.get_output(left_output_socket).set_class("output", true);
@@ -289,9 +295,6 @@ var State = new function() {
 	    InterfaceTool.disconnect.call(this, right_in_socket);
 	}
 	
-	if (CT) CT.destroy();
-	CT = CompoundTool.create(null, CP, OI);
-
 	CT.initialize(undobuffer);
 	UNDO = undobuffer;
     }
@@ -324,12 +327,12 @@ var State = new function() {
     }
 
     this.create_line = function(pos1, pos2) {
-	var cp1 = CP.first_free_output();
+	var cp1 = CT_II.first_free_output();
 	var cf1 = ["create_controlpoint", cp1, pos1];
 	CT.change(cf1);
 	register_change(cf1, ["remove_controlpoint", cp1]);
 
-	var cp2 = CP.first_free_output();
+	var cp2 = CT_II.first_free_output();
 	var cf2 = ["create_controlpoint", cp2, pos2];
 	CT.change(cf2);
 	register_change(cf2, ["remove_controlpoint", cp2]);
@@ -344,16 +347,17 @@ var State = new function() {
 	var savestatename = Storage.filename2savestatename(filename);
 	var embed_action = ["embed", savestatename];
 	var compound_id = CT.change(embed_action);
+	console.log("embedded '"+filename+"' as tool with id="+compound_id);
 	register_change(embed_action, ["remove_tool", compound_id]);
     }
 
     this.create_circle = function(pos_centre, pos_border) {
-	var cp_centre = CP.first_free_output();
+	var cp_centre = CT_II.first_free_output();
 	var cf_centre = ["create_controlpoint", cp_centre, pos_centre];
 	CT.change(cf_centre);
 	register_change(cf_centre, ["remove_controlpoint", cp_centre]);
 
-	var cp_border = CP.first_free_output();
+	var cp_border = CT_II.first_free_output();
 	var cf_border = ["create_controlpoint", cp_border, pos_border];
 	CT.change(cf_border);
 	register_change(cf_border, ["remove_controlpoint", cp_border]);
@@ -364,9 +368,11 @@ var State = new function() {
     }
 
     this.pick_up_controlpoint = function(cp_out_socket) {
-	DRAG_START = [cp_out_socket, CP.get_output(cp_out_socket).dup()];
+	DRAG_START = [cp_out_socket, CT_II.get_output(cp_out_socket).dup()];
 	var separated = CT.separate(cp_out_socket);
+	console.log("separation: ["+separated[0].join(",")+"] / ["+separated[1].join(",")+"]");
 
+	console.log("picking up controlpoint "+cp_out_socket);
 	// first find all point outputs connected to the same tool as the one being dragged...
 	var disqualified_outputs = {};
 	CT.foreach_listener(0, cp_out_socket, separated[1], function(connection) {
@@ -386,7 +392,7 @@ var State = new function() {
     }
 
     this.drag_controlpoint = function(pos) {
-	var gizmo = CP.get_output(DRAG_START[0]);
+	var gizmo = CT_II.get_output(DRAG_START[0]);
 	gizmo.pos = pos; // delay creating the event until drag end
     }
 
@@ -398,7 +404,7 @@ var State = new function() {
 
     this.release_controlpoint = function() {
 	var cp_out_socket = DRAG_START[0];
-	var gizmo = CP.get_output(cp_out_socket);
+	var gizmo = CT_II.get_output(cp_out_socket);
 	var new_pos = gizmo.dup();
 	var cf = ["move_controlpoint", cp_out_socket, new_pos];
 	var cb = ["move_controlpoint", cp_out_socket, DRAG_START[1]];

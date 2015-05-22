@@ -2,17 +2,12 @@
 
 var CompoundTool = Tool.extend(function() {
 
-    this.create = function(parent, ii, oi) {
+    this.create = function() {
 	return this.extend(function() {
 	    this.tools = [];
 	    this.id2tool = [];
-	    this.parent = parent;
-
-	    if (!ii) ii = InterfaceTool.create();
-	    if (!oi) oi = InterfaceTool.create();
-
-	    this.add_tool(ii);
-	    this.add_tool(oi);
+	    this.add_tool(InterfaceTool.create());
+	    this.add_tool(InterfaceTool.create());
 	});
     }
 
@@ -57,6 +52,14 @@ var CompoundTool = Tool.extend(function() {
     this.get_tie = function(right_out_socket) {
 	return this.id2tool[1].get_tie(right_out_socket);
     }
+
+    this.get_gizmo = function(right_out_socket) {
+	return this.id2tool[1].get_gizmo(right_out_socket);
+    }
+
+    this.remove_gizmo = function(right_out_socket) {
+	this.id2tool[1].remove_gizmo(right_out_socket);
+    }
     
     this.recalculate = function() {
 	for (var i = 0; i < this.tools.length; i++) {
@@ -65,6 +68,16 @@ var CompoundTool = Tool.extend(function() {
     }
 
     this.destroy = function() {
+	var ii = this.id2tool[0];
+
+	// first destroy any controlpoints that exist only for the benefit of this compound
+	for (var i=0; i<ii.max_input_socket(); i++) {
+	    var input = ii.get_input(i);
+	    if (input && input[0]===this.ControlPoints) {
+		this.ControlPoints.remove_output(input[1]);
+	    }
+	}
+
 	for (var i=0; i<this.id2tool.length; i++) {
 	    this.id2tool[i].destroy();
 	}
@@ -129,14 +142,13 @@ var CompoundTool = Tool.extend(function() {
 
 	var candidates = initialise_candidates(this.tools);
 	report("Initialised candidates", candidates);
-	var cpt = this.id2tool[0];
-	var state = cpt.get_state();
+	var state = this.ControlPoints.get_state();
 	for (var tst=0; tst<5; tst++) {
-	    cpt.randomize();
+	    this.ControlPoints.randomize();
 	    this.recalculate();
 	    filter(candidates);
 	}
-	cpt.restore_state(state);
+	this.ControlPoints.restore_state(state);
 	this.recalculate();
 
 	report("After filtering", candidates);
@@ -342,30 +354,28 @@ var CompoundTool = Tool.extend(function() {
 	return fu.apply(this, change.slice(1));
     }
 
-
-    this.create_controlpoint = function(socket, pos) {
-	if (this.parent) {
-	    var left_out_socket = this.parent.id2tool[0].first_free_output();
-	    this.parent.create_controlpoint(left_out_socket, pos);
-	    this.id2tool[0].tie(this.parent.id2tool[0], left_out_socket, socket);
-	} else {
-	    this.id2tool[0].create_controlpoint(socket, pos);
-	}
-    }
-
     /* --------------------------------------- Changes ------------------------------------------- */ 
 
-
+    // socket always refers to the input interface, not to the socket number in this.ControlPoints
     function C_create_controlpoint(socket, pos) {
-	this.create_controlpoint(socket, pos);
+	var left_out_socket = this.ControlPoints.first_free_output();
+	this.ControlPoints.create_controlpoint(left_out_socket, pos);
+	this.id2tool[0].connect(this.ControlPoints, left_out_socket, socket);
     }
 
     function C_move_controlpoint(cp_socket, pos) {
 	this.id2tool[0].get_output(cp_socket).pos = [pos[0], pos[1]];
     }
 
+    // socket always refers to the input interface, not to the socket number in this.ControlPoints
     function C_remove_controlpoint(cp_socket) {
-	this.id2tool[0].remove_output(cp_socket);
+	var input = this.id2tool[0].get_input(cp_socket);
+	if (input[0] !== this.ControlPoints) {
+	    console.error("Attempt to remove a controlpoint that isn't a controlpoint.");
+	    return;
+	}
+	this.id2tool[0].disconnect(cp_socket);
+	this.ControlPoints.remove_output(input[1]);
     }
 
     // returns tool id
@@ -453,13 +463,12 @@ var CompoundTool = Tool.extend(function() {
     }
 
     function C_connect_output(left_tool_id, left_out_socket, right_in_socket) {
-	var output_interface = this.id2tool[1];
-	output_interface.connect(this.id2tool[left_tool_id], left_out_socket, right_in_socket);
+	this.id2tool[1].connect(this.id2tool[left_tool_id], left_out_socket, right_in_socket);
     }
 
     function C_disconnect_output(left_tool_id, left_out_socket, right_in_socket) {
-	var output_interface = this.id2tool[1];
-	output_interface.disconnect(right_in_socket);
+	this.id2tool[1].disconnect(right_in_socket);
     }
 
 });
+
