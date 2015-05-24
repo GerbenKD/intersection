@@ -2,6 +2,9 @@
 
 var CompoundTool = Tool.extend(function() {
 
+    this.ControlPoints = ControlPointTool.create();
+	
+
     this.create = function() {
 	return this.extend(function() {
 	    this.tools = [];
@@ -33,6 +36,10 @@ var CompoundTool = Tool.extend(function() {
 	return this.id2tool[0].get_input(right_in_socket);
     }
 
+    this.get_output = function(socket) { 
+	return this.id2tool[1].get_output(socket); 
+    }
+
     this.connect = function(src_tool, src_socket, dst_socket) {
 	this.id2tool[0].connect(src_tool, src_socket, dst_socket);
     }
@@ -53,17 +60,16 @@ var CompoundTool = Tool.extend(function() {
 	return this.id2tool[1].get_tie(right_out_socket);
     }
 
-    this.get_gizmo = function(right_out_socket) {
-	return this.id2tool[1].get_gizmo(right_out_socket);
-    }
-
-    this.remove_gizmo = function(right_out_socket) {
-	this.id2tool[1].remove_gizmo(right_out_socket);
-    }
-    
     this.recalculate = function() {
 	for (var i = 0; i < this.tools.length; i++) {
 	    this.tools[i].recalculate();
+	}
+    }
+
+    this.remove_output = function(socket) {
+	if (this.get_tie(socket)) this.untie(socket);
+	if (this.id2tool[1].get_input(socket)) {
+	    this.id2tool[1].disconnect(socket);
 	}
     }
 
@@ -73,15 +79,23 @@ var CompoundTool = Tool.extend(function() {
 	// first destroy any controlpoints that exist only for the benefit of this compound
 	for (var i=0; i<ii.max_input_socket(); i++) {
 	    var input = ii.get_input(i);
-	    if (input && input[0]===this.ControlPoints) {
-		this.ControlPoints.remove_output(input[1]);
+	    if (!input) continue;
+	    console.log("i="+i+", disconnecting");
+	    ii.disconnect(i);
+
+	    while (input[0] !== CompoundTool.ControlPoints) {
+		var next = input[0].get_input(input[1]);
+		input[0].disconnect(input[1]);
+		input = next;
 	    }
+	    // found the controlpoint, destroy it
+ 	    input[0].remove_output(input[1]);
 	}
 
-	for (var i=0; i<this.id2tool.length; i++) {
+	for (var i=this.id2tool.length-1; i>=0; i--) {
 	    this.id2tool[i].destroy();
 	}
-    }
+     }
 
     // alternative to build_draw_list for when you wanna see everything
     this.build_draw_set_with_internals = function(set) {
@@ -339,7 +353,7 @@ var CompoundTool = Tool.extend(function() {
 	    var t = this.id2tool[tool_id];
 	    for (var j=0; j<t.max_output_socket(); j++) {
 		var tie = t.get_tie(j);
-		var info = tie ? [tool_id, j, undefined, tie] : [tool_id, j, t.get_gizmo(j), undefined];
+		var info = [tool_id, j, t.get_output(j), tie];
 		if (info[2] && func.apply(undefined, info)) res.push(info);
 	    }
 	}
@@ -399,6 +413,7 @@ var CompoundTool = Tool.extend(function() {
 	// initialisatie
 
 	this.add_tool_with_intersections(circle);
+
 	return circle.id;
     }
 
@@ -435,6 +450,20 @@ var CompoundTool = Tool.extend(function() {
 	var new_ct = CompoundTool.create(this);
 	new_ct.initialize(savestate[1]); // TODO remove socket array from savestate
 	this.add_tool_with_intersections(new_ct); // new_ct is now given the right id
+
+	// now rewire all new_ct's controlpoints via this compoundtool's input interface
+	var ii = this.id2tool[0];
+	for (var i=0; i<new_ct.max_input_socket(); i++) {
+	    var input = new_ct.get_input(i);
+	    if (input) {
+		assert(input[0]===CompoundTool.ControlPoints, 
+		       "Embedded compoundtool has non-controlpoint input?!");
+		var my_socket = ii.first_free_input();
+		new_ct.disconnect(i);
+		new_ct.connect(ii, my_socket, i);
+		ii.connect(CompoundTool.ControlPoints, input[1], my_socket);
+	    }
+	}
 	return new_ct.id;
     }
 

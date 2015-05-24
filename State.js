@@ -274,11 +274,6 @@ var State = new function() {
 	
 	var undobuffer = savestate[1];
 
-	if (CompoundTool.ControlPoints) {
-	    CompoundTool.ControlPoints.destroy();
-	}
-	CompoundTool.ControlPoints = ControlPointTool.create();
-	
 	if (CT) CT.destroy();
 	CT = CompoundTool.create();
 	CT_II = CT.get_input_interface();
@@ -303,6 +298,7 @@ var State = new function() {
     this.redraw = function() {
 	CT.recalculate();
 	var set = {};
+	CompoundTool.ControlPoints.build_draw_set(set);
 	CT.build_draw_set_with_internals(set);
 	Graphics.redraw(set);
     }

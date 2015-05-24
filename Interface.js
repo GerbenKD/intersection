@@ -51,11 +51,17 @@ var ControlPointTool = BasicTool.extend(function() {
 
 // TODO bug: get_gizmo reports connected gizmos, while its contract is to return only gizmos owned
 // by this tool. This leads to problems in Tool.remove_output.
+// Perhaps solution is to override get_output rather than get_gizmo?
 
 var InterfaceTool = BasicTool.extend(function() {
     this.create_output = function() {} // we never own any gizmos
     this.max_output_socket = function() { return this.max_input_socket(); }
-    this.get_gizmo = this.listen;
+
+    this.get_output = function(socket) { 
+	var tie = this.get_tie(socket);
+	return tie ? tie[0].get_output(tie[1]) : this.listen(socket);
+    }
+
     this.recalculate = function() {}
 
 });

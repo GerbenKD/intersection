@@ -37,23 +37,16 @@ var Tool = new function() {
     this.extend = function(constr) { 
 	constr.prototype = this;
 	return new constr();
-    };
-    
-    this.get_output = function(socket) { 
-	var tie = this.get_tie(socket);
-	return tie ? tie[0].get_output(tie[1]) : this.get_gizmo(socket);
     }
 
-    this.remove_output = function(socket) {
-	if (this.get_tie(socket)) this.untie(socket);
-	if (this.get_gizmo(socket)) { 
-	    var r = this.get_gizmo(socket);
-	    console.log("here, I get a gizmo, namely "+r);
-	    this.remove_gizmo(socket);
-	    console.log("done");
+    this.first_free_input = function() {
+	var socket;
+	for (socket = 0; socket < this.max_input_socket(); socket++) {
+	    if (!this.get_input(socket)) break;
 	}
+	return socket;
     }
-    
+
     this.first_free_output = function() {
 	var socket;
 	for (socket = 0; socket < this.max_output_socket(); socket++) {
@@ -149,9 +142,7 @@ var BasicTool = Tool.extend(function() {
     }
 
     this.disconnect = function(right_in_socket) {
-	if (!this.inputs[right_in_socket]) {
-	    console.error("Attempt to disconnect an unconnected socket "+socket); return;
-	}
+	assert(this.inputs[right_in_socket], "Attempt to disconnect an unconnected socket "+right_in_socket);
 	this.inputs[right_in_socket] = undefined;
     }
 
@@ -199,14 +190,19 @@ var BasicTool = Tool.extend(function() {
 	this.gizmos[socket] = this.create_output_gizmo(socket);
     }
 
-    this.get_gizmo = function(socket) { return this.gizmos[socket]; }
+    this.remove_output = function(socket) {
+	if (this.get_tie(socket)) this.untie(socket);
+	if (this.gizmos[socket]) this.gizmos[socket] = undefined;
 
-    this.remove_gizmo = function(socket) {
-	if (!(this.gizmos[socket])) {
-	    console.error("Attempt to remove a gizmo at socket "+socket+", but there is none");
-	    return;
+	if (this.gizmos[socket]) {
+	    this.gizmos[socket].destroy();
+	    this.gizmos[socket] = undefined;
 	}
-	this.gizmos[socket] = undefined;
+    }
+
+    this.get_output = function(socket) { 
+	var tie = this.get_tie(socket);
+	return tie ? tie[0].get_output(tie[1]) : this.gizmos[socket];
     }
 
 });
