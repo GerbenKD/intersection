@@ -2,6 +2,8 @@
 
 var ControlPointTool = BasicTool.extend(function() {
 
+    this.type = "ControlPointTool";
+
     this.create_controlpoint = function(socket, pos) {
 	if (this.gizmos[socket] || this.ties[socket]) {
 	    console.error("Attempt to add a controlpoint at a used socket"); return;
@@ -54,6 +56,9 @@ var ControlPointTool = BasicTool.extend(function() {
 // Perhaps solution is to override get_output rather than get_gizmo?
 
 var InterfaceTool = BasicTool.extend(function() {
+    
+    this.type = "InterfaceTool";
+
     this.create_output = function() {} // we never own any gizmos
     this.max_output_socket = function() { return this.max_input_socket(); }
 

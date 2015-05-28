@@ -73,28 +73,45 @@ var CompoundTool = Tool.extend(function() {
 	}
     }
 
-    this.destroy = function() {
+
+    /*
+      
+      embed:
+      creates new compoundtools-within-compoundtools
+      after embedding, all inputs of the embedded tool are to controlpoints
+      destroying a compoundtool should therefore:
+      (1) destroy its contents.
+      (2) all remaining inputs should be destroyed recursively up to and including their controlpoints
+    */
+
+    this.destroy = function(level) {
 	var ii = this.id2tool[0];
 
-	// first destroy any controlpoints that exist only for the benefit of this compound
-	for (var i=0; i<ii.max_input_socket(); i++) {
-	    var input = ii.get_input(i);
-	    if (!input) continue;
-	    console.log("i="+i+", disconnecting");
-	    ii.disconnect(i);
+	console.log("Destroying compoundtool, id="+this.id+", level="+level+", first deleting contents recursively");
 
-	    while (input[0] !== CompoundTool.ControlPoints) {
-		var next = input[0].get_input(input[1]);
+	// first destroy recursively
+	for (var i=this.id2tool.length-1; i>=2; i--) {
+	    this.id2tool[i].destroy((level||0)+1);
+	}
+
+	console.log("Still at id="+this.id+", killing controlpoints");
+
+	// then destroy any remaining controlpoints
+	for (var i=0; i<ii.max_input_socket(); i++) {
+	    var input = [ii, i];
+	    var next = ii.get_input(i);
+	    while (next) {
 		input[0].disconnect(input[1]);
 		input = next;
+		next = input[0].get_input(input[1]);
 	    }
-	    // found the controlpoint, destroy it
- 	    input[0].remove_output(input[1]);
+	    if (input[0]===CompoundTool.ControlPoints) {
+		input[0].remove_output(input[1]);
+	    }
 	}
 
-	for (var i=this.id2tool.length-1; i>=0; i--) {
-	    this.id2tool[i].destroy();
-	}
+	console.log("Done with compoundtool id="+this.id);
+
      }
 
     // alternative to build_draw_list for when you wanna see everything
