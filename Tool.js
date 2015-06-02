@@ -209,6 +209,8 @@ var BasicTool = Tool.extend(function() {
 
 var LineTool = BasicTool.extend(function() {
 
+    this.typename = "LineTool"; // intended for debugging
+
     this.recalculate = function() {
 	var point1 = this.listen(0), point2 = this.listen(1);
 	var line = this.gizmos[0];
@@ -232,6 +234,8 @@ var LineTool = BasicTool.extend(function() {
 
 var CircleTool = BasicTool.extend(function() {
 
+    this.typename = "CircleTool"; // intended for debugging
+
     this.recalculate = function() {
 	var center = this.listen(0), border = this.listen(1);
 	var circle = this.gizmos[0];
@@ -254,6 +258,8 @@ var CircleTool = BasicTool.extend(function() {
 
 
 var CCI_Tool = BasicTool.extend(function() {
+
+    this.typename = "CCI_Tool"; // intended for debugging
 
     this.create = function() {
 	var instance = BasicTool.create.call(this);
@@ -332,6 +338,8 @@ var CCI_Tool = BasicTool.extend(function() {
 
 var LCI_Tool = BasicTool.extend(function() {
 
+    this.typename = "LCI_Tool"; // intended for debugging
+
     this.create = function() {
 	var instance = BasicTool.create.call(this);
 	instance.create_output(0);
@@ -394,6 +402,8 @@ var LCI_Tool = BasicTool.extend(function() {
 });
 
 var LLI_Tool = BasicTool.extend(function() {
+
+    this.typename = "LLI_Tool"; // intended for debugging
 
     this.create = function() {
 	var instance = BasicTool.create.call(this);

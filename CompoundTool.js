@@ -2,8 +2,9 @@
 
 var CompoundTool = Tool.extend(function() {
 
+    this.typename = "CompoundTool"; // intended for debugging
+
     this.ControlPoints = ControlPointTool.create();
-	
 
     this.create = function() {
 	return this.extend(function() {
@@ -87,14 +88,10 @@ var CompoundTool = Tool.extend(function() {
     this.destroy = function(level) {
 	var ii = this.id2tool[0];
 
-	console.log("Destroying compoundtool, id="+this.id+", level="+level+", first deleting contents recursively");
-
 	// first destroy recursively
 	for (var i=this.id2tool.length-1; i>=2; i--) {
 	    this.id2tool[i].destroy((level||0)+1);
 	}
-
-	console.log("Still at id="+this.id+", killing controlpoints");
 
 	// then destroy any remaining controlpoints
 	for (var i=0; i<ii.max_input_socket(); i++) {
@@ -109,9 +106,6 @@ var CompoundTool = Tool.extend(function() {
 		input[0].remove_output(input[1]);
 	    }
 	}
-
-	console.log("Done with compoundtool id="+this.id);
-
      }
 
     // alternative to build_draw_list for when you wanna see everything
@@ -193,11 +187,11 @@ var CompoundTool = Tool.extend(function() {
 		var right_hash = candidates[left_keys[i]];
 		var right_keys = Object.keys(right_hash);
 		var first = right_hash[right_keys[0]];
-		var str = first[0].id+"@"+first[2]+" is duplicated in tool(s) ";
+		var str = first[0].id+"@"+first[2]+" (index "+first[3]+") is duplicated in tool(s) ";
 		for (var j=0; j<right_keys.length; j++) {
 		    var item = right_hash[right_keys[j]];
 		    if (j>0) str = str + " ; ";
-		    str = str + item[1].id;
+		    str = str + item[1].id + " (index "+item[4]+")";
 		}
 		console.log(str);
 	    }
@@ -205,7 +199,7 @@ var CompoundTool = Tool.extend(function() {
 
 	function initialise_candidates(tools) {
 	    // Initialise list = [[tool, tool_index, pos, output_socket], ...],
-	    // filtered for valid, untied points and sorted by x-coordinate. Include CPT
+	    // filtered for valid, untied points and sorted by x-coordinate.
 	    var list = [];
 	    for (var index=0; index < tools.length; index++) {
 		var tool = tools[index];
@@ -219,28 +213,28 @@ var CompoundTool = Tool.extend(function() {
 	    list.sort(function(a,b) { return a[2][0] - b[2][0]; });
 	    
 	    // Find all candidates: tools that are sufficiently close together. Tool with higher index
-	    // is a candidate for snapping to the tool with lower index.
+	    // is a candidate for snapping to the tool with lower index
+	    // AND (new) output sockets are candidates for snapping to lower output sockets on the same tool.
 	    var map = {};
 	    var j=0;
 	    for (var i=1; i<list.length; i++) {
 		var list_i = list[i];
-		var ix = list_i[2][0];
-		while (j<list.length && ix - list[j][2][0] > SMALL) { j++; }
+		var x = list_i[2][0];
+		while (j<list.length && x - list[j][2][0] > SMALL) { j++; }
 		for (var k=j; k<list.length; k++) {
-		    if (i==k) continue;
+		    if (i==k) continue; // don't snap a socket to itself
 		    var list_k = list[k];
-		    if (list_k[2][0] - ix >= SMALL) break;
-		    if (Point.distance_cc(list_k[2], list_i[2])<SMALL) {
-			// figure out who's source and who's destination
-			var info = list_k[1] > list_i[1] 
-			    ? [ list_i[0], list_k[0], list_i[3], list_i[1], list_k[1] ]  // i is destination
-			    : [ list_k[0], list_i[0], list_k[3], list_k[1], list_i[1] ];
-			// info is [left_tool, right_tool, left_out_socket, left_index, right_index]
-			var left_key = info[0]+":"+info[2];
-			var right_hash = map[left_key];
-			if (!right_hash) { right_hash = {}; map[left_key] = right_hash; }
-			right_hash[info[1]] = info;
-		    }
+		    if (list_k[2][0] - x >= SMALL || Point.distance_cc(list_k[2], list_i[2])>=SMALL) break;
+
+		    // figure out who's source and who's destination
+		    var info = (list_k[1] > list_i[1]) || (list_k[1]==list_i[1] && list_k[3]>list_i[3])
+			? [ list_i[0], list_k[0], list_i[3], list_i[1], list_k[1] ]  // i is destination
+			: [ list_k[0], list_i[0], list_k[3], list_k[1], list_i[1] ];
+		    // info is [left_tool, right_tool, left_out_socket, left_index, right_index]
+		    var left_key = info[0]+":"+info[2];
+		    var right_hash = map[left_key];
+		    if (!right_hash) { right_hash = {}; map[left_key] = right_hash; }
+		    right_hash[info[1]] = info;
 		}
 	    }
 	    return map;
@@ -261,6 +255,22 @@ var CompoundTool = Tool.extend(function() {
 		    var matching_outputs = src.get_matching_outputs(gizmo);
 		    if (matching_outputs.length>1) {
 			console.log("I found more than one matching output, so this is the really weird case");
+			console.log("The target is a "+info[0].typename+" with id="+info[0].id+" and index="+info[3]+", output socket "+info[2]);
+			console.log("The source is a "+info[1].typename+" with id="+info[1].id+" and index="+info[4]+", multiple output sockets");
+			for (var a=0; a<src.max_output_socket(); a++) {
+			    var tie = src.get_tie(a);
+			    var gizmo = src.gizmos[a];
+			    var msg = "socket "+a+": ";
+			    if (tie) {
+				msg = msg+"tied to a "+tie[0].typename+" with id "+tie[0].id+", socket "+tie[1];
+			    } else if (gizmo) {
+				msg = msg+"has an output gizmo of type "+gizmo.type;
+				if (gizmo.type=="point") msg = msg+" at ("+gizmo.pos[0]+","+gizmo.pos[1]+")";
+			    } else {
+				msg = "unattached";
+			    }
+			    console.log(msg);
+			}
 		    }
 		    if (matching_outputs.length==0) {
 			// these turn out not to be equal
@@ -303,7 +313,7 @@ var CompoundTool = Tool.extend(function() {
 	    if (right_out_sockets.length<1) console.error("Somehow a duplicate has disappeared?!");
 	    for (var j=0; j<right_out_sockets.length; j++) {
 		var right_out_socket = right_out_sockets[j];
-		if (!info[1].get_tie(right_out_socket)) {
+		if (!info[1].get_tie(right_out_socket) && (info[3]!=info[4]||info[2]<right_out_socket)) {
 		    func([info[0].id, info[2], info[1].id, right_out_socket, true]);
 		}
 	    }
