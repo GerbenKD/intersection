@@ -8,7 +8,7 @@ function main() {
     var DRAGGING;               // [tool, output #, dx(mouse-origin), dy(mouse-origin)]. Tool should be ControlPointTool
     var MOUSE = [0,0];          // [x,y]
     var STATE = "normal";       // one of normal, dragging, selecting_outputs or animating
-
+    var BUSY = false;
     Graphics.BODY.oncontextmenu = function() { return false; } // disable right click menu
 
     State.restore_state(post_animation);
@@ -16,6 +16,10 @@ function main() {
     // Assume the user is not currently dragging. Keypresses during a drag are allowed to go wrong
     window.onkeypress = function(e) {
 	var key = e.keyCode || e.charCode;
+
+	if (BUSY) console.error("Attempted reentry in onkeypress while busy");
+
+	BUSY = true;
 
 	if (STATE == "normal") {
 	    switch (key) {
@@ -71,6 +75,7 @@ function main() {
 		console.log("Pressed unknown key with keycode "+key);
 	    }
 	}
+	BUSY = false;
     }
 
     function post_animation() {

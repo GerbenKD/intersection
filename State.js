@@ -91,7 +91,8 @@ var State = new function() {
     function remove_reference(savestatename) {
 	var refname = savestatename+"_ref";
 	var nref = Storage.getstr(refname);
-	if (nref>1) { Storage.setstr(refname, nref-1); return; }
+	if (nref>1) { Storage.setstr(refname, (nref|0)-1); return; }
+	console.log("Destroying savestate '"+savestatename+"'");
 	var savestate = Storage.getobj(savestatename);
 	if (savestate) {
 	    var refs = get_references(savestate);
@@ -106,9 +107,10 @@ var State = new function() {
     function add_reference(savestatename) {
 	var refname = savestatename+"_ref";
 	var nref = Storage.getstr(refname);
-	if (nref != null) { Storage.setstr(refname, nref+1); return; }
+	if (nref != null) { Storage.setstr(refname, (nref|0)+1); return; }
 	Storage.setstr(refname, 1);
 	var refs = get_references(Storage.getobj(savestatename));
+	console.log("going to add references to "+JSON.stringify(refs));
 	for (var i=0; i<refs.length; i++) {
 	    add_reference(refs[i]);
 	}
@@ -120,10 +122,10 @@ var State = new function() {
 	var savestatename = new_savestate_name();
 	file2savestate[filename] = savestatename;
 	Storage.setobj("file2savestate", file2savestate);
-	console.log("saving buffer as '"+savestatename+"'");
+	console.log("saving savestate '"+savestatename+"' under filename '"+filename+"'");
 	Storage.setobj(savestatename, [0, UNDO]);//CP.get_socket_list(), UNDO]);
 	add_reference(savestatename);
-	remove_reference(old_savestatename);
+	if (old_savestatename) remove_reference(old_savestatename);
     }
 
     this.switch_file = function(filename, continuation) {
@@ -392,9 +394,10 @@ var State = new function() {
 	gizmo.pos = pos; // delay creating the event until drag end
     }
 
+    // returns outputs eligible for exporting from the compoundtool
     this.get_cool_outputs = function() {
 	return CT.select_outputs(CT.get_tool_ids(), function(tool_id,socket,gizmo,tie) {
-	    return tool_id!=0 && !tie; 
+	    return tool_id>=2 && !tie; 
 	});
     }
 
@@ -460,7 +463,7 @@ var State = new function() {
 	var cf, cb, right_in_socket;
 
 	CT.foreach_listener(left_tool_id, left_out_socket, [1], function(conn) { right_in_socket = conn[3]; });
-
+	
 	if (right_in_socket != undefined) {
 	    cf = ["disconnect_output", left_tool_id, left_out_socket, right_in_socket];
 	    cb = ["connect_output", left_tool_id, left_out_socket, right_in_socket];

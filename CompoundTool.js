@@ -224,7 +224,8 @@ var CompoundTool = Tool.extend(function() {
 		for (var k=j; k<list.length; k++) {
 		    if (i==k) continue; // don't snap a socket to itself
 		    var list_k = list[k];
-		    if (list_k[2][0] - x >= SMALL || Point.distance_cc(list_k[2], list_i[2])>=SMALL) break;
+		    if (list_k[2][0] - x >= SMALL) break;
+		    if (Point.distance_cc(list_k[2], list_i[2])>=SMALL) continue;
 
 		    // figure out who's source and who's destination
 		    var info = (list_k[1] > list_i[1]) || (list_k[1]==list_i[1] && list_k[3]>list_i[3])
@@ -251,8 +252,18 @@ var CompoundTool = Tool.extend(function() {
 		for (var right_ix=0; right_ix<right_tool_ids.length; right_ix++) {
 		    var right_key = right_tool_ids[right_ix];
 		    var info = right_hash[right_key];
-		    var src = info[1], gizmo = info[0].get_output(info[2]);
-		    var matching_outputs = src.get_matching_outputs(gizmo);
+		    var left_out_socket = info[2];
+		    var src = info[1], gizmo = info[0].get_output(left_out_socket);
+		    var matching_outputs_unfiltered = src.get_matching_outputs(gizmo);
+		    var matching_outputs = matching_outputs_unfiltered;
+		    if (info[0]===src) {
+			matching_outputs = [];
+			for (var i=0; i<matching_outputs_unfiltered.length; i++) {
+			    var right_out_socket = matching_outputs_unfiltered[i];
+			    if (left_out_socket < right_out_socket) matching_outputs.push(right_out_socket);
+			}
+		    }
+
 		    if (matching_outputs.length>1) {
 			console.log("I found more than one matching output, so this is the really weird case");
 			console.log("The target is a "+info[0].typename+" with id="+info[0].id+" and index="+info[3]+", output socket "+info[2]);
