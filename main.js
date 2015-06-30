@@ -9,8 +9,7 @@ function main() {
     var MOUSE = [0,0];          // [x,y]
     var STATE = "normal";       // one of normal, dragging, selecting_outputs or animating
     var BUSY = false;
-    Graphics.BODY.oncontextmenu = function() { return false; } // disable right click menu
-
+    
     State.restore_state(post_animation);
 
     // Assume the user is not currently dragging. Keypresses during a drag are allowed to go wrong
