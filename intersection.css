@@ -7,6 +7,18 @@ body.select_outputs {
     background-color: #e0e0e0;
 }
 
+svg.canvas {
+	position: absolute;
+}
+
+svg.stamp {
+	background-color: #EEEEEE;
+	position: absolute;
+	opacity: 0.95;
+	border: 1px solid #D0D0D0;
+}
+
+
 .line,.circle {
     fill: none;
     stroke: #8080b0;

@@ -21,10 +21,12 @@
 
 
 var Graphics = new function() {
-
-	var main_svg_object;
 	this.XS = window.innerWidth;
 	this.YS = window.innerHeight;
+	
+	var main_svg_object;
+	var stamps;
+	
 	
 	var N_STAMPS = 10;
 	
@@ -60,8 +62,8 @@ var Graphics = new function() {
 					this.group_elts[group_names[i]] = group_elt;
 					this.svg_elt.appendChild(group_elt);
 				}
-				this.svg_elt.setAttribute("left", x0);
-				this.svg_elt.setAttribute("top", y0);
+				this.svg_elt.style.left = x0;
+				this.svg_elt.style.top 	= y0;
 				this.svg_elt.setAttribute("width", width);
 				this.svg_elt.setAttribute("height", height);
 				DIV.appendChild(this.svg_elt);
@@ -97,6 +99,10 @@ var Graphics = new function() {
 			this.group_elts[group].appendChild(sprite_elt);
 			return new construct();
 		}
+		
+		this.add_class = function(cls) {
+			this.svg_elt.classList.add(cls);
+		}
 	}	
 	
 	// ------------------------ for backward compatibility: --------------------------------
@@ -124,6 +130,21 @@ var Graphics = new function() {
 	
 	// create SVG objects
 	main_svg_object = SVG.create(0,0,this.XS,this.YS);
+	main_svg_object.add_class("canvas");
+	
+	stamps = [];
+	
+	var stamp_margin = this.XS * 0.01;
+	var stamp_width  = (this.XS - ((N_STAMPS + 1) * stamp_margin)) / N_STAMPS;
+	var stamp_height = stamp_width * 0.8;
+	
+	console.log("Stamp margin: " + stamp_margin + ", stamp width: " + stamp_width + ", stamp height: " + stamp_height);
+	
+	for (var i = 0; i < N_STAMPS; i++) {
+		var stamp_object = SVG.create((stamp_margin * (i + 1)) + (stamp_width * i), this.YS - (stamp_height + stamp_margin), stamp_width, stamp_height);
+		stamps.push(stamp_object);
+		stamp_object.add_class("stamp");
+	}
 	
 	/*
 	
