@@ -145,29 +145,4 @@ var Graphics = new function() {
 		stamps.push(stamp_object);
 		stamp_object.add_class("stamp");
 	}
-	
-	/*
-	
-	function create_stamp(x0, y0, width, height) {
-		var stamp = document.createElementNS(this.SVG_NS, "svg");
-		this.DIV.appendChild(stamp);
-		
-		stamp.setAttribute("left", x0);
-		stamp.setAttribute("top", y0);
-		stamp.setAttribute("width", width);
-		stamp.setAttribute("height", height);
-		
-	} 
-	
-	this.SVG.setAttribute("width",  this.XS);
-	this.SVG.setAttribute("height", this.YS);
-	
-	var stamp_margin = this.XS * 0.01;
-	var stamp_width  = this.XS - ((this.N_STAMPS + 1) * stamp_margin) / this.N_STAMPS;
-	var stamp_height = stamp_width * 0.8;
-	
-	for (var i = 0; i < this.N_STAMPS; i++) {
-		create_stamp((stamp_margin * (i + 1)) + (stamp_width * i), this.YS - stamp_height - stamp_margin, stamp_width, stamp_height);
-	}
-*/
 }
