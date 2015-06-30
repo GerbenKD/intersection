@@ -285,13 +285,21 @@ var CCI_Tool = BasicTool.extend(function() {
 	    break;
 	case 1:
 	    var tie = this.ties[0];
-	    var tied_output = tie[0].get_output(tie[1]);
-	    this.gizmos[1].pos = Point.distance_cc(p1, tied_output.pos) < SMALL ? p2 : p1;
+	    if (tie[0]===this) {
+		this.gizmos[1].pos = p1;
+	    } else {
+		var tied_output = tie[0].get_output(tie[1]);
+		this.gizmos[1].pos = Point.distance_cc(p1, tied_output.pos) < SMALL ? p2 : p1;
+	    }
 	    break;
 	case 2: 
 	    var tie = this.ties[1];
-	    var tied_output = tie[0].get_output(tie[1]);
-	    this.gizmos[0].pos = Point.distance_cc(p1, tied_output.pos) < SMALL ? p2 : p1;
+	    if (tie[0]===this) {
+		this.gizmos[0].pos = p1;
+	    } else {
+		var tied_output = tie[0].get_output(tie[1]);
+		this.gizmos[0].pos = Point.distance_cc(p1, tied_output.pos) < SMALL ? p2 : p1;
+	    }
 	    break;
 	case 3:
 	    // no gizmos, do nothing!
@@ -374,13 +382,21 @@ var LCI_Tool = BasicTool.extend(function() {
 	    break;
 	case 1:
 	    var tie = this.ties[0];
-	    var tied_output = tie[0].get_output(tie[1]);
-	    this.gizmos[1].pos = Point.distance_cc(p1, tied_output.pos) < SMALL ? p2 : p1;
+	    if (tie[0]===this) {
+		this.gizmos[1].pos = p1;
+	    } else {
+		var tied_output = tie[0].get_output(tie[1]);
+		this.gizmos[1].pos = Point.distance_cc(p1, tied_output.pos) < SMALL ? p2 : p1;
+	    }
 	    break;
 	case 2: 
 	    var tie = this.ties[1];
-	    var tied_output = tie[0].get_output(tie[1]);
-	    this.gizmos[0].pos = Point.distance_cc(p1, tied_output.pos) < SMALL ? p2 : p1;
+	    if (tie[0]===this) {
+		this.gizmos[0].pos = p1;
+	    } else {
+		var tied_output = tie[0].get_output(tie[1]);
+		this.gizmos[0].pos = Point.distance_cc(p1, tied_output.pos) < SMALL ? p2 : p1;
+	    }
 	    break;
 	case 3:
 	    // no gizmos, do nothing!

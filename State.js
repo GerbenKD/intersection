@@ -10,6 +10,15 @@ function Reset() {
     }
 }
 
+function Fix() {
+    var ssn = Storage.filename2savestatename("file_0");
+    if (ssn) {
+	if (ssn in localStorage) delete localStorage[ssn];
+	delete localStorage[ssn];
+    }
+    Storage.setstr("current_file", "file_0");
+}
+
 var State = new function() {
 
     var UNDO;
