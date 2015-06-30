@@ -23,8 +23,8 @@
 var Graphics = new function() {
 
 	var main_svg_object;
-	var XS = window.innerWidth;
-	var YS = window.innerHeight;
+	this.XS = window.innerWidth;
+	this.YS = window.innerHeight;
 	
 	var N_STAMPS = 10;
 	
@@ -52,11 +52,11 @@ var Graphics = new function() {
 
 		this.create = function(x0, y0, width, height) {
 			function construct() {
-				this.svg_elt = document.createElementNS(this.SVG_NS, "svg");
+				this.svg_elt = document.createElementNS(SVG_NS, "svg");
 				this.group_elts = {};
 				var group_names = ["lines", "points", "highlighted", "controlpoints"];
 				for (var i=0; i<group_names.length; i++) {
-					var group_elt = document.createElementNS(this.SVG_NS, "g");
+					var group_elt = document.createElementNS(SVG_NS, "g");
 					this.group_elts[group_names[i]] = group_elt;
 					this.svg_elt.appendChild(group_elt);
 				}
@@ -85,7 +85,7 @@ var Graphics = new function() {
 		}	
 		
 		this.create_sprite = function(name, group) {
-			var sprite_elt = document.createElementNS(this.SVG_NS, name);
+			var sprite_elt = document.createElementNS(SVG_NS, name);
 			var svg_object = this;
 			
 			function construct() {
@@ -123,7 +123,7 @@ var Graphics = new function() {
 	BODY.oncontextmenu = function() { return false; } // disable right click menu
 	
 	// create SVG objects
-	main_svg_object = SVG.create(0,0,XS,YS);
+	main_svg_object = SVG.create(0,0,this.XS,this.YS);
 	
 	/*
 	
