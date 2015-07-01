@@ -134,15 +134,14 @@ var Graphics = new function() {
 	
 	stamps = [];
 	
-	var stamp_margin = this.XS * 0.01;
-	var stamp_width  = (this.XS - ((N_STAMPS + 1) * stamp_margin)) / N_STAMPS;
-	var stamp_height = stamp_width * 0.8;
-	
-	console.log("Stamp margin: " + stamp_margin + ", stamp width: " + stamp_width + ", stamp height: " + stamp_height);
+	var stamp_margin = this.YS * 0.01;
+	var stamp_height  = (this.YS - ((N_STAMPS + 1) * stamp_margin)) / N_STAMPS;
+	var stamp_width = stamp_height * 1.2;
 	
 	for (var i = 0; i < N_STAMPS; i++) {
-		var stamp_object = SVG.create((stamp_margin * (i + 1)) + (stamp_width * i), this.YS - (stamp_height + stamp_margin), stamp_width, stamp_height);
-		stamps.push(stamp_object);
-		stamp_object.add_class("stamp");
+	    var stamp_object = SVG.create(stamp_margin, (stamp_margin*(i+1)) + (stamp_height*i),
+					  stamp_width, stamp_height);
+	    stamps.push(stamp_object);
+	    stamp_object.add_class("stamp");
 	}
 }
