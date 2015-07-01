@@ -1,35 +1,10 @@
 "use strict";
 
 
-/*
- * 
- * var Graphics = new function() {
- * 	 this.N_STAMPS = 10;
- *   this.DIV = ???;
- * };
- * 
- * var SVG = new function() {
- *   this.create = function() {
- *   }
- *   
- *   this.create_sprite = function() {}
- * 
- * }
- * 
- */
-
-
-
 var Graphics = new function() {
 	this.XS = window.innerWidth;
 	this.YS = window.innerHeight;
-	
-	var main_svg_object;
-	var stamps;
-	
-	
-	var N_STAMPS = 10;
-	
+
 	var SVG_NS = "http://www.w3.org/2000/svg";
 
 	// html elements
@@ -50,28 +25,34 @@ var Graphics = new function() {
 		return [x,y];
 	}
 
-	var SVG = new function() {
+	this.SVG = new function() {
 
-		this.create = function(x0, y0, width, height) {
-			function construct() {
-				this.svg_elt = document.createElementNS(SVG_NS, "svg");
-				this.group_elts = {};
-				var group_names = ["lines", "points", "highlighted", "controlpoints"];
-				for (var i=0; i<group_names.length; i++) {
-					var group_elt = document.createElementNS(SVG_NS, "g");
-					this.group_elts[group_names[i]] = group_elt;
-					this.svg_elt.appendChild(group_elt);
-				}
-				this.svg_elt.style.left = x0;
-				this.svg_elt.style.top 	= y0;
-				this.svg_elt.setAttribute("width", width);
-				this.svg_elt.setAttribute("height", height);
-				DIV.appendChild(this.svg_elt);
+		this.create = function(bbox) {
+			var svg_elt = document.createElementNS(SVG_NS, "svg");
+			svg_elt.style.left = bbox[0];
+			svg_elt.style.top 	= bbox[1];
+			svg_elt.style.width = bbox[2];
+			svg_elt.style.height= bbox[3];
+			DIV.appendChild(svg_elt);
+			var group_elts = {};
+			var group_names = ["lines", "points", "highlighted", "controlpoints"];
+			for (var i=0; i<group_names.length; i++) {
+				var group_elt = document.createElementNS(SVG_NS, "g");
+				group_elts[group_names[i]] = group_elt;
+				svg_elt.appendChild(group_elt);
 			}
+
+			function construct() {
+				this.width = bbox[2];
+				this.height = bbox[3];
+				this.svg_elt = svg_elt;
+				this.group_elts = group_elts;
+			}
+
 			construct.prototype = this;
 			return new construct();
 		};
-		
+
 		var Sprite = new function() {
 			this.add_class = function(cls) { this.sprite_elt.classList.add(cls); }
 			this.remove_class = function(cls) { this.sprite_elt.classList.remove(cls); }
@@ -85,11 +66,11 @@ var Graphics = new function() {
 				this.group_name = group;
 			}
 		}	
-		
+
 		this.create_sprite = function(name, group) {
 			var sprite_elt = document.createElementNS(SVG_NS, name);
 			var svg_object = this;
-			
+
 			function construct() {
 				this.sprite_elt = sprite_elt;
 				this.group_name  = group;
@@ -99,49 +80,34 @@ var Graphics = new function() {
 			this.group_elts[group].appendChild(sprite_elt);
 			return new construct();
 		}
-		
+
 		this.add_class = function(cls) {
 			this.svg_elt.classList.add(cls);
 		}
-	}	
-	
-	// ------------------------ for backward compatibility: --------------------------------
-	this.create = function(name, group) {
-		return main_svg_object.create_sprite(name, group);
-	};
 
-
-	this.redraw = function() {
-		var previous = {}; // id -> gizmo
-		return function(set) {
+		this.redraw = function(set) {
+			var prev = this.previous_redraw_set;
+			if (!prev) prev = {};
+						
 			for (var id in set) { 
-				set[id].draw(); 
+				set[id].draw(this); 
 			}
 			// kill sprites that are no longer used
-			for (var id in previous) {
-				if (!(id in set)) previous[id].remove_sprite();
+			for (var id in prev) {
+				if (!(id in set)) prev[id].remove_sprite();
 			}
-			previous = set;
-		};
-	}();
+			this.previous_redraw_set = set;
+		}
+	}	
 
-	
-	BODY.oncontextmenu = function() { return false; } // disable right click menu
-	
-	// create SVG objects
-	main_svg_object = SVG.create(0,0,this.XS,this.YS);
-	main_svg_object.add_class("canvas");
-	
-	stamps = [];
-	
-	var stamp_margin = this.YS * 0.01;
-	var stamp_height  = (this.YS - ((N_STAMPS + 1) * stamp_margin)) / N_STAMPS;
-	var stamp_width = stamp_height * 1.2;
-	
-	for (var i = 0; i < N_STAMPS; i++) {
-	    var stamp_object = SVG.create(stamp_margin, (stamp_margin*(i+1)) + (stamp_height*i),
-					  stamp_width, stamp_height);
-	    stamps.push(stamp_object);
-	    stamp_object.add_class("stamp");
+	this.get_stamp = function(stamp_id) {
+		return stamps[stamp_id];
 	}
+
+
+
+//	------------------------ for backward compatibility: --------------------------------
+
+	BODY.oncontextmenu = function() { return false; } // disable right click menu
+
 }

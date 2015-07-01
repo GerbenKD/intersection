@@ -24,6 +24,7 @@ svg.stamp {
     stroke: #8080b0;
     stroke-width: 1px;
     pointer-events: none;
+	position: absolute;
 }
 
 .line.highlighted, .circle.highlighted {
@@ -49,6 +50,7 @@ svg.stamp {
     stroke: black;
     stroke-width: 2px;
     fill: #8080e0;
+    position: absolute;
 }
 
 .controlpoint.highlighted {
