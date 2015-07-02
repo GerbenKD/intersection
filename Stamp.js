@@ -111,8 +111,10 @@ var ConstructionStamp = Stamp.extend(function() {
 	construction.change_bounding_box(oldbb, newbb);
 	this.pos_stamp = construction.get_positions();
 	for (var i=0; i<this.pos_stamp.length; i++) {
-	    this.pos_stamp[i][0] += this.svg_object.bbox[0];
-	    this.pos_stamp[i][1] += this.svg_object.bbox[1];
+	    if (this.pos_stamp[i]) {
+		this.pos_stamp[i][0] += this.svg_object.bbox[0];
+		this.pos_stamp[i][1] += this.svg_object.bbox[1];
+	    }
 	}
 	construction.redraw(this.svg_object); 
     }
