@@ -33,12 +33,10 @@ var Graphics = new function() {
 
     this.create_sprite = function(name, group) {
 	var sprite_elt = document.createElementNS(SVG_NS, name);
-	var svg_object = this;
 
 	function construct() {
 	    this.sprite_elt = sprite_elt;
 	    this.group_name  = group;
-	    this.svg_object = svg_object;
 	}
 	construct.prototype = Sprite;
 	return new construct();
@@ -78,24 +76,76 @@ var Graphics = new function() {
 	this.attach = function(sprite) { this.group_elts[sprite.group_name].appendChild(sprite.sprite_elt); }
 	this.detach = function(sprite) { this.group_elts[sprite.group_name].removeChild(sprite.sprite_elt); }
 
-	this.redraw = function(set) {
-	    var prev = this.previous_redraw_set;
-	    if (!prev) prev = {};
-	    
-	    for (var id in set) { 
-		set[id].draw(this); 
-		if (!(id in prev)) this.attach(set[id].sprite);
+	this.create_renderer = function() {
+	    var prev = {};
+	    var me = this;
+
+	    return function(set, graphics_state) {
+		if (!set) set = {};
+		for (var id in set) { 
+		    set[id].draw(graphics_state); 
+		    if (!(id in prev)) me.attach(set[id].sprite);
+		}
+		// kill sprites that are no longer used
+		for (var id in prev) {
+		    if (!(id in set)) me.detach(prev[id].sprite);
+		}
+		prev = set;
 	    }
-	    // kill sprites that are no longer used
-	    for (var id in prev) {
-		if (!(id in set)) this.detach(prev[id].sprite);
-	    }
-	    this.previous_redraw_set = set;
 	}
-    }	
+    }
+    
 
     //	------------------------ for backward compatibility: --------------------------------
 
     BODY.oncontextmenu = function() { return false; } // disable right click menu
 
 }
+
+var Animation = new function() {
+    
+    this.run = function(anim) {
+	var frame = 0;
+	function animate() {
+	    var busy = anim(frame);
+	    frame++;
+	    if (busy) requestAnimationFrame(animate);
+	}
+	requestAnimationFrame(animate);
+    }
+
+    this.delay = function(anim, numframes) {
+	return function(frame) {
+	    return frame>=numframes ? anim(frame-numframes) : true;
+	}
+    }
+
+    this.parallel = function() {
+	var animations = Array.prototype.slice.call(arguments);
+	return function(frame) {
+	    if (animations.length==0) return false;
+	    for (var i=0; i<animations.length; i++) {
+		var f = animations[i];
+		if (!f(frame)) { animations.splice(i, 1); i--; }
+	    }
+	    return animations.length!=0;
+	}
+    }
+
+    this.sequential = function() {
+	var animations = Array.prototype.slice.call(arguments);
+	var frame0 = 0;
+
+	return function(frame) {
+	    var busy = undefined;
+	    while (busy==undefined) {
+		if (animations.length==0) return false;
+		var f = animations[0];
+		var busy = f(frame-frame0);
+		if (!busy) { animations.shift(); frame0 = frame; }
+	    }
+	    return animations.length!=0;
+	}
+
+    }
+}();

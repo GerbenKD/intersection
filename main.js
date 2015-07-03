@@ -19,7 +19,6 @@ function main() {
 
     var stamp = Storage.getstr("current_stamp");
     switch_stamp(stamp ? (stamp|0) : 2);
-    redraw();
         
     // Assume the user is not currently dragging. Keypresses during a drag are allowed to go wrong
     window.onkeypress = function(e) {
@@ -86,23 +85,56 @@ function main() {
 	BUSY = false;
     }
 
+
+
     function switch_stamp(stamp_id) {
+	if (stamp_id==CURRENT_STAMP) return;
+
+	var anims = [];
+	var gs = { bbox: MAIN_SVG.bbox };
+
 	if (CURRENT_STAMP) {
-	    if (stamp_id==CURRENT_STAMP) return;
+	    var seq_anim = [];
+	    // Move contents of main view to old stamp and unhide it
 	    State.save("file_"+(CURRENT_STAMP+1));
-	    STAMPS[CURRENT_STAMP].redraw();
-	    STAMPS[CURRENT_STAMP].svg_object.remove_class("hidden");
+	    var cur_stamp = STAMPS[CURRENT_STAMP];
+	    cur_stamp.redraw(); // TODO maybe the new state of the stamp should be passed directly
+	    var step1 = State.get_construction().get_animation(cur_stamp.pos_screen, cur_stamp.pos_stamp, 
+							       State.renderer, gs,
+							       MAIN_SVG.bbox, cur_stamp.svg_object.bbox,
+							      8, 3);
+	    var step2 = function() { cur_stamp.svg_object.remove_class("hidden"); };
+	    anims.push(Animation.sequential(step1, step2));
 	}
-	CURRENT_STAMP = stamp_id;
-	Storage.setstr("current_stamp", stamp_id);
-	var stamp = STAMPS[stamp_id];
-	stamp.svg_object.add_class("hidden");
-	stamp.svg_object.redraw({});
-	stamp.construction.animate(stamp.pos_stamp, stamp.pos_screen, MAIN_SVG, redraw);
-	State.load("file_"+(stamp_id+1)); // move to continuation
 
-    }
+	var new_stamp = STAMPS[stamp_id];
+	var renderer = MAIN_SVG.create_renderer();
 
+	var seq_anim = [];
+	seq_anim.push(function() { new_stamp.svg_object.add_class("hidden"); new_stamp.renderer(); });
+	if (new_stamp.construction) {
+	    seq_anim.push(new_stamp.construction.get_animation(new_stamp.pos_stamp, new_stamp.pos_screen,
+							       renderer, gs,
+							      new_stamp.svg_object.bbox, MAIN_SVG.bbox,
+							      3, 8));
+	}
+	var zoom_in = Animation.sequential.apply(undefined, seq_anim);
+	anims.push(CURRENT_STAMP ? Animation.delay(zoom_in, 20) : zoom_in);
+
+
+	var animate = Animation.parallel.apply(undefined, anims);
+	var finalize = function() {
+	    State.load("file_"+(stamp_id+1));
+	    CURRENT_STAMP = stamp_id;                   // in final continuation
+	    Storage.setstr("current_stamp", stamp_id);
+	    redraw();
+	    renderer();
+	}
+
+	Animation.run(Animation.sequential(animate, finalize));
+    }	
+
+ 
     // A highlight target is [tool, socket, gizmo, sprite]. But we should not use that too much as it
     // should be private to State!
 

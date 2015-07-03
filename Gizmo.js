@@ -42,15 +42,15 @@ var Gizmo = new function() {
 	if (this.sprite) delete this.sprite;
     }
 
-    this.draw = function(svg_object) {	
+    this.draw = function(graphics_state) {	
 	if (!this.sprite) {
-	    this.create_sprite();
+	    this.create_sprite(graphics_state);
 	    for (var cls in this.classes) {
 		if (this.classes[cls]) this.sprite.add_class(cls);
 	    }
 	}
 	this.set_class("hidden", !this.valid);
-	if (this.valid) this.move_sprite(svg_object);
+	if (this.valid) this.move_sprite(graphics_state);
     }
 
     this.has_class = function(cls) { return this.classes[cls]; }
@@ -94,7 +94,9 @@ var Point = Gizmo.extend(function() {
 	return Point.distance_cc(this.pos, pos);
     }
 
-    this.move_sprite = function() { this.sprite.attrib({ "cx": this.pos[0], "cy": this.pos[1] }); }
+    this.move_sprite = function() { 
+	this.sprite.attrib({ "cx": this.pos[0], "cy": this.pos[1] }); 
+    }
 });
 Point.add_log("I am the Point class");
 
@@ -122,12 +124,22 @@ var ControlPoint = Point.extend(function() {
 	return instance;
     }
 
-    this.create_sprite = function() {
+    this.create_sprite = function(graphics_state) {
 	var sprite = Graphics.create_sprite("circle", "controlpoints");
 	sprite.add_class("controlpoint");
-	sprite.attrib({"r":"8"});
+	var r = graphics_state.cp_radius || 8;
+	sprite.attrib({"r": r});
 	this.sprite = sprite;
     }
+
+    this.move_sprite = function(graphics_state) {
+	Point.move_sprite.call(this, graphics_state);
+	if ("cp_radius" in graphics_state) {
+	    this.sprite.attrib({"r":graphics_state.cp_radius});
+	}
+    }
+
+
 });
 ControlPoint.add_log("I am the ControlPoint class");
 
@@ -176,10 +188,9 @@ var Line = Gizmo.extend(function() {
 	return p ? Point.distance_cc(p, pos) : Infinity;
     }
 
-    this.move_sprite = function(svg_object) {
+    this.move_sprite = function(graphics_state) {
 	var sprite = this.sprite;
-	var width = svg_object.bbox[2];
-	var height = svg_object.bbox[3];
+	var bbox = graphics_state.bbox;
 	var exit1 = extend(this.p1, this.p2);
 	var exit2 = extend(this.p2, this.p1);
 
@@ -196,14 +207,14 @@ var Line = Gizmo.extend(function() {
 	function extend(p1, p2) {
 	    var x = p1[0], dx = p2[0]-p1[0], y = p1[1], dy = p2[1]-p1[1];
 	    if (dx!=0) {
-		var ix = dx>0 ? width : 0;
+		var ix = bbox[0] + (dx>0 ? bbox[2] : 0);
 		var iy = y + (ix-x)/dx * dy;
-		if (iy>=0 && iy<=height) return [ix, iy];
+		if (iy>=bbox[1] && iy<=bbox[1]+bbox[3]) return [ix, iy];
 	    }
 	    if (dy!=0) {
-		var iy = dy>0 ? height : 0;
+		var iy = bbox[1] + (dy>0 ? bbox[3] : 0);
 		var ix = x+(iy-y)/dy * dx;
-		if (ix>=0 && ix<=width) return [ix, iy];
+		if (ix>=bbox[0] && ix<=bbox[0]+bbox[2]) return [ix, iy];
 	    }
 	    return null;
 	}

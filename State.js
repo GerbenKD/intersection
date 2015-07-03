@@ -137,7 +137,10 @@ var State = new function() {
 	Storage.setstr("current_file", filename);
     }
 
-    this.attach_svg_object = function(svg_object) { this.svg_object = svg_object; }
+    this.attach_svg_object = function(svg_object) {
+	this.svg_object = svg_object; 
+	this.renderer = svg_object.create_renderer();
+    }
     
     /* --------------------------------------- Constructor ------------------------------------- */ 
 
@@ -284,7 +287,7 @@ var State = new function() {
     }
 
 
-    this.redraw = function () { CT.redraw(this.svg_object); }
+    this.redraw = function () { CT.redraw(this.renderer, { bbox: this.svg_object.bbox }); }
     
     // This creates an action (by putting all arguments in an array) and performs it
 

@@ -12,7 +12,8 @@ var Stamp = new function() {
     };
 
     this.attach_svg_object = function(svg_object) { 
-	this.svg_object = svg_object; 
+	this.svg_object = svg_object;
+	this.renderer = svg_object.create_renderer();
 	svg_object.add_class("stamp");
 	var me = this;
 	svg_object.svg_elt.onclick = function() { me.mouse_handler(me.stamp_id); }
@@ -22,7 +23,9 @@ var Stamp = new function() {
 
 var BasicStamp = Stamp.extend(function() {
     this.redraw = function() { 
-	this.svg_object.redraw(this.get_gizmo_set()); 
+	var bbox = this.svg_object.bbox;
+	this.renderer(this.get_gizmo_set(), { bbox: [0,0,bbox[2],bbox[3]],
+					      cp_radius: 3}); 
     }
 });
 
@@ -88,7 +91,7 @@ var ConstructionStamp = Stamp.extend(function() {
 
     this.redraw = function() {
 	var savestate = Storage.get_file(this.filename);
-	if (!savestate) { this.svg_object.redraw({}); return; }
+	if (!savestate) { this.renderer(); return; }
 	var construction = Construction.create();
 	construction.initialize(savestate[1]);
 	this.construction = construction;
@@ -116,7 +119,8 @@ var ConstructionStamp = Stamp.extend(function() {
 		this.pos_stamp[i][1] += this.svg_object.bbox[1];
 	    }
 	}
-	construction.redraw(this.svg_object); 
+	var bbox = this.svg_object.bbox;
+	construction.redraw(this.renderer, { bbox: [0,0,bbox[2],bbox[3]],
+					   cp_radius: 3}); 
     }
-    
 }); 

@@ -18,6 +18,10 @@ svg.stamp {
 	border: 1px solid #D0D0D0;
 }
 
+svg.stamp:hover {
+    background-color: #E8E8FF;
+}
+
 
 .line,.circle {
     fill: none;
