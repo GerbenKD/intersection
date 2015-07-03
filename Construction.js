@@ -50,15 +50,16 @@ var Construction = CompoundTool.extend(function() {
 
 	var dist = [];
 	var endtimes = [];
-	var total_time = 0;
+	// var total_time = 0;
 	for (var i=0; i<my_from.length; i++) {
 	    if (!my_from[i]) continue;
 	    dist[i] = Point.distance_cc(my_from[i], my_to[i]);
 	    var T = 2*Math.sqrt(0.5*dist[i]/a);
 	    endtimes[i] = T; 
-	    if (T > total_time) total_time = T;
-	    
+	    // if (T > total_time) total_time = T;
 	}
+	var size_from = Math.sqrt(bbox0[2]*bbox0[3]);
+	var size_to   = Math.sqrt(bbox1[2]*bbox1[3]);
 
 	return function(t) {
 	    var moving = 0;
@@ -84,7 +85,11 @@ var Construction = CompoundTool.extend(function() {
 
 	    me.set_positions(now);
 	    my_gs.bbox = [tl[0], tl[1], br[0]-tl[0], br[1]-tl[1]];
-	    var f = t/total_time;
+
+	    var size_now  = Math.sqrt(my_gs.bbox[2] * my_gs.bbox[3]);
+	    
+	    var f = (size_now - size_from)/(size_to - size_from);
+
 	    my_gs.cp_radius = cp_r0*(1-f) + cp_r1*f;
 
 	    me.redraw(renderer, my_gs);

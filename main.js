@@ -8,7 +8,6 @@ function main() {
     var DRAGGING;               // [tool, output #, dx(mouse-origin), dy(mouse-origin)]. Tool should be ControlPointTool
     var MOUSE = [0,0];          // [x,y]
     var STATE = "normal";       // one of normal, dragging, selecting_outputs or animating
-    var BUSY = false;
 
     var MAIN_SVG = Graphics.SVG.create([0,0,Graphics.XS,Graphics.YS]);
     var STAMPS = create_stamps(8);
@@ -24,72 +23,67 @@ function main() {
     window.onkeypress = function(e) {
 	var key = e.keyCode || e.charCode;
 
-	if (BUSY) console.error("Attempted reentry in onkeypress while busy");
+	if (STATE != "normal") return;
 
-	BUSY = true;
 
-	if (STATE == "normal") {
-	    switch (key) {
+	switch (key) {
 	    // case 48: State.switch_file("file_0", redraw); break;
 	    // case 49: State.switch_file("file_1", redraw); break;
 	    // case 50: State.switch_file("file_2", redraw); break;
-	    case 51: switch_stamp(2); break; 
-	    case 52: switch_stamp(3); break; 
-	    case 53: switch_stamp(4); break; 
-	    case 54: switch_stamp(5); break; 
-	    case 55: switch_stamp(6); break; 
-	    case 56: switch_stamp(7); break; 
+	case 51: switch_stamp(2); break; 
+	case 52: switch_stamp(3); break; 
+	case 53: switch_stamp(4); break; 
+	case 54: switch_stamp(5); break; 
+	case 55: switch_stamp(6); break; 
+	case 56: switch_stamp(7); break; 
 	    // case 57: State.switch_file("file_9", redraw); break;
 	    // case 41: State.clone_file("file_0", redraw); break;
 	    // case 33: State.clone_file("file_1", redraw); break;
 	    // case 64: State.clone_file("file_2", redraw); break;
-	    case 35: State.clone_file("file_3", redraw); break;
-	    case 36: State.clone_file("file_4", redraw); break;
-	    case 37: State.clone_file("file_5", redraw); break;
-	    case 94: State.clone_file("file_6", redraw); break;
-	    case 38: State.clone_file("file_7", redraw); break;
-	    case 42: State.clone_file("file_8", redraw); break;
+	case 35: State.clone_file("file_3", redraw); break;
+	case 36: State.clone_file("file_4", redraw); break;
+	case 37: State.clone_file("file_5", redraw); break;
+	case 94: State.clone_file("file_6", redraw); break;
+	case 38: State.clone_file("file_7", redraw); break;
+	case 42: State.clone_file("file_8", redraw); break;
 	    // case 40: State.clone_file("file_9", redraw); break;
 	    // case 186: State.create_undo_frame(); State.embed_file("file_0"); redraw(); break;
 	    // case 161: State.create_undo_frame(); State.embed_file("file_1"); redraw(); break;
 	    // case 8482: State.create_undo_frame();State.embed_file("file_2"); redraw(); break;
-	    case 163: State.create_undo_frame(); State.embed_file("file_3"); redraw(); break;
-	    case 162: State.create_undo_frame(); State.embed_file("file_4"); redraw(); break;
-	    case 8734: State.create_undo_frame();State.embed_file("file_5"); redraw(); break;
-	    case 167: State.create_undo_frame(); State.embed_file("file_6"); redraw(); break;
-	    case 182: State.create_undo_frame(); State.embed_file("file_7"); redraw(); break;
-	    case 8226: State.create_undo_frame();State.embed_file("file_8"); redraw(); break;
+	case 163: State.create_undo_frame(); State.embed_file("file_3"); redraw(); break;
+	case 162: State.create_undo_frame(); State.embed_file("file_4"); redraw(); break;
+	case 8734: State.create_undo_frame();State.embed_file("file_5"); redraw(); break;
+	case 167: State.create_undo_frame(); State.embed_file("file_6"); redraw(); break;
+	case 182: State.create_undo_frame(); State.embed_file("file_7"); redraw(); break;
+	case 8226: State.create_undo_frame();State.embed_file("file_8"); redraw(); break;
 	    // case 170: State.create_undo_frame(); State.embed_file("file_9"); redraw(); break;
-	    case 108: // 'l', line
-		State.create_undo_frame();
-		State.create_line([MOUSE[0]-100, MOUSE[1]], [MOUSE[0]+100,MOUSE[1]]);
-		redraw();
-		break;
-	    case 99: // 'c', circle
-		State.create_undo_frame();
-		State.create_circle([MOUSE[0], MOUSE[1]], [MOUSE[0]+100,MOUSE[1]]);
-		redraw();
-		break;
-	    case 122: // Z, undo
-		STATE = "animating";
-		State.undo(redraw, MAIN_SVG);
-		break;
-	    case 120: // X, redo
-		STATE = "animating";
-		State.redo(redraw, MAIN_SVG);
-		break;
-	    default:
-		console.log("Pressed unknown key with keycode "+key);
-	    }
+	case 108: // 'l', line
+	    State.create_undo_frame();
+	    State.create_line([MOUSE[0]-100, MOUSE[1]], [MOUSE[0]+100,MOUSE[1]]);
+	    redraw();
+	    break;
+	case 99: // 'c', circle
+	    State.create_undo_frame();
+	    State.create_circle([MOUSE[0], MOUSE[1]], [MOUSE[0]+100,MOUSE[1]]);
+	    redraw();
+	    break;
+	case 122: // Z, undo
+	    STATE = "animating";
+	    State.undo(redraw, MAIN_SVG);
+	    break;
+	case 120: // X, redo
+	    STATE = "animating";
+	    State.redo(redraw, MAIN_SVG);
+	    break;
+	default:
+	    console.log("Pressed unknown key with keycode "+key);
 	}
-	BUSY = false;
     }
 
-
-
     function switch_stamp(stamp_id) {
-	if (stamp_id==CURRENT_STAMP) return;
-
+	if (STATE != "normal" || stamp_id==CURRENT_STAMP) return;
+	STATE = "animating";
+	
 	var anims = [];
 	var gs = { bbox: MAIN_SVG.bbox };
 
@@ -129,6 +123,7 @@ function main() {
 	    Storage.setstr("current_stamp", stamp_id);
 	    redraw();
 	    renderer();
+	    STATE = "normal";
 	}
 
 	Animation.run(Animation.sequential(animate, finalize));
@@ -244,7 +239,7 @@ function main() {
 	State.redraw();
 	HIGHLIGHT_TARGETS = State.get_controlpoints(); 
 	highlight(); 
-	STATE = "normal";
+	STATE = "normal"; // TODO: move this to the place responsible for STATE = "animating" (UNDO/REDO)
     }
 
     function stamp_click_handler(stamp_id) {
