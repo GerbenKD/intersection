@@ -106,7 +106,7 @@ var ConstructedPoint = Point.extend(function() {
     this.create_sprite = function() { 
 	var sprite = Graphics.create_sprite("circle", "points");
 	sprite.add_class("intersectionpoint");
-	sprite.attrib({"r":"3"});
+	sprite.attrib({"r":"4"});
 	this.sprite = sprite;
     }
 
@@ -115,7 +115,6 @@ ConstructedPoint.add_log("I am the ConstructedPoint class");
 
 var ControlPoint = Point.extend(function() {
     this.valid = true;
-    this.controlpoint = true;
 
     this.create = function(pos) {
 	var instance = Point.create.call(this);
@@ -189,6 +188,7 @@ var Line = Gizmo.extend(function() {
     }
 
     this.move_sprite = function(graphics_state) {
+
 	var sprite = this.sprite;
 	var bbox = graphics_state.bbox;
 	var exit1 = extend(this.p1, this.p2);
@@ -207,14 +207,14 @@ var Line = Gizmo.extend(function() {
 	function extend(p1, p2) {
 	    var x = p1[0], dx = p2[0]-p1[0], y = p1[1], dy = p2[1]-p1[1];
 	    if (dx!=0) {
-		var ix = bbox[0] + (dx>0 ? bbox[2] : 0);
+		var ix = dx>0 ? bbox[2] : 0;
 		var iy = y + (ix-x)/dx * dy;
-		if (iy>=bbox[1] && iy<=bbox[1]+bbox[3]) return [ix, iy];
+		if (iy>=0 && iy<=bbox[3]) return [ix, iy];
 	    }
 	    if (dy!=0) {
-		var iy = bbox[1] + (dy>0 ? bbox[3] : 0);
+		var iy = dy>0 ? bbox[3] : 0;
 		var ix = x+(iy-y)/dy * dx;
-		if (ix>=bbox[0] && ix<=bbox[0]+bbox[2]) return [ix, iy];
+		if (ix>0 && ix<=bbox[2]) return [ix, iy];
 	    }
 	    return null;
 	}

@@ -10,6 +10,7 @@ var Graphics = new function() {
     // html elements
     var BODY = document.getElementById("body");
     var DIV  = document.getElementById("div");
+    var MAINDIV = document.getElementById("maindiv");
 
     // this.add_class    = function(elt, cls) { elt.classList.add(cls); }
     // this.remove_class = function(elt, cls) { elt.classList.remove(cls); }
@@ -45,30 +46,48 @@ var Graphics = new function() {
     this.SVG = new function() {
 
 	this.create = function(bbox) {
-	    var svg_elt = document.createElementNS(SVG_NS, "svg");
-	    svg_elt.style.left = bbox[0];
-	    svg_elt.style.top 	= bbox[1];
-	    svg_elt.style.width = bbox[2];
-	    svg_elt.style.height= bbox[3];
-	    DIV.appendChild(svg_elt);
-	    var group_elts = {};
-	    var group_names = ["lines", "points", "highlighted", "controlpoints"];
-	    for (var i=0; i<group_names.length; i++) {
-		var group_elt = document.createElementNS(SVG_NS, "g");
-		group_elts[group_names[i]] = group_elt;
-		svg_elt.appendChild(group_elt);
-	    }
-
+	 
 	    function construct() {
-		this.bbox = bbox;
+		var svg_elt = document.createElementNS(SVG_NS, "svg");
+		var group_elts = {};
+		var group_names = ["lines", "points", "highlighted", "controlpoints"];
+		for (var i=0; i<group_names.length; i++) {
+		    var group_elt = document.createElementNS(SVG_NS, "g");
+		    group_elts[group_names[i]] = group_elt;
+		    svg_elt.appendChild(group_elt);
+		}
 		this.svg_elt = svg_elt;
 		this.group_elts = group_elts;
+		this.set_bbox(bbox);
+		DIV.appendChild(svg_elt);
 	    }
 
 	    construct.prototype = this;
 	    return new construct();
 	};
 
+	this.set_bbox = function(bbox) {
+	    this.bbox = bbox;
+	    this.svg_elt.style.left  = bbox[0];
+	    this.svg_elt.style.top   = bbox[1];
+	    this.svg_elt.style.width = bbox[2];
+	    this.svg_elt.style.height= bbox[3];
+	}
+
+	// moves the svg element to maindiv
+	this.focus = function() {
+	    DIV.removeChild(this.svg_elt);
+	    this.remove_class("deselected");
+	    this.add_class("selected");
+	    MAINDIV.appendChild(this.svg_elt);
+	}
+
+	this.unfocus = function() {
+	    MAINDIV.removeChild(this.svg_elt);
+	    this.remove_class("selected");
+	    this.add_class("deselected");
+	    DIV.appendChild(this.svg_elt);
+	}
 
 	this.add_class = function(cls) { this.svg_elt.classList.add(cls); }
 	this.remove_class = function(cls) { this.svg_elt.classList.remove(cls); }
@@ -76,12 +95,29 @@ var Graphics = new function() {
 	this.attach = function(sprite) { this.group_elts[sprite.group_name].appendChild(sprite.sprite_elt); }
 	this.detach = function(sprite) { this.group_elts[sprite.group_name].removeChild(sprite.sprite_elt); }
 
+	function arrays_equal(a, b) {
+	    if (a === b) return true;
+	    if (a == null || b == null) return false;
+	    if (a.length != b.length) return false;
+
+	    // If you don't care about the order of the elements inside
+	    // the array, you should sort both arrays here.
+
+	    for (var i = 0; i < a.length; ++i) {
+		if (a[i] !== b[i]) return false;
+	    }
+	    return true;
+	}
+
 	this.create_renderer = function() {
 	    var prev = {};
 	    var me = this;
 
 	    return function(set, graphics_state) {
 		if (!set) set = {};
+		if (graphics_state.bbox && !arrays_equal(graphics_state.bbox, me.bbox)) {
+		    me.set_bbox(graphics_state.bbox);
+		}
 		for (var id in set) { 
 		    set[id].draw(graphics_state); 
 		    if (!(id in prev)) me.attach(set[id].sprite);
@@ -120,8 +156,7 @@ var Animation = new function() {
 	}
     }
 
-    this.parallel = function() {
-	var animations = Array.prototype.slice.call(arguments);
+    this.parallel = function(animations) {
 	return function(frame) {
 	    if (animations.length==0) return false;
 	    for (var i=0; i<animations.length; i++) {
@@ -132,8 +167,7 @@ var Animation = new function() {
 	}
     }
 
-    this.sequential = function() {
-	var animations = Array.prototype.slice.call(arguments);
+    this.sequential = function(animations) {
 	var frame0 = 0;
 
 	return function(frame) {

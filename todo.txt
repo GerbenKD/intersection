@@ -1,84 +1,9 @@
-To do lijst, bug tracker en timeline voor intersection.
+- stamps staan achter een transparante div met een gat erin
+- alle constructions worden gerendered op een bepaalde schaal
+- stamps tonen alleen outputs (als die er zijn)
+- de move_controlpoints na embed_tool moeten worden afgesloten met een undo_frame
+- buttons voor undo, rewind all the way, redo, fast forward
+- wat vaker saven. (op undo_frame?)
+- als je een stamp niet ver genoeg het scherm in sleept springt ie terug
+- de stamp verdwijnt tijdens het draggen en als je m loslaat verschijnt een "nieuwe"
 
-*******************************************************************************
-* Grote stappen die moeten worden gedaan:
-*******************************************************************************
-
-1. Fix de issue dat het spel de verschillende snijpunten door elkaar haalt
-Hoeveelheid werk: 2 dagen
-Af: begin maart
-
-2. Laden/saven/undo.
-Hoeveelheid werk: 2 dagen
-Af: half maart
-
-3. Toevoegen van het puzzelelement
-Hoeveelheid werk: 2 dagen, of 3 als we punten identificeren nog niet voor (1) hebben geimplementeerd
-Af: begin april
-(Vanaf nu is het een leuk spel)
-
-4. Implementeren van een mooi user interface, over muziek nadenken
-Hoeveelheid werk: 2 dagen?
-Af: midden april
-(Playable demo)
-
-5. Puzzels maken, details gladstrijken, playtesten
-
-6. Publiceren?
-
-*******************************************************************************
-* Details:
-*******************************************************************************
-
--------------------------------------------------------------------------------
-1. Fix de issue dat het spel de verschillende snijpunten door elkaar haalt
-Hoeveelheid werk: 2 dagen
-Af: begin maart
-
-Probleem:
-- alle LCI en CCI objecten hebben twee outputs. Het probleem is dat de volgorde van die twee outputs consistent moet blijven. Het probleem treedt in ieder geval op als je het randpunt van een cirkel C vastmaakt aan een ander punt P. Door P gaan altijd weer andere lijnen of cirkels {l,c,...}. Die andere lijnen en cirkels hebben een of meer snijpunten met C; die snijpunten moeten altijd P op *dezelfde* output houden!
-
-Oplossing: nog niet helemaal bedacht.
-
-
-
--------------------------------------------------------------------------------
-2. Laden/saven/undo.
-Hoeveelheid werk: 2 dagen
-Af: half maart
-
-Dit ontwerp moet nog verder worden uitgewerkt. Maar uit het emailtje dat ik had gestuurd:
-
-1. We coderen elke gewenste state change van de constructie in een javascript object dat gejsonificeerd kan worden (dus alle waardes in het object zijn strings of getallen, geen functies of andere moeilijke dingen). We krijgen dus nu concrete “Action” objecten. De Actions bevatten ook de informatie die nodig is om de state change juist weer ongedaan te maken. Volgens mij zijn die Actions een soort beans, als ik jou laatst goed had begrepen :)
-
-2. We maken een functie die een Action uitvoert, en een andere die m juist weer ongedaan maakt.
-
-3. We hebben een array U van undo frames. Elk undo frame bestaat uit een lijstje van Actions. Met undo worden alle Actions ongedaan gemaakt tot aan het juiste punt. Met een redo worden ze opnieuw gedaan tot het juiste punt. En het mooie is, save kan nu gewoon bestaan uit het opslaan van de jsonificatie van U!
-
-Om het wat concreter te maken, volgens mij moeten er dit soort actions komen:
-
-- Voeg een controlepunt toe op socket 3
-- Connect input socket 5 van tool id 8 met output socket 2 van tool id 15
-- Focus controlepunt op socket 3; oude volgorde van 'tools’ array was [id, id, id, …] (de nieuwe volgorde kan berekend worden, maar voor de andere kant op moeten we de oude state bewaren)
-- Sleep controlepunt op socket 10 van (123,435) naar (24,352)
-- Voeg graphics toe aan tool met id 12
-- Creeer LLI_Tool/CCI_Tool/LCI_Tool met tool id 5 en tool met id 8
-- Snap controlepunt op socket 6 met de tool met id 5 op input socket 2
-
--------------------------------------------------------------------------------
-3. Toevoegen van het puzzelelement
-Hoeveelheid werk: 2 dagen, of 3 als we punten identificeren nog niet voor (1) hebben geimplementeerd
-Af: begin april
-(Vanaf nu is het een leuk spel)
-
--------------------------------------------------------------------------------
-4. Implementeren van een mooi user interface, over muziek nadenken
-Hoeveelheid werk: 2 dagen?
-Af: midden april
-(Playable demo)
-
--------------------------------------------------------------------------------
-5. Puzzels maken, details gladstrijken, playtesten
-
--------------------------------------------------------------------------------
-6. Publiceren?

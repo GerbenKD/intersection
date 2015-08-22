@@ -23,6 +23,7 @@ var State = new function() {
 
     var UNDO;
     var CT_II, CT, DRAG_START;
+    var STAMP;
 
     /* --------------------------------------- Load/save --------------------------------------- */ 
 
@@ -33,21 +34,6 @@ var State = new function() {
        savestate_<n>_ref   : reference count of savestate_<n>
        file2savestate      : { filename: savestatename }
     */
-
-    this.restore_state = function() {
-	if (!Storage.haskey("file2savestate")) Storage.setobj("file2savestate", {});
-    }
-
-
-    this.load = function(filename) {
-	var savestate = Storage.get_file(filename);
-	if (!savestate) savestate = [[], { buffer:  [],
-					   current: [],
-					   current_stored: [],
-					   index: 0
-					 }];
-	initialize.call(this, savestate);
-    }
 
     function new_savestate_name() {
 	var i = 0;
@@ -101,50 +87,24 @@ var State = new function() {
 	if (nref != null) { Storage.setstr(refname, (nref|0)+1); return; }
 	Storage.setstr(refname, 1);
 	var refs = get_references(Storage.getobj(savestatename));
-	console.log("going to add references to "+JSON.stringify(refs));
 	for (var i=0; i<refs.length; i++) {
 	    add_reference(refs[i]);
 	}
     }
 
-    this.save = function(filename) {
+    this.save = function() {
 	var file2savestate = Storage.getobj("file2savestate");
-	var old_savestatename = file2savestate[filename];
+	var old_savestatename = file2savestate[STAMP.filename];
 	var savestatename = new_savestate_name();
-	file2savestate[filename] = savestatename;
+	file2savestate[STAMP.filename] = savestatename;
 	Storage.setobj("file2savestate", file2savestate);
-	console.log("saving savestate '"+savestatename+"' under filename '"+filename+"'");
-	Storage.setobj(savestatename, [0, UNDO]);//CP.get_socket_list(), UNDO]);
+	console.log("saving stamp "+(STAMP.id+1));
+	Storage.setobj(savestatename, [0, UNDO]);
 	add_reference(savestatename);
 	if (old_savestatename) remove_reference(old_savestatename);
     }
 
-    this.switch_file = function(filename, continuation) {
-	var current = Storage.getstr("current_file");
-	if (filename==current) return;
-	console.log("Switching to "+filename);
-	save(current);
-	this.load(filename);
-	Storage.setstr("current_file", filename);
-    }
-
-    this.clone_file = function(filename) {
-	var current = Storage.getstr("current_file");
-	if (filename == current) return;
-	console.log("Cloning into '"+filename+"'");
-	save(current);
-	save(filename);
-	Storage.setstr("current_file", filename);
-    }
-
-    this.attach_svg_object = function(svg_object) {
-	this.svg_object = svg_object; 
-	this.renderer = svg_object.create_renderer();
-    }
-    
     /* --------------------------------------- Constructor ------------------------------------- */ 
-
-    this.get_construction = function() { return CT; }
 
     this.create_undo_frame = function() {
 	if (UNDO.current.length>0) {
@@ -155,73 +115,40 @@ var State = new function() {
 	}
     }
 
-    // alternative sigmoid function
-    // function bounded_sigmoid(x, a) { return 1 / (1+Math.pow((1-x)/x, a)); }
-
-    /* t: current time, T: total time for moving that controlpoint,
-       X: total distance, f: fraction of total distance covered
-       Points are subject to acceleration 2a, so that x = a t^2.
-       From halfway, they decelerate with the same speed.
-       They reach halfway point when t = sqrt(0.5 X/a), so the transition takes twice that number of 
-       frames in total.
-
-
-    */
-    function animate_controlpoints(displacements, continuation, svg_object) {
-	var t = 0;
-	requestAnimationFrame(animate);
-	var a = 0.5;
-
-	function animate() {
-	    t++;
-	    var moving = 0;
-	    for (var cp_out_socket in displacements) {
-		var d = displacements[cp_out_socket];
-		var X = Point.distance_cc(d[0], d[1]);
-		var T = 2*Math.sqrt(0.5*X/a);
-		if (t > T) continue;
-		moving++; // this point is still moving
-		var f = 2*t > T ? 1 - a*(T-t)*(T-t)/X : (a * t * t)/X;
-		var pos = [ d[0][0]*(1-f) + d[1][0]*f,
-			    d[0][1]*(1-f) + d[1][1]*f ];
-		CT.change(["move_controlpoint", cp_out_socket, pos], true);
-		State.redraw(svg_object);
+    function animate_frame(frame, direction) {
+	function do_change(i) {
+	    return function() { 
+		CT.change(frame[i][direction]); STAMP.redraw(); 
 	    }
-	    if (moving > 0) requestAnimationFrame(animate); else continuation();
 	}
-    }
 
-    function animate_frame(frame, direction, continuation, svg_object) {
-	if (frame.length==0) { continuation(); return; }
-	var num_moves = 0;
-	while (num_moves < frame.length && frame[num_moves][direction][0] == "move_controlpoint") {
-	    num_moves++;
-	}
-	if (num_moves==0) {
-	    CT.change(frame[0][direction]);
-	    animate_frame(frame.slice(1), direction, continuation, svg_object);
-	} else {
-	    var displacements = {};
-	    for (var i=0; i<num_moves; i++) {
+	var anims = [];
+	var move_from = [], move_to = [];
+	for (var i=0; i<frame.length; i++) {
+	    if (frame[i][direction][0] == "move_controlpoint") {
 		var fw = frame[i][direction], bw = frame[i][1-direction];
 		var cp_out_socket = bw[1];
-		if (!(cp_out_socket in displacements)) {
-		    displacements[cp_out_socket] = [bw[2], fw[2]];
-		} else {
-		    displacements[cp_out_socket][1] = fw[2];
+		if (move_from[cp_out_socket]==undefined) move_from[cp_out_socket] = bw[2];
+		move_to[cp_out_socket] = fw[2];
+	    } else {
+		if (move_from.length != 0) {
+		    var old_from = move_from, old_to = move_to;
+		    anims.push(function() { console.log("Animation: from="+JSON.stringify(old_from)+" to="+JSON.stringify(old_to))});
+		    anims.push(STAMP.animate_no_zoom(move_from, move_to));
+		    move_from = [];
+		    move_to = [];
 		}
+		anims.push(do_change(i));
 	    }
-	    console.log("Animating controlpoints:");
-	    for (var key in displacements) {
-		console.log(key+": "+JSON.stringify(displacements[key][0])+" -> "+JSON.stringify(displacements[key][1]));
-	    }
-	    animate_controlpoints(displacements, 
-				  function() { animate_frame(frame.slice(num_moves), direction, continuation, svg_object); }, svg_object);
 	}
+	if (move_from.length != 0) {
+	    anims.push(STAMP.animate_no_zoom(move_from, move_to));
+	}
+	return Animation.sequential(anims);
     }
 
     // continuation is executed once undo animation has completed
-    this.undo = function(continuation, svg_object) {
+    this.undo = function(continuation) {
 	// figure out what undo frame we're dealing with and handle administration
 	var frame;
 	if (UNDO.index == UNDO.buffer.length && UNDO.current.length > 0) {
@@ -237,12 +164,17 @@ var State = new function() {
 	    }
 	}
 
-	// actually undo all the changes
-	if (frame) animate_frame(frame.slice().reverse(), 1, continuation, svg_object); else continuation();
+	if (frame) {
+	    // actually undo all the changes
+	    var animation = animate_frame(frame.slice().reverse(), 1);
+	    Animation.run(Animation.sequential([animation, continuation]));
+	} else {
+	    continuation();
+	}
     }
 
     // continuation is executed once redo animation has completed
-    this.redo = function(continuation, svg_object) {
+    this.redo = function(continuation) {
 	// figure out what undo frame we're dealing with and handle administration
 	var frame;
 	if (UNDO.index == UNDO.buffer.length && UNDO.current_stored.length > 0) {
@@ -258,18 +190,29 @@ var State = new function() {
 	    }
 	}
 
-	// actually undo all the changes
-	if (frame) animate_frame(frame, 0, continuation, svg_object); else continuation();
+	if (frame) {
+	    // actually redo all the changes
+	    var animation = animate_frame(frame, 0);
+	    Animation.run(Animation.sequential([animation, continuation]));
+	} else {
+	    continuation();
+	}
     }
 
-    function initialize(savestate, svg_object) {
-
+    this.initialize = function(stamp) {
+	STAMP = stamp;
+	CT = stamp.get_construction();
+	CT_II = CT.get_input_interface();
+	if (!Storage.haskey("file2savestate")) Storage.setobj("file2savestate", {});
+	var savestate = Storage.get_file(stamp.filename);
+	if (!savestate) savestate = [[], { buffer:  [],
+					   current: [],
+					   current_stored: [],
+					   index: 0
+					 }];
 	var undobuffer = savestate[1];
 
-	if (CT) CT.destroy();
-	CT = Construction.create();
-	CT_II = CT.get_input_interface();
-
+	/*
 	// override "connect" and "disconnect" methods in the Interface tool to add/remove the
 	// "output" class from the connected gizmo.
 	var OI = CT.get_output_interface();
@@ -281,17 +224,17 @@ var State = new function() {
 	    this.get_output(right_in_socket).set_class("output", false);
 	    InterfaceTool.disconnect.call(this, right_in_socket);
 	}
+	*/
 
-	CT.initialize(undobuffer);
 	UNDO = undobuffer;
     }
 
 
-    this.redraw = function () { CT.redraw(this.renderer, { bbox: this.svg_object.bbox }); }
+    this.redraw = function () { STAMP.redraw(); }
     
     // This creates an action (by putting all arguments in an array) and performs it
 
-    function register_change(change_forward, change_backward) {
+    this.register_change = function(change_forward, change_backward) {
 	if (UNDO.index < UNDO.buffer.length || UNDO.current_stored.length > 0) {
 	    if (UNDO.index < UNDO.buffer.length) console.log("Killing frames "+UNDO.index+"-"+(UNDO.buffer.length-1));
 	    if (UNDO.current_stored.length>0) console.log("Killing current frame");
@@ -312,41 +255,45 @@ var State = new function() {
 	var cp1 = CT_II.first_free_output();
 	var cf1 = ["create_controlpoint", cp1, pos1];
 	CT.change(cf1);
-	register_change(cf1, ["remove_controlpoint", cp1]);
+	this.register_change(cf1, ["remove_controlpoint", cp1]);
 
 	var cp2 = CT_II.first_free_output();
 	var cf2 = ["create_controlpoint", cp2, pos2];
 	CT.change(cf2);
-	register_change(cf2, ["remove_controlpoint", cp2]);
+	this.register_change(cf2, ["remove_controlpoint", cp2]);
 
 	var cf3 = ["create_line", cp1, cp2];
 	var id = CT.change(cf3);
-	register_change(cf3, ["remove_tool", id]);
+	this.register_change(cf3, ["remove_tool", id]);
+	return id;
     }
 
 
-    this.embed_file = function(filename, pos) {
+    this.embed_file = function(filename, bbox) {
 	var savestatename = Storage.filename2savestatename(filename);
-	var embed_action = ["embed", savestatename];
+	var embed_action = ["embed", savestatename, bbox];
 	var compound_id = CT.change(embed_action);
 	console.log("embedded '"+filename+"' as tool with id="+compound_id);
-	register_change(embed_action, ["remove_tool", compound_id]);
+	this.register_change(embed_action, ["remove_tool", compound_id]);
+	return compound_id;
     }
 
     this.create_circle = function(pos_centre, pos_border) {
 	var cp_centre = CT_II.first_free_output();
 	var cf_centre = ["create_controlpoint", cp_centre, pos_centre];
 	CT.change(cf_centre);
-	register_change(cf_centre, ["remove_controlpoint", cp_centre]);
+	this.register_change(cf_centre, ["remove_controlpoint", cp_centre]);
 
 	var cp_border = CT_II.first_free_output();
 	var cf_border = ["create_controlpoint", cp_border, pos_border];
 	CT.change(cf_border);
-	register_change(cf_border, ["remove_controlpoint", cp_border]);
+	this.register_change(cf_border, ["remove_controlpoint", cp_border]);
 
 	var cf_circle = ["create_circle", cp_centre, cp_border];
 	var id = CT.change(cf_circle);
-	register_change(cf_circle, ["remove_tool", id]);
+	this.register_change(cf_circle, ["remove_tool", id]);
+
+	return id;
     }
 
     this.pick_up_controlpoint = function(cp_out_socket) {
@@ -379,12 +326,6 @@ var State = new function() {
     }
 
     // returns outputs eligible for exporting from the compoundtool
-    this.get_cool_outputs = function() {
-	return CT.select_outputs(CT.get_tool_ids(), function(tool_id,socket,gizmo,tie) {
-	    return tool_id>=2 && !tie; 
-	});
-    }
-
     this.release_controlpoint = function() {
 	var cp_out_socket = DRAG_START[0];
 	var gizmo = CT_II.get_output(cp_out_socket);
@@ -392,12 +333,14 @@ var State = new function() {
 	var cf = ["move_controlpoint", cp_out_socket, new_pos];
 	var cb = ["move_controlpoint", cp_out_socket, DRAG_START[1]];
 	CT.change(cf); // perhaps not strictly necessary
-	register_change(cf, cb); 
+	this.register_change(cf, cb); 
 	DRAG_START = undefined;
     }
 
 
     this.snap = function(cp_out_socket, left_tool_id, left_out_socket) {
+
+	var me = this; // need to bind this object for function calls (ugh)
 
 	// Step 1: reorder the tools array
 	var separated = CT.separate(cp_out_socket);
@@ -405,13 +348,13 @@ var State = new function() {
 	var cf = ["shuffle_tools", new_tool_ids];
 	var old_tool_ids = CT.change(cf);
 	var cb = ["shuffle_tools", old_tool_ids];
-	register_change(cf, cb);
+	this.register_change(cf, cb);
 
 	// Step 2: create a change that moves the controlpoint onto the target
 	var old_pos = DRAG_START[1];
 	var new_pos = CT.get_output_for_id(left_tool_id, left_out_socket).dup();
 	// I could call CT.change here, but it is not necessary as the controlpoint is removed in step 4 anyway
-	register_change(["move_controlpoint", cp_out_socket, new_pos],
+	this.register_change(["move_controlpoint", cp_out_socket, new_pos],
 			["move_controlpoint", cp_out_socket, old_pos]);
 
 
@@ -421,27 +364,35 @@ var State = new function() {
 	    var cb = ["redirect", [left_tool_id, left_out_socket, connection[2], connection[3], connection[4]],
 		      [connection[0], connection[1]]];
 	    CT.change(cf);
-	    register_change(cf, cb);
+	    me.register_change(cf, cb);
 	});
 
 	// Step 4: remove the old controlpoint
 	cf = ["remove_controlpoint", cp_out_socket];
 	cb = ["create_controlpoint", cp_out_socket, CT.get_output_for_id(left_tool_id, left_out_socket).dup()];
 	CT.change(cf);
-	register_change(cf, cb);
+	this.register_change(cf, cb);
 
 	// Step 5: look for new dupicate points and tie them together
 	CT.foreach_tie(function(connection) {
 	    var cf = ["tie",   connection[0], connection[1], connection[2], connection[3]];
 	    var cb = ["untie", connection[2], connection[3]];
 	    CT.change(cf);
-	    register_change(cf, cb);
+	    me.register_change(cf, cb);
 	});
     }
 
+    this.get_all_highlight_targets = function() {
+	return CT.select_outputs(CT.get_tool_ids(), function(tool_id,socket,gizmo,tie) {
+	    return tool_id!=1 && !tie; 
+	});
+    }
+
+    /*
     this.get_controlpoints = function() {
 	return CT.select_outputs([0], function() { return true; }); // all controlpoints
     }
+    */
 
     this.toggle_output = function(left_tool_id, left_out_socket) {
 	var cf, cb, right_in_socket;
@@ -457,8 +408,12 @@ var State = new function() {
 	    cb = ["disconnect_output", left_tool_id, left_out_socket, right_in_socket];
 	} 
 	CT.change(cf);
-	register_change(cf, cb);
+	this.register_change(cf, cb);
     }
+
+    this.get_cp_positions = function(id) { return CT.get_cp_positions(CT.id2tool[id]); }
+    this.set_scaled_cp_positions = function(cppos, bbox0, bbox1) { CT.set_scaled_cp_positions(cppos, bbox0, bbox1); }
+
 
 
 };

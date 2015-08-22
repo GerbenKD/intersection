@@ -12,26 +12,30 @@ svg.canvas {
 }
 
 svg.stamp {
-	background-color: #F8F8F8;
-	position: absolute;
-	opacity: 0.95;
-	border: 1px solid #D0D0D0;
+    background-color: #c0c0c0;
+    position: absolute;
+    opacity: 0.95;
 }
 
-svg.stamp:hover {
-    background-color: #E8E8FF;
+svg.stamp.selected {
+    background-color: white;
+    border-right: none;
+}
+
+svg.stamp.deselected:hover {
+    background-color: #606060; /* #E8E8FF;*/
 }
 
 
 .line,.circle {
     fill: none;
-    stroke: #8080b0;
-    stroke-width: 1px;
+    stroke: black;
+    stroke-width: 0.3%;
     pointer-events: none;
-	position: absolute;
+    position: absolute;
 }
 
-.line.highlighted, .circle.highlighted {
+.line.highlighted, .circle.highlighted, line.output.highlighted, circle.output.highlighted {
     stroke: red;
 }
 
@@ -40,7 +44,7 @@ svg.stamp:hover {
 }
 
 .line.output, .circle.output {
-    stroke-width: 4px;
+    stroke-width: 0.6%;
 }
 
 
@@ -53,7 +57,7 @@ svg.stamp:hover {
     pointer-events: none;
     stroke: black;
     stroke-width: 2px;
-    fill: #8080e0;
+    fill: #0040ff;
     position: absolute;
 }
 
@@ -90,16 +94,16 @@ svg.stamp:hover {
 .intersectionpoint {
     pointer-events: none;
     stroke: black;
-    stroke-width: 1px;
+    stroke-width: 0.2%;
     fill: white;
 }
 
-.intersectionpoint.highlighted {
+.intersectionpoint.highlighted,.intersectionpoint.highlighted.output {
     fill: red;
 }
 
 .intersectionpoint.output {
-    fill: black;
+    fill: #00d040;
 }
 
 
