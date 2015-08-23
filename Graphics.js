@@ -12,6 +12,10 @@ var Graphics = new function() {
     var DIV  = document.getElementById("div");
     var MAINDIV = document.getElementById("maindiv");
 
+    var TOPRULER = document.getElementById("topruler");
+    var BOTTOMRULER = document.getElementById("bottomruler");
+    var BUTTONS = document.getElementById("buttons");
+
     // this.add_class    = function(elt, cls) { elt.classList.add(cls); }
     // this.remove_class = function(elt, cls) { elt.classList.remove(cls); }
 
@@ -31,6 +35,30 @@ var Graphics = new function() {
 	this.remove_class = function(cls) { this.sprite_elt.classList.remove(cls); }
 	this.attrib = function(attrib) { for (var key in attrib) { this.sprite_elt.setAttribute(key, attrib[key]); } }
     }	
+
+    this.topruler = function(bbox) { set_elt_bbox(TOPRULER, bbox); }
+    this.bottomruler = function(bbox) { set_elt_bbox(BOTTOMRULER, bbox); console.log("set bottom bbox to "+JSON.stringify(bbox));}
+
+    this.create_button = function(which, onclick, init) {
+	var size = Graphics.XS/40;
+	var svg_elt = document.createElementNS(SVG_NS, "svg");
+	svg_elt.onclick = onclick;
+	svg_elt.classList.add("button");
+	svg_elt.style.top = Graphics.YS-size;
+	svg_elt.style.left = Graphics.XS-(5-which)*size;
+	svg_elt.style.width = size;
+	svg_elt.style.height = size;
+	init(svg_elt, SVG_NS, size);
+	BUTTONS.appendChild(svg_elt);
+    }
+
+    function set_elt_bbox(elt, bbox) {
+	var st = elt.style;
+	st.left = bbox[0];
+	st.top = bbox[1];
+	st.width = bbox[2];
+	st.height = bbox[3];
+    }
 
     this.create_sprite = function(name, group) {
 	var sprite_elt = document.createElementNS(SVG_NS, name);
@@ -68,23 +96,18 @@ var Graphics = new function() {
 
 	this.set_bbox = function(bbox) {
 	    this.bbox = bbox;
-	    this.svg_elt.style.left  = bbox[0];
-	    this.svg_elt.style.top   = bbox[1];
-	    this.svg_elt.style.width = bbox[2];
-	    this.svg_elt.style.height= bbox[3];
+	    set_elt_bbox(this.svg_elt, bbox);
 	}
 
 	// moves the svg element to maindiv
 	this.focus = function() {
 	    DIV.removeChild(this.svg_elt);
 	    this.remove_class("deselected");
-	    this.add_class("selected");
 	    MAINDIV.appendChild(this.svg_elt);
 	}
 
 	this.unfocus = function() {
 	    MAINDIV.removeChild(this.svg_elt);
-	    this.remove_class("selected");
 	    this.add_class("deselected");
 	    DIV.appendChild(this.svg_elt);
 	}

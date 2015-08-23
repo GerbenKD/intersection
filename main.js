@@ -13,6 +13,8 @@ function main() {
     var STAMPS = create_stamps(8);
     var CURRENT_STAMP = undefined;
 
+    make_buttons();
+
     var stamp = Storage.getstr("current_stamp");
     switch_stamp(stamp ? (stamp|0) : 0);
         
@@ -37,37 +39,26 @@ function main() {
 	if (STATE != "normal") return;
 
 	switch (key) {
-	case 49: embed_stamp(0); break;
-	case 50: embed_stamp(1); break;
-	case 51: embed_stamp(2); break;
-	case 52: embed_stamp(3); break;
-	case 53: embed_stamp(4); break;
-	case 54: embed_stamp(5); break;
-	case 55: embed_stamp(6); break;
-	case 56: embed_stamp(7); break;
-	case 122: // Z, undo
-	    STATE = "animating";
-	    State.undo(undo_continuation);
-	    break;
+	case 49: switch_stamp(0); break;
+	case 50: switch_stamp(1); break;
+	case 51: switch_stamp(2); break;
+	case 52: switch_stamp(3); break;
+	case 53: switch_stamp(4); break;
+	case 54: switch_stamp(5); break;
+	case 122: undo(); break;
 	case 120: // X, redo
 	    STATE = "animating";
 	    State.redo(undo_continuation);
-	    break;
-	case 116: // T, test
-	    var stamp = STAMPS[0];
-	    var test_bbox;
-	    if (stamp.graphics_state.bbox[0] == stamp.small_bbox[0]) {
-		test_bbox = [150,300,500,300];
-	    } else {
-		test_bbox = stamp.small_bbox;
-	    }
-	    stamp.set_bbox(test_bbox);
-	    stamp.svg_object.svg_elt.style.opacity = 1;
 	    break;
 	default:
 	    console.log("Pressed unknown key with keycode "+key);
 	}
     }
+
+    function nil() {}
+
+    function undo() { STATE = "animating"; State.undo(undo_continuation); }
+    function redo() { STATE = "animating"; State.redo(undo_continuation); }
 
     function undo_continuation() {
 	STATE = "normal";
@@ -111,7 +102,7 @@ function main() {
     }
 
     function switch_stamp(stamp_id) {
-	if (STATE != "normal" || stamp_id==CURRENT_STAMP) return;
+	if (STATE != "normal" || stamp_id==CURRENT_STAMP || stamp_id >= STAMPS.length-2) return;
 	console.log("switching from stamp "+CURRENT_STAMP+" to "+stamp_id);
 	STATE = "animating";
 	var gs = {};
@@ -135,8 +126,7 @@ function main() {
 	var pre_zoom_in = function() {
 	    // WHEN: new stamp starts to grow from toolbar to main screen
  	    new_stamp.svg_object.focus();
-	    if (stamp_id > 0              ) STAMPS[stamp_id-1].svg_object.add_class("bottomborder");
-	    if (stamp_id < STAMPS.length-1) STAMPS[stamp_id+1].svg_object.add_class("topborder");
+	    move_ruler(stamp_id);
 	};
 	var do_zoom_in = new_stamp.animate_enlarge(gs);
 
@@ -251,46 +241,44 @@ function main() {
     }
 
     function mouseup(id, e) {
-	if (STATE == "embedding") { 
-	    STATE = "normal";
-	    HIGHLIGHT_TARGETS = State.get_all_highlight_targets();
-	    highlight();
-	    if (EMBEDDING[3]==0) {
-		console.log("This was actually a click!");
-		EMBEDDING = undefined;
-		if (id != CURRENT_STAMP) {
-		    if (id < STAMPS.length-2) switch_stamp(id);
-		    return;
-		} 
-	    } else if (EMBEDDING[3]==1) {
-		console.log("dropping embedded construction");
-		var opos = EMBEDDING[5];
-		var cpos = State.get_cp_positions(EMBEDDING[4]);
-		var changes = {};
-		for (var i=0; i<opos.length; i++) {
-		    var socket = opos[i][0], pos0=opos[i][1];
-		    if (!changes[socket]) changes[socket] = [undefined, pos0]; else changes[socket][1] = pos0;
-		}
-		for (var i=0; i<cpos.length; i++) {
-		    var socket = cpos[i][0], pos1=cpos[i][1];
-		    if (!changes[socket]) changes[socket] = [pos1, undefined]; else changes[socket][0] = pos1;
-		}
-		for (var socket in changes) {
-		    var pos0 = changes[socket][0], pos1 = changes[socket][1];
-		    assert(pos0!=undefined && pos1!=undefined, "Inconsistent controlpoint change during embedding");
-		    State.register_change(["move_controlpoint", socket, pos0], ["move_controlpoint", socket, pos1]);
-		}
-		State.redraw();
-		EMBEDDING = undefined;
-		HIGHLIGHT_TARGETS = State.get_all_highlight_targets();
-		console.log("dropped, highlight_targets = "+HIGHLIGHT_TARGETS.length+", state="+STATE);
-		highlight();
+	var old_state = STATE;
+	STATE = "normal";
+	if (old_state == "embedding") {
+	    switch (EMBEDDING[3]) {
+	    case 0: switch_stamp(id); break;
+	    case 1: drop_stamp(); break;
 	    }
-	    return;
+	    EMBEDDING = undefined;
+	} else if (old_state == "dragging") {
+	    drag_release();
+	    DRAGGING = undefined;
 	}
-	
-	if (id != CURRENT_STAMP) return;
-	if (STATE != "dragging") return;
+	HIGHLIGHT_TARGETS = State.get_all_highlight_targets();
+	highlight();
+    }
+
+    function drop_stamp() {
+	var opos = EMBEDDING[5];
+	var cpos = State.get_cp_positions(EMBEDDING[4]);
+	var changes = {};
+	for (var i=0; i<opos.length; i++) {
+	    var socket = opos[i][0], pos0=opos[i][1];
+	    if (!changes[socket]) changes[socket] = [undefined, pos0]; else changes[socket][1] = pos0;
+	}
+	for (var i=0; i<cpos.length; i++) {
+	    var socket = cpos[i][0], pos1=cpos[i][1];
+	    if (!changes[socket]) changes[socket] = [pos1, undefined]; else changes[socket][0] = pos1;
+	}
+	for (var socket in changes) {
+	    var pos0 = changes[socket][0], pos1 = changes[socket][1];
+	    assert(pos0!=undefined && pos1!=undefined, "Inconsistent controlpoint change during embedding");
+	    State.register_change(["move_controlpoint", socket, pos0], ["move_controlpoint", socket, pos1]);
+	}
+	State.create_undo_frame(); // make sure these controlpoint move events are not combined with the ones to follow
+	State.redraw();
+    }
+
+    function drag_release() {
 	unsparkle();
 	if (HIGHLIGHTED) {
 	    State.create_undo_frame();
@@ -301,10 +289,6 @@ function main() {
 	    if (!State.last_change_was_a_move()) State.create_undo_frame();
 	    State.release_controlpoint(DRAGGING[1], [MOUSE[0]+DRAGGING[2], MOUSE[1]+DRAGGING[3]]);
 	}
-	DRAGGING = undefined;
-	STATE = "normal";
-	HIGHLIGHT_TARGETS = State.get_all_highlight_targets();
-	highlight();
     }
 
     function mousedown(id, e) {
@@ -361,6 +345,88 @@ function main() {
 	}
 
 	return stamps;
+    }
+
+    function move_ruler(stamp_id) {
+	var stamp_height = Graphics.YS / STAMPS.length;
+	var stamp_width = stamp_height * 3/2;
+	var ytop = stamp_height * stamp_id;
+	Graphics.topruler([0, 0, stamp_width, ytop]);
+	Graphics.bottomruler([0, ytop+stamp_height, stamp_width, Graphics.YS-(ytop+stamp_height)]);
+    }
+
+    function make_buttons() {
+	var pi = Math.PI;
+
+	// converts an array of [x,y] coordinates to a string for use in a svg polygon
+	function to_str(size, r, points) {
+	    var res = "";
+	    for (var i=0; i<points.length; i++) {
+		if (i>0) res = res + " ";
+		res = res + (0.5*size*(1+r*points[i][0])).toFixed(1) + ","
+		          + (0.5*size*(1-r*points[i][1])).toFixed(1);
+	    }
+	    return res;
+	}
+
+	function polygon(svg_ns, size, r, points) {
+	    var poly = document.createElementNS(svg_ns, "polygon");
+	    poly.setAttribute("points", to_str(size, r, points));
+	    return poly;
+	}
+
+
+
+	function cos(a) { return Math.cos(a); }
+	function sin(a) { return Math.sin(a); }
+
+	Graphics.create_button(0, nil, function(svg_elt, svg_ns, size) {
+	    var p1 = [-1, 0], p2 = [cos(5/3*pi),sin(5/3*pi)], p3 = [cos(1/3*pi),sin(1/3*pi)];
+	    svg_elt.appendChild(polygon(svg_ns, size, 0.6, [[p1[0]+0.9,p1[1]],
+							    [p2[0]+0.9,p2[1]],
+							    [p3[0]+0.9,p3[1]]])); 
+	    svg_elt.appendChild(polygon(svg_ns, size, 0.6, [[p1[0]-0.3,p1[1]],
+							    [p2[0]-0.3,p2[1]],
+							    [p3[0]-0.3,p3[1]]])); 
+	    svg_elt.appendChild(polygon(svg_ns, size, 0.6, [[-1.5,-1],[-1.5,1],[-1.1,1],[-1.1,-1]]));
+	});
+
+	Graphics.create_button(1, undo, function(svg_elt, svg_ns, size) {
+	    var p1 = [-1, 0], p2 = [cos(5/3*pi),sin(5/3*pi)], p3 = [cos(1/3*pi),sin(1/3*pi)];
+	    svg_elt.appendChild(polygon(svg_ns, size, 0.6, [[p1[0],p1[1]],
+							    [p2[0],p2[1]],
+							    [p3[0],p3[1]]])); 
+	});
+
+	Graphics.create_button(2, redo, function(svg_elt, svg_ns, size) {
+	    var p1 = [1, 0], p2 = [cos(2/3*pi),sin(2/3*pi)], p3 = [cos(-2/3*pi),sin(-2/3*pi)];
+	    svg_elt.appendChild(polygon(svg_ns, size, 0.6, [[p1[0],p1[1]],
+							    [p2[0],p2[1]],
+							    [p3[0],p3[1]]])); 
+	});
+
+	Graphics.create_button(3, nil, function(svg_elt, svg_ns, size) {
+	    var p1 = [1, 0], p2 = [cos(2/3*pi),sin(2/3*pi)], p3 = [cos(-2/3*pi),sin(-2/3*pi)];
+	    svg_elt.appendChild(polygon(svg_ns, size, 0.6, [[p1[0]-0.9,p1[1]],
+							    [p2[0]-0.9,p2[1]],
+							    [p3[0]-0.9,p3[1]]])); 
+	    svg_elt.appendChild(polygon(svg_ns, size, 0.6, [[p1[0]+0.3,p1[1]],
+							    [p2[0]+0.3,p2[1]],
+							    [p3[0]+0.3,p3[1]]])); 
+	    svg_elt.appendChild(polygon(svg_ns, size, 0.6, [[1.5,-1],[1.5,1],[1.1,1],[1.1,-1]]));
+	});
+
+	Graphics.create_button(4, nil,function(svg_elt, svg_ns, size) {
+	    svg_elt.appendChild(polygon(svg_ns, size, 0.8, [[0.1,0.1],[0.3,0.1],
+							    [0.8,0.6], [0.8,0.1], [1,0.1],
+							    [1,1], [0.1,1], [0.1,0.8],
+							    [0.6,0.8], [0.1,0.3]]));
+	    svg_elt.appendChild(polygon(svg_ns, size, 0.8, [[-0.1,-0.1],[-0.3,-0.1],
+							    [-0.8,-0.6], [-0.8,-0.1], [-1,-0.1],
+							    [-1,-1], [-0.1,-1], [-0.1,-0.8],
+							    [-0.6,-0.8], [-0.1,-0.3]]));
+
+	});
     }
 
 }

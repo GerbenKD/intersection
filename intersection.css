@@ -7,25 +7,43 @@ body.select_outputs {
     background-color: #e0e0e0;
 }
 
+div {
+    position: absolute;
+}
+
+svg {
+    position: absolute;
+}
+
+svg.button {
+    fill: #00b000;
+    stroke: #008000;
+    stroke-width: 7%;
+}
+
+svg.button:hover {
+    fill: #00ff80;
+    stroke: #00b040;
+}
+
 svg.canvas {
 	position: absolute;
 }
 
 svg.stamp {
-    background-color: #c0c0c0;
-    position: absolute;
-    opacity: 0.95;
-}
-
-svg.stamp.selected {
     background-color: white;
-    border-right: none;
 }
 
 svg.stamp.deselected:hover {
-    background-color: #606060; /* #E8E8FF;*/
+    background-color: #808080; /* #E8E8FF;*/
 }
 
+
+div.ruler {
+    background-color: #00a000;
+    opacity: 0.2;
+    pointer-events: none;
+}
 
 .line,.circle {
     fill: none;
@@ -35,7 +53,7 @@ svg.stamp.deselected:hover {
     position: absolute;
 }
 
-.line.highlighted, .circle.highlighted, line.output.highlighted, circle.output.highlighted {
+.line.highlighted, .circle.highlighted, .line.output.highlighted, .circle.output.highlighted {
     stroke: red;
 }
 

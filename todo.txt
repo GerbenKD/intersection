@@ -1,9 +1,21 @@
-- stamps staan achter een transparante div met een gat erin
+- stamps staan achter een transparante div met een gat erin: maak de
+   animatie en de kleur mooi
+
 - alle constructions worden gerendered op een bepaalde schaal
+
 - stamps tonen alleen outputs (als die er zijn)
-- de move_controlpoints na embed_tool moeten worden afgesloten met een undo_frame
-- buttons voor undo, rewind all the way, redo, fast forward
+
+- buttons voor undo, rewind all the way, redo, fast forward, full screen:
+   implementeer rewind, fast forward, en maak de knoppen greyed out
+   als je niet verder kan
+
 - wat vaker saven. (op undo_frame?)
+
 - als je een stamp niet ver genoeg het scherm in sleept springt ie terug
+
 - de stamp verdwijnt tijdens het draggen en als je m loslaat verschijnt een "nieuwe"
+
+- testen op andere browsers
+
+- maak het onafhankelijk van resolutie
 
