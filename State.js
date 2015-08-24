@@ -107,6 +107,7 @@ var State = new function() {
     /* --------------------------------------- Constructor ------------------------------------- */ 
 
     this.create_undo_frame = function() {
+	this.save();
 	if (UNDO.current.length>0) {
 	    UNDO.buffer.splice(UNDO.index, UNDO.buffer.length - UNDO.index, UNDO.current);
 	    UNDO.current = [];
@@ -115,7 +116,7 @@ var State = new function() {
 	}
     }
 
-    function animate_frame(frame, direction) {
+    function animate_frame(frame, direction, speed) {
 	function do_change(i) {
 	    return function() { 
 		CT.change(frame[i][direction]); STAMP.redraw(); 
@@ -134,7 +135,7 @@ var State = new function() {
 		if (move_from.length != 0) {
 		    var old_from = move_from, old_to = move_to;
 		    anims.push(function() { console.log("Animation: from="+JSON.stringify(old_from)+" to="+JSON.stringify(old_to))});
-		    anims.push(STAMP.animate_no_zoom(move_from, move_to));
+		    anims.push(STAMP.animate_no_zoom(move_from, move_to, speed));
 		    move_from = [];
 		    move_to = [];
 		}
@@ -142,7 +143,7 @@ var State = new function() {
 	    }
 	}
 	if (move_from.length != 0) {
-	    anims.push(STAMP.animate_no_zoom(move_from, move_to));
+	    anims.push(STAMP.animate_no_zoom(move_from, move_to, speed));
 	}
 	return Animation.sequential(anims);
     }
@@ -171,8 +172,8 @@ var State = new function() {
 	}
 
 	// actually undo all the changes
-	var animation = animate_frame(frame.slice().reverse(), 1);
-	Animation.run(Animation.sequential([animation, continuation]), speed);
+	var animation = animate_frame(frame.slice().reverse(), 1, speed);
+	Animation.run(Animation.sequential([animation, continuation]));
     }
 
     this.can_redo = function() {
@@ -201,7 +202,7 @@ var State = new function() {
 	}
 
 	// actually redo all the changes
-	var animation = animate_frame(frame, 0);
+	var animation = animate_frame(frame, 0, speed);
 	Animation.run(Animation.sequential([animation, continuation]), speed);
     }
 
@@ -274,6 +275,14 @@ var State = new function() {
 	return id;
     }
 
+    this.remove_tool_and_cp = function(id) {
+	var cppos = this.get_cp_positions(id);
+	for (var i=0; i<cppos.length; i++) {
+	    var socket = cppos[i][0];
+	    CT.change(["remove_controlpoint", socket]);
+	}
+	CT.change(["remove_tool", id]);
+    }
 
     this.embed_file = function(filename, bbox) {
 	var savestatename = Storage.filename2savestatename(filename);

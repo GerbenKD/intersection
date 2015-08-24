@@ -18,8 +18,8 @@ svg {
 svg.button {
     stroke-height: 10%;
     opacity: 0.2;
-    fill: #00b000;
-    stroke: #008000;
+    fill: #40e080;
+    stroke: #208040;
 }
 
 svg.button.active {
@@ -27,8 +27,8 @@ svg.button.active {
 }
 
 svg.button.active:hover {
-    fill: #00ff80;
-    stroke: #00b040;
+    fill: #80ffb0;
+    stroke: #40e080;
 }
 
 svg.canvas {
@@ -36,17 +36,18 @@ svg.canvas {
 }
 
 svg.stamp {
-    background-color: white;
+    /* background-color: white;*/
 }
 
 svg.stamp.deselected:hover {
-    background-color: #808080; /* #E8E8FF;*/
+    transition: 0.5s;
+    background-color: #80ffb0;
 }
 
 
 div.ruler {
-    background-color: #00a000;
-    opacity: 0.2;
+    background-color: #40e080;
+    opacity: 0.95;
     pointer-events: none;
 }
 

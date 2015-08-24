@@ -35,6 +35,7 @@ function main() {
       embed krijgt een bounding box als parameter, omdat dit in de undo informatie moet. 
      */
 
+/*
     window.onkeypress = function(e) {
 	var key = e.keyCode || e.charCode;
 
@@ -48,37 +49,65 @@ function main() {
 	case 53: switch_stamp(4); break;
 	case 54: switch_stamp(5); break;
 	case 122: undo(); break;
-	case 120: // X, redo
-	    STATE = "animating";
-	    State.redo(undo_continuation);
-	    break;
+	case 120: redo(); break;
 	default:
 	    console.log("Pressed unknown key with keycode "+key);
 	}
     }
+*/
 
-    function nil() {}
+    function switch_state(new_state) {
+	if (STATE==new_state) return;
+	if (new_state=="normal") {
+	    for (var b in BUTTONS) { BUTTONS[b].highlight(); }
+	    HIGHLIGHT_TARGETS = State.get_all_highlight_targets();
+	} else if (new_state == "animating") {
+	    for (var b in BUTTONS) { BUTTONS[b].update_highlight(false); }
+	    HIGHLIGHT_TARGETS = [];
+	} else if (new_state == "dragging") {
+	    HIGHLIGHT_TARGETS = State.pick_up_controlpoint(HIGHLIGHTED[1]);
+	    sparkle();
+	}
+	STATE = new_state;
+	highlight();
+    }
 
-    function undo() { if (STATE!="normal") return; STATE = "animating"; State.undo(undo_continuation); }
-    function redo() { if (STATE!="normal") return; STATE = "animating"; State.redo(undo_continuation); }
 
+    function undo() { 
+	if (STATE!="normal") return; 
+	switch_state("animating");
+	State.undo(function() { switch_state("normal"); });
+    }
+
+    function redo() { 
+	if (STATE!="normal") return; 
+	switch_state("animating");
+	State.redo(function() { switch_state("normal"); });
+    }
 
     function rewind() {
 	if (STATE!="normal") return;
-	State.undo(function() { if (State.can_undo()) rewind(); }, 4);
+	switch_state("animating");
+	function rewind_rec() {
+	    State.undo(function() { 
+		if (State.can_undo()) rewind_rec(); else switch_state("normal"); 
+	    });
+	}
+	rewind_rec();
     }
 
     function fforward() {
 	if (STATE!="normal") return;
-	State.redo(function() { if (State.can_redo()) fforward(); }, 4);
+	switch_state("animating");
+	function fforward_rec() {
+	    State.redo(function() {
+		if (State.can_redo()) fforward_rec(); else switch_state("normal");
+	    });
+	}
+	fforward_rec();
     }
 
-
-    function undo_continuation() {
-	STATE = "normal";
-	HIGHLIGHT_TARGETS = State.get_all_highlight_targets();
-	highlight();
-    }
+    function undo_continuation() { switch_state("normal"); }
 
     /*
       stamp: manages construction, and links to the correct file but not savestate
@@ -118,7 +147,7 @@ function main() {
     function switch_stamp(stamp_id) {
 	if (STATE != "normal" || stamp_id==CURRENT_STAMP || stamp_id >= STAMPS.length-2) return;
 	console.log("switching from stamp "+CURRENT_STAMP+" to "+stamp_id);
-	STATE = "animating";
+	switch_state("animating");
 	var gs = {};
 	var anims = [];
 	if (CURRENT_STAMP != undefined) {
@@ -154,9 +183,7 @@ function main() {
 	    State.initialize(new_stamp);
 	    CURRENT_STAMP = stamp_id;                   // in final continuation
 	    Storage.setstr("current_stamp", stamp_id);
-	    STATE = "normal";
-	    HIGHLIGHT_TARGETS = State.get_all_highlight_targets();
-	    highlight();
+	    switch_state("normal");
 	}
 
 	Animation.run(Animation.sequential([animate, finalize]));
@@ -182,8 +209,6 @@ function main() {
     }
 
     function highlight() {
-	for (var b in BUTTONS) { BUTTONS[b].highlight(); }
-
 	if (!HIGHLIGHT_TARGETS) return;
 
 	// determine what highlight target we're pointing at
@@ -233,7 +258,7 @@ function main() {
 		EMBEDDING[6] = STAMPS[stamp_id].small_bbox;
 		State.redraw();
 	    }
-	} else if (EMBEDDING[3]==1) {
+	} else if (EMBEDDING[3]==1 || EMBEDDING[3]==2) {
 	    var stamp = STAMPS[EMBEDDING[0]];
 
 	    // calculate the current bbox
@@ -241,7 +266,13 @@ function main() {
 	    var stampbarwidth = bbox[0]+bbox[2];
 	    var fx = (EMBEDDING[1]-bbox[0])/bbox[2], fy = (EMBEDDING[2]-bbox[1])/bbox[3];
 	    var width = (MOUSE[0]-stampbarwidth) / fx;
-	    if (width < stampbarwidth) width = bbox[2]; else if (width > 0.5*Graphics.XS) width = 0.5*Graphics.XS;
+	    if (width < stampbarwidth) { 
+		EMBEDDING[3]=1; // releasing the thing now will make it jump back
+		width = bbox[2];
+	    } else {
+		EMBEDDING[3]=2; // releasing now will actually embed
+		if (width > 0.5*Graphics.XS) width = 0.5*Graphics.XS;
+	    }
 	    var height = width / bbox[2] * bbox[3];
 	    bbox = [MOUSE[0]-fx*width, MOUSE[1]-fy*height, width, height];
 
@@ -258,20 +289,22 @@ function main() {
     }
 
     function mouseup(id, e) {
-	var old_state = STATE;
-	STATE = "normal";
-	if (old_state == "embedding") {
-	    switch (EMBEDDING[3]) {
-	    case 0: switch_stamp(id); break;
-	    case 1: drop_stamp(); break;
+	if (STATE == "embedding") {
+	    var state = EMBEDDING[3];
+	    if (state==1) {	
+		State.remove_tool_and_cp(EMBEDDING[4]);
+		State.redraw();
+	    } else if (state==2) {
+		drop_stamp();
 	    }
 	    EMBEDDING = undefined;
-	} else if (old_state == "dragging") {
+	    switch_state("normal");
+	    if (state==0) switch_stamp(id);
+	} else if (STATE == "dragging") {
 	    drag_release();
 	    DRAGGING = undefined;
+	    switch_state("normal");
 	}
-	HIGHLIGHT_TARGETS = State.get_all_highlight_targets();
-	highlight();
     }
 
     function drop_stamp() {
@@ -315,10 +348,7 @@ function main() {
 	    // may initiate an embed, but it will only really start when the mouse has moved a sufficient distance
 	    var stamp = STAMPS[id];
 	    EMBEDDING = [id, MOUSE[0], MOUSE[1], 0];
-	    STATE = "embedding";
-	    HIGHLIGHT_TARGETS = [];
-	    highlight();
-	    console.log("Attempt to embed stamp "+(id+1));
+	    switch_state("embedding");
 	    return;
 	}
 
@@ -326,17 +356,14 @@ function main() {
 
 	if (HIGHLIGHTED[0]==0) { 
 	    // selected point is a control point, start dragging
-	    HIGHLIGHT_TARGETS = State.pick_up_controlpoint(HIGHLIGHTED[1]);
-	    sparkle();
 	    var cp = HIGHLIGHTED[2];
 	    DRAGGING = [HIGHLIGHTED[0], HIGHLIGHTED[1], cp.pos[0] - MOUSE[0], cp.pos[1] - MOUSE[1]];
-	    STATE = "dragging";
+	    switch_state("dragging");
 	} else {
 	    // toggle output status of the highlighted gizmo
 	    State.create_undo_frame();
 	    State.toggle_output(HIGHLIGHTED[0], HIGHLIGHTED[1]);
 	}
-	highlight();
     }
 
     function create_stamps(nstamps) {

@@ -29,7 +29,6 @@ var CompoundTool = Tool.extend(function() {
     }
 
     this.get_cp_positions = function(tool) {
-	console.log("getting cp positions for "+tool.id);
 	var cppos = [];
 	var ii = this.id2tool[0];
 	for (var i=0; i<tool.max_input_socket(); i++) {

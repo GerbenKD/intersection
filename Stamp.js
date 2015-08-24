@@ -140,8 +140,8 @@ var ConstructionStamp = Stamp.extend(function() {
 	return get_animation(this, this.large_positions, this.small_positions, this.large_bbox, this.small_bbox, 8, 3);
     }
 
-    this.animate_no_zoom = function(from_positions, to_positions) {
-	return get_animation(this, from_positions, to_positions, this.large_bbox, this.large_bbox, 8, 8);
+    this.animate_no_zoom = function(from_positions, to_positions, speed) {
+	return get_animation(this, from_positions, to_positions, this.large_bbox, this.large_bbox, 8, 8, speed);
     }
 
 
@@ -149,12 +149,11 @@ var ConstructionStamp = Stamp.extend(function() {
 	return this.construction.get_gizmo_set(); 
     }
 
-    function get_animation(stamp, from, to, bbox0, bbox1, cp_r0, cp_r1) {
+    function get_animation(stamp, from, to, bbox0, bbox1, cp_r0, cp_r1, speed) {
 	var a = 0.9;
 
 	var my_from = from.slice(0); my_from.push([bbox0[0], bbox0[1]], [bbox0[0]+bbox0[2], bbox0[1]+bbox0[3]]);
 	var my_to   = to.slice(0);   my_to.push  ([bbox1[0], bbox1[1]], [bbox1[0]+bbox1[2], bbox1[1]+bbox1[3]]);
-
 	var dist = [];
 	var endtimes = [];
 	// var total_time = 0;
@@ -179,7 +178,7 @@ var ConstructionStamp = Stamp.extend(function() {
 		var X = dist[i], T = endtimes[i];
 		if (t < T) {
 		    moving++; // this point is still moving
-		    var f = 2*t > T ? 1 - a*(T-t)*(T-t)/X : (a * t * t)/X;
+		    var f = 2*t < T ? (a * t * t)/X : 1 - a*(T-t)*(T-t)/X;
 		    now[i] = [ p0[0]*(1-f) + p1[0]*f,
 			       p0[1]*(1-f) + p1[1]*f ];
 		} else {

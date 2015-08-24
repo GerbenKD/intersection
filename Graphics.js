@@ -82,6 +82,15 @@ var Graphics = new function() {
 	 
 	    function construct() {
 		var svg_elt = document.createElementNS(SVG_NS, "svg");
+		// to fix a bug with the background not appearing, stick an invisible rectangle in here
+		var rect_elt = document.createElementNS(SVG_NS, "rect");
+		rect_elt.setAttribute("x", 0);
+		rect_elt.setAttribute("y", 0);
+		rect_elt.setAttribute("width", bbox[2]);
+		rect_elt.setAttribute("height", bbox[3]);
+		rect_elt.style.fill = "none";
+		rect_elt.style.stroke = "none";
+		svg_elt.appendChild(rect_elt);
 		var group_elts = {};
 		var group_names = ["lines", "points", "highlighted", "controlpoints"];
 		for (var i=0; i<group_names.length; i++) {
@@ -168,12 +177,11 @@ var Graphics = new function() {
 
 var Animation = new function() {
     
-    this.run = function(anim, speed) {
-	if (speed==undefined) speed=1;
+    this.run = function(anim) {
 	var frame = 0;
 	function animate() {
 	    var busy = anim(frame);
-	    frame+=speed;
+	    frame++;
 	    if (busy) requestAnimationFrame(animate);
 	}
 	requestAnimationFrame(animate);

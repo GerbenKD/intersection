@@ -1,26 +1,13 @@
-- stamps staan achter een transparante div met een gat erin: maak de
-   animatie en de kleur mooi
-
-- alle constructions worden gerendered op een bepaalde schaal
+- alle constructions worden gerendered op een bepaalde schaal, die de
+  grootte van de points en dikte van de lijnen bepaalt
 
 - stamps tonen alleen outputs (als die er zijn)
 
-- buttons voor undo, rewind all the way, redo, fast forward, full screen:
-   implementeer rewind, fast forward, en maak de knoppen greyed out
-   als je niet verder kan
-
-- wat vaker saven. (op undo_frame?)
-
-- als je een stamp niet ver genoeg het scherm in sleept springt ie terug
-
 - de stamp verdwijnt tijdens het draggen en als je m loslaat verschijnt een "nieuwe"
+
+- rewind en fast forward moeten sneller en mooi
 
 - testen op andere browsers
 
-- maak het onafhankelijk van resolutie
-
-- het highlighten van de buttons en het echte highlighten en het
-  veranderen van state moeten wat beter worden doordacht en
-  samengevoegd in main. Buttons moeten inactive zijn als STATE =
-  "animating".
+- maak het onafhankelijk van resolutie, en ondersteun resizen van het window
 
