@@ -13,7 +13,9 @@ function main() {
     var STAMPS = create_stamps(8);
     var CURRENT_STAMP = undefined;
 
-    make_buttons();
+    var BUTTONS;
+
+    BUTTONS = make_buttons();
 
     var stamp = Storage.getstr("current_stamp");
     switch_stamp(stamp ? (stamp|0) : 0);
@@ -57,8 +59,20 @@ function main() {
 
     function nil() {}
 
-    function undo() { STATE = "animating"; State.undo(undo_continuation); }
-    function redo() { STATE = "animating"; State.redo(undo_continuation); }
+    function undo() { if (STATE!="normal") return; STATE = "animating"; State.undo(undo_continuation); }
+    function redo() { if (STATE!="normal") return; STATE = "animating"; State.redo(undo_continuation); }
+
+
+    function rewind() {
+	if (STATE!="normal") return;
+	State.undo(function() { if (State.can_undo()) rewind(); }, 4);
+    }
+
+    function fforward() {
+	if (STATE!="normal") return;
+	State.redo(function() { if (State.can_redo()) fforward(); }, 4);
+    }
+
 
     function undo_continuation() {
 	STATE = "normal";
@@ -142,6 +156,7 @@ function main() {
 	    Storage.setstr("current_stamp", stamp_id);
 	    STATE = "normal";
 	    HIGHLIGHT_TARGETS = State.get_all_highlight_targets();
+	    highlight();
 	}
 
 	Animation.run(Animation.sequential([animate, finalize]));
@@ -167,6 +182,8 @@ function main() {
     }
 
     function highlight() {
+	for (var b in BUTTONS) { BUTTONS[b].highlight(); }
+
 	if (!HIGHLIGHT_TARGETS) return;
 
 	// determine what highlight target we're pointing at
@@ -356,77 +373,174 @@ function main() {
     }
 
     function make_buttons() {
-	var pi = Math.PI;
+	
+	var screenheight = Graphics.YS * 0.03;
+	var margin = screenheight * 0.5, padding = margin*0.2;
 
-	// converts an array of [x,y] coordinates to a string for use in a svg polygon
-	function to_str(size, r, points) {
-	    var res = "";
-	    for (var i=0; i<points.length; i++) {
-		if (i>0) res = res + " ";
-		res = res + (0.5*size*(1+r*points[i][0])).toFixed(1) + ","
-		          + (0.5*size*(1-r*points[i][1])).toFixed(1);
+	var cos = Math.cos, sin = Math.sin, pi = Math.PI, sqrt = Math.sqrt;
+
+	var svg_elt = Graphics.create_svg();
+
+	var Button = new function() {
+	    this.extend = function(constr) { constr.prototype = this; return new constr(); }
+
+	    this.initialize = function(y0,x1) {
+		var screenwidth = this.width * screenheight;
+		this.svg_elt = Graphics.create_button([x1-screenwidth-padding, y0-padding, 
+						       screenwidth +2*padding, screenheight+2*padding]);
+		this.draw();
+		var me = this;
+		this.svg_elt.onclick = function() { me.action(); }
+		return x1-screenwidth-margin;
 	    }
-	    return res;
+
+	    // points are a list of points in the bbox[0,0,this.width,1], y=0 at bottom
+	    this.draw_polygon = function(points) {
+		var poly = Graphics.create_polygon();
+
+		var res = "";
+		for (var i=0; i<points.length; i++) {
+		    if (i>0) res = res + " ";
+		    res = res + (screenheight*points[i][0]+padding).toFixed(1) + ","
+		        + (screenheight*(1-points[i][1])+padding).toFixed(1);
+		}
+
+		poly.setAttribute("points", res);
+		this.svg_elt.appendChild(poly);
+	    }
+
+
+	    this.update_highlight = function(active) {
+		if (!this.active && active) {
+		    this.active = active;
+		    this.svg_elt.classList.add("active");
+		} else if (this.active && !active) {
+		    this.active = active;
+		    this.svg_elt.classList.remove("active");
+		}
+	    }
+
 	}
 
-	function polygon(svg_ns, size, r, points) {
-	    var poly = document.createElementNS(svg_ns, "polygon");
-	    poly.setAttribute("points", to_str(size, r, points));
-	    return poly;
+	var Rewind = Button.extend(function() {
+	    this.width = 1.6;
+
+	    this.draw = function() {
+		var w = this.width;
+		var x1 = 0.1;           // left of leftmost triangle
+		var x2 = 0.2;           // right of left rectangle
+		var x3 = w-0.5*sqrt(3); // left of rightmost triangle
+		var x4 = x1+0.5*sqrt(3) // right of leftmost triangle
+		this.draw_polygon([[x3,0.5],[w,1],[w,0]]);
+		this.draw_polygon([[x1,0.5],[x4,1],[x4,0]]);
+		this.draw_polygon([[0,0],[0,1],[x2,1],[x2,0]]);
+	    }
+
+
+	    this.action = function() { rewind(); }
+
+	    this.highlight = function() { this.update_highlight(State.can_undo()); }
+
+
+	});
+
+	var Undo = Button.extend(function() {
+	    this.width = 0.5*sqrt(3);
+	    
+	    this.draw = function() {
+		var w = this.width;
+		this.draw_polygon([[0,0.5], [w, 0], [w, 1]]);
+	    }
+
+	    this.action = function() {
+		undo();
+		this.update_highlight();
+	    }
+
+	    this.highlight = function() { this.update_highlight(State.can_undo()); }
+
+	});
+
+	var Redo = Button.extend(function() {
+	    this.width = 0.5*sqrt(3);
+	    
+	    this.draw = function() {
+		var w = this.width;
+		this.draw_polygon([[0,0], [0, 1], [w, 0.5]]);
+	    }
+
+	    this.action = function() {
+		redo();
+		this.highlight();
+	    }
+
+	    this.highlight = function() { this.update_highlight(State.can_redo()); }
+
+
+	});
+
+	var FForward = Button.extend(function() {
+	    this.width = 1.6;
+
+	    this.draw = function() {
+		var w = this.width;
+		var x1 = w-0.1-0.5*sqrt(3);
+		var x2 = 0.5*sqrt(3);
+		var x3 = w-0.2;
+		var x4 = x1+0.5*sqrt(3);
+		this.draw_polygon([[0,0],[0,1],[x2,0.5]]);
+		this.draw_polygon([[x1,0],[x1,1],[x4,0.5]]);
+		this.draw_polygon([[x3,0],[x3,1],[w,1],[w,0]]);
+	    }
+
+
+	    this.action = function() { fforward(); }
+	    
+	    this.highlight = function() { this.update_highlight(State.can_redo()); }
+
+	});
+
+	var FullScreen = Button.extend(function() {
+	    this.width = 1;
+
+	    this.draw = function() {
+		var s = 0.05; // spacing between center and arrow
+		var t = 0.15;  // line thickness
+
+		// top-right
+		this.draw_polygon([[0.5+s,0.5+s], [0.5+s+t,0.5+s], [1-t, 1-2*t], [1-t, 0.5+s], [1,0.5+s],
+				   [1,1], [0.5+s,1], [0.5+s,1-t], [1-2*t,1-t], [0.5+s,0.5+s+t]]);
+
+		// bottom-left
+		this.draw_polygon([[0.5-s,0.5-s], [0.5-s-t, 0.5-s], [t, 2*t], [t,0.5-s], [0,0.5-s],
+				   [0,0], [0.5-s,0], [0.5-s,t], [2*t,t], [0.5-s,0.5-s-t]]);
+
+	    }
+
+
+	    this.action = function() {
+		console.log("Fullscreen clicked");
+	    }
+
+	    this.highlight = function() { this.update_highlight(true); }
+	    
+	});
+
+	var y = Graphics.YS - screenheight - margin;
+	var x = Graphics.XS - margin;
+
+
+	var buttons = {
+	    fullscreen: FullScreen,
+	    fforward: FForward,
+	    redo: Redo,
+	    undo: Undo,
+	    rewind: Rewind
+	};
+	for (var b in buttons) {
+	    x = buttons[b].initialize(y, x);
 	}
 
-
-
-	function cos(a) { return Math.cos(a); }
-	function sin(a) { return Math.sin(a); }
-
-	Graphics.create_button(0, nil, function(svg_elt, svg_ns, size) {
-	    var p1 = [-1, 0], p2 = [cos(5/3*pi),sin(5/3*pi)], p3 = [cos(1/3*pi),sin(1/3*pi)];
-	    svg_elt.appendChild(polygon(svg_ns, size, 0.6, [[p1[0]+0.9,p1[1]],
-							    [p2[0]+0.9,p2[1]],
-							    [p3[0]+0.9,p3[1]]])); 
-	    svg_elt.appendChild(polygon(svg_ns, size, 0.6, [[p1[0]-0.3,p1[1]],
-							    [p2[0]-0.3,p2[1]],
-							    [p3[0]-0.3,p3[1]]])); 
-	    svg_elt.appendChild(polygon(svg_ns, size, 0.6, [[-1.5,-1],[-1.5,1],[-1.1,1],[-1.1,-1]]));
-	});
-
-	Graphics.create_button(1, undo, function(svg_elt, svg_ns, size) {
-	    var p1 = [-1, 0], p2 = [cos(5/3*pi),sin(5/3*pi)], p3 = [cos(1/3*pi),sin(1/3*pi)];
-	    svg_elt.appendChild(polygon(svg_ns, size, 0.6, [[p1[0],p1[1]],
-							    [p2[0],p2[1]],
-							    [p3[0],p3[1]]])); 
-	});
-
-	Graphics.create_button(2, redo, function(svg_elt, svg_ns, size) {
-	    var p1 = [1, 0], p2 = [cos(2/3*pi),sin(2/3*pi)], p3 = [cos(-2/3*pi),sin(-2/3*pi)];
-	    svg_elt.appendChild(polygon(svg_ns, size, 0.6, [[p1[0],p1[1]],
-							    [p2[0],p2[1]],
-							    [p3[0],p3[1]]])); 
-	});
-
-	Graphics.create_button(3, nil, function(svg_elt, svg_ns, size) {
-	    var p1 = [1, 0], p2 = [cos(2/3*pi),sin(2/3*pi)], p3 = [cos(-2/3*pi),sin(-2/3*pi)];
-	    svg_elt.appendChild(polygon(svg_ns, size, 0.6, [[p1[0]-0.9,p1[1]],
-							    [p2[0]-0.9,p2[1]],
-							    [p3[0]-0.9,p3[1]]])); 
-	    svg_elt.appendChild(polygon(svg_ns, size, 0.6, [[p1[0]+0.3,p1[1]],
-							    [p2[0]+0.3,p2[1]],
-							    [p3[0]+0.3,p3[1]]])); 
-	    svg_elt.appendChild(polygon(svg_ns, size, 0.6, [[1.5,-1],[1.5,1],[1.1,1],[1.1,-1]]));
-	});
-
-	Graphics.create_button(4, nil,function(svg_elt, svg_ns, size) {
-	    svg_elt.appendChild(polygon(svg_ns, size, 0.8, [[0.1,0.1],[0.3,0.1],
-							    [0.8,0.6], [0.8,0.1], [1,0.1],
-							    [1,1], [0.1,1], [0.1,0.8],
-							    [0.6,0.8], [0.1,0.3]]));
-	    svg_elt.appendChild(polygon(svg_ns, size, 0.8, [[-0.1,-0.1],[-0.3,-0.1],
-							    [-0.8,-0.6], [-0.8,-0.1], [-1,-0.1],
-							    [-1,-1], [-0.1,-1], [-0.1,-0.8],
-							    [-0.6,-0.8], [-0.1,-0.3]]));
-
-	});
+	return buttons;
     }
-
 }

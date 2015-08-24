@@ -147,8 +147,14 @@ var State = new function() {
 	return Animation.sequential(anims);
     }
 
+    this.can_undo = function() {
+	return ((UNDO.index==UNDO.buffer.length && UNDO.current.length > 0) || UNDO.index > 0);
+    }
+
     // continuation is executed once undo animation has completed
-    this.undo = function(continuation) {
+    this.undo = function(continuation, speed) {
+	if (!this.can_undo()) { continuation(); return; }
+
 	// figure out what undo frame we're dealing with and handle administration
 	var frame;
 	if (UNDO.index == UNDO.buffer.length && UNDO.current.length > 0) {
@@ -164,17 +170,21 @@ var State = new function() {
 	    }
 	}
 
-	if (frame) {
-	    // actually undo all the changes
-	    var animation = animate_frame(frame.slice().reverse(), 1);
-	    Animation.run(Animation.sequential([animation, continuation]));
-	} else {
-	    continuation();
-	}
+	// actually undo all the changes
+	var animation = animate_frame(frame.slice().reverse(), 1);
+	Animation.run(Animation.sequential([animation, continuation]), speed);
     }
 
+    this.can_redo = function() {
+	return ((UNDO.index==UNDO.buffer.length && UNDO.current_stored.length > 0) 
+		|| UNDO.index < UNDO.buffer.length);
+    }
+
+
     // continuation is executed once redo animation has completed
-    this.redo = function(continuation) {
+    this.redo = function(continuation, speed) {
+	if (!this.can_redo()) { continuation(); return; }
+
 	// figure out what undo frame we're dealing with and handle administration
 	var frame;
 	if (UNDO.index == UNDO.buffer.length && UNDO.current_stored.length > 0) {
@@ -190,13 +200,9 @@ var State = new function() {
 	    }
 	}
 
-	if (frame) {
-	    // actually redo all the changes
-	    var animation = animate_frame(frame, 0);
-	    Animation.run(Animation.sequential([animation, continuation]));
-	} else {
-	    continuation();
-	}
+	// actually redo all the changes
+	var animation = animate_frame(frame, 0);
+	Animation.run(Animation.sequential([animation, continuation]), speed);
     }
 
     this.initialize = function(stamp) {

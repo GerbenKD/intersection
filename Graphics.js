@@ -39,18 +39,23 @@ var Graphics = new function() {
     this.topruler = function(bbox) { set_elt_bbox(TOPRULER, bbox); }
     this.bottomruler = function(bbox) { set_elt_bbox(BOTTOMRULER, bbox); console.log("set bottom bbox to "+JSON.stringify(bbox));}
 
-    this.create_button = function(which, onclick, init) {
-	var size = Graphics.XS/40;
+    this.create_button = function(bbox) {
 	var svg_elt = document.createElementNS(SVG_NS, "svg");
 	svg_elt.onclick = onclick;
 	svg_elt.classList.add("button");
-	svg_elt.style.top = Graphics.YS-size;
-	svg_elt.style.left = Graphics.XS-(5-which)*size;
-	svg_elt.style.width = size;
-	svg_elt.style.height = size;
-	init(svg_elt, SVG_NS, size);
+	set_elt_bbox(svg_elt, bbox);
 	BUTTONS.appendChild(svg_elt);
+	return svg_elt;
     }
+
+    this.create_svg = function() {
+	return document.createElementNS(SVG_NS, "svg");
+    }
+
+    this.create_polygon = function() {
+	return document.createElementNS(SVG_NS, "polygon");
+    }
+
 
     function set_elt_bbox(elt, bbox) {
 	var st = elt.style;
@@ -163,11 +168,12 @@ var Graphics = new function() {
 
 var Animation = new function() {
     
-    this.run = function(anim) {
+    this.run = function(anim, speed) {
+	if (speed==undefined) speed=1;
 	var frame = 0;
 	function animate() {
 	    var busy = anim(frame);
-	    frame++;
+	    frame+=speed;
 	    if (busy) requestAnimationFrame(animate);
 	}
 	requestAnimationFrame(animate);

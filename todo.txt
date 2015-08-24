@@ -19,3 +19,8 @@
 
 - maak het onafhankelijk van resolutie
 
+- het highlighten van de buttons en het echte highlighten en het
+  veranderen van state moeten wat beter worden doordacht en
+  samengevoegd in main. Buttons moeten inactive zijn als STATE =
+  "animating".
+

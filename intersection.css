@@ -16,12 +16,17 @@ svg {
 }
 
 svg.button {
+    stroke-height: 10%;
+    opacity: 0.2;
     fill: #00b000;
     stroke: #008000;
-    stroke-width: 7%;
 }
 
-svg.button:hover {
+svg.button.active {
+    opacity: 1;
+}
+
+svg.button.active:hover {
     fill: #00ff80;
     stroke: #00b040;
 }
