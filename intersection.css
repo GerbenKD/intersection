@@ -1,4 +1,12 @@
+* {
+    cursor: inherit;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+}
+
 body {
+    cursor: default;
     border: none;
     overflow: hidden;
     margin: 0px 0px 0px 0px;
@@ -36,6 +44,7 @@ svg.button.active {
 svg.button.active:hover {
     fill: #80ffb0;
     stroke: #40e080;
+    cursor: pointer;
 }
 
 svg.canvas {
@@ -49,6 +58,7 @@ svg.stamp {
 svg.stamp.deselected:hover {
     transition: 0.5s;
     background-color: #80ffb0;
+    cursor: pointer;
 }
 
 

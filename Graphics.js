@@ -17,6 +17,10 @@ var Graphics = new function() {
     // this.add_class    = function(elt, cls) { elt.classList.add(cls); }
     // this.remove_class = function(elt, cls) { elt.classList.remove(cls); }
 
+    this.cursor = function(type) {
+	BODY.style.cursor = type;
+    }
+
     this.toggle_fullscreen = function() {
 	if (is_fullscreen()) leave_fullscreen(); else enter_fullscreen();
 	

@@ -34,20 +34,6 @@ function main() {
 	body.style["background-color"] = "white";
     }
 
-    /*
-
-      drag een stamp:
-      1. doe een embed
-      2. vogel uit welke nieuwe controlpoints er bij de embedded tool horen (dwz, sockets van het main ii)
-         C_change("embed") geeft het id terug van de embedded compoundtool,
-	 die zn inputs zitten aan het input interface van de main construction, met dus de sockets waar we aan moeten schuiven.
-      3. hou bij: de small_bbox van de stamp, de mouse position in small_bbox waar de drag begon
-      4. op basis van de huidige muispositie, bepaal nieuwe bbox, en schaal de posities van de controlpoints van stap 2
-
-      embed krijgt een bounding box als parameter, omdat dit in de undo informatie moet. 
-     */
-
-/*
     window.onkeypress = function(e) {
 	var key = e.keyCode || e.charCode;
 
@@ -66,19 +52,27 @@ function main() {
 	    console.log("Pressed unknown key with keycode "+key);
 	}
     }
-*/
 
     function switch_state(new_state) {
 	if (STATE==new_state) return;
 	if (new_state=="normal") {
+	    Graphics.cursor("default");
 	    BUTTONBAR.rehighlight();
 	    HIGHLIGHT_TARGETS = State.get_all_highlight_targets();
 	} else if (new_state == "animating") {
+	    Graphics.cursor("default");
 	    BUTTONBAR.rehighlight(false);
 	    HIGHLIGHT_TARGETS = [];
 	} else if (new_state == "dragging") {
+	    Graphics.cursor("grabbing");
+	    Graphics.cursor("-moz-grabbing");
+	    Graphics.cursor("-webkit-grabbing");
 	    HIGHLIGHT_TARGETS = State.pick_up_controlpoint(HIGHLIGHTED[1]);
 	    sparkle();
+	} else if (new_state=="embedding") {
+	    Graphics.cursor("grabbing");
+	    Graphics.cursor("-moz-grabbing");
+	    Graphics.cursor("-webkit-grabbing");
 	}
 	STATE = new_state;
 	highlight();
@@ -222,7 +216,7 @@ function main() {
     }
 
     function highlight() {
-	if (!HIGHLIGHT_TARGETS) return;
+	if (!HIGHLIGHT_TARGETS) { Graphics.cursor("default"); return; }
 
 	// determine what highlight target we're pointing at
 	var item = null;
@@ -241,8 +235,20 @@ function main() {
 	if (d_best<=0) item = HIGHLIGHT_TARGETS[i_best];
 
 	var changed = HIGHLIGHTED && item && !(item[0]===HIGHLIGHTED[0] && item[1]==HIGHLIGHTED[1]);
-	if (HIGHLIGHTED && (!item || changed))        HIGHLIGHTED[2].set_class("highlighted", false);
-	if (item        && (!HIGHLIGHTED || changed)) item[2].set_class("highlighted", true);
+	if (HIGHLIGHTED && (!item || changed)) {
+	    if (STATE=="normal") Graphics.cursor("default");
+	    HIGHLIGHTED[2].set_class("highlighted", false);
+	}
+	if (item && (!HIGHLIGHTED || changed)) {
+	    if (STATE == "normal") {
+		if (item[0]==0) { 
+		    Graphics.cursor("grab"); Graphics.cursor("-moz-grab"); Graphics.cursor("-webkit-grab"); 
+		} else {
+		    Graphics.cursor("pointer");
+		}
+	    }
+	    item[2].set_class("highlighted", true);
+	}
 	HIGHLIGHTED = item;
     }
 
@@ -512,7 +518,7 @@ function main() {
 
 	    this.action = function() {
 		undo();
-		this.update_highlight();
+		this.update_highlight(this.is_highlighted());
 	    }
 
 	    this.is_highlighted = function() { return State.can_undo(); }
@@ -531,7 +537,7 @@ function main() {
 
 	    this.action = function() {
 		redo();
-		this.highlight();
+		this.update_highlight(this.is_highlighted());
 	    }
 
 	    this.is_highlighted = function() { return State.can_redo(); }
