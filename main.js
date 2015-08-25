@@ -133,7 +133,6 @@ function main() {
     function embed_stamp(stamp_id) {
 	State.create_undo_frame();
 	var stamp = STAMPS[stamp_id];
-	console.log("embed_stamp: stamp_id="+stamp_id+", stamp="+stamp);
 	var bbox = stamp.small_bbox;
 	var id;
 	if (stamp_id < STAMPS.length-2) {
@@ -268,7 +267,6 @@ function main() {
 	    var dx = MOUSE[0] - EMBEDDING[1], dy = MOUSE[1] - EMBEDDING[2];
 	    if (dx*dx+dy*dy>10*10) {
 		EMBEDDING[3] = 1;
-		console.log("Switching to stage 1");
 		var stamp_id = EMBEDDING[0];
 		var tool_id = embed_stamp(stamp_id);
 		EMBEDDING[4] = tool_id;
@@ -276,7 +274,7 @@ function main() {
 		EMBEDDING[6] = STAMPS[stamp_id].small_bbox;
 		State.redraw();
 	    }
-	} else if (EMBEDDING[3]==1 || EMBEDDING[3]==2) {
+	} else if (EMBEDDING[3]==1) {
 	    var stamp = STAMPS[EMBEDDING[0]];
 
 	    // calculate the current bbox
@@ -284,13 +282,10 @@ function main() {
 	    var stampbarwidth = bbox[0]+bbox[2];
 	    var fx = (EMBEDDING[1]-bbox[0])/bbox[2], fy = (EMBEDDING[2]-bbox[1])/bbox[3];
 	    var width = (MOUSE[0]-stampbarwidth) / fx;
-	    if (width < stampbarwidth) { 
-		EMBEDDING[3]=1; // releasing the thing now will make it jump back
-		width = bbox[2];
-	    } else {
-		EMBEDDING[3]=2; // releasing now will actually embed
-		if (width > 0.5*Graphics.XS) width = 0.5*Graphics.XS;
-	    }
+	    EMBEDDING[3]=1;
+	    if      (width < stampbarwidth)   width = bbox[2];
+	    else if (width > 0.5*Graphics.XS) width = 0.5*Graphics.XS;
+
 	    var height = width / bbox[2] * bbox[3];
 	    bbox = [MOUSE[0]-fx*width, MOUSE[1]-fy*height, width, height];
 
@@ -310,9 +305,6 @@ function main() {
 	if (STATE == "embedding") {
 	    var state = EMBEDDING[3];
 	    if (state==1) {	
-		State.remove_tool_and_cp(EMBEDDING[4]);
-		State.redraw();
-	    } else if (state==2) {
 		drop_stamp();
 	    }
 	    EMBEDDING = undefined;

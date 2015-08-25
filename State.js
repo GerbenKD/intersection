@@ -274,15 +274,6 @@ var State = new function() {
 	return id;
     }
 
-    this.remove_tool_and_cp = function(id) {
-	var cppos = this.get_cp_positions(id);
-	for (var i=0; i<cppos.length; i++) {
-	    var socket = cppos[i][0];
-	    CT.change(["remove_controlpoint", socket]);
-	}
-	CT.change(["remove_tool", id]);
-    }
-
     this.embed_file = function(filename, bbox) {
 	var savestatename = Storage.filename2savestatename(filename);
 	var embed_action = ["embed", savestatename, bbox];
