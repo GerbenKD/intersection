@@ -6,26 +6,12 @@
 
 var Gizmo = new function() {
 
-    this.log = ["I am the Gizmo class"];
-
-    this.add_log = function(msg) { 
-	this.log.push(msg);
-    }
-
-    this.information = function() {
-	if (!this.log) { console.log("This gizmo has no log"); return; }
-	for (var i=0; i<this.log.length; i++) {
-	    console.log(this.log[i]);
-	}
-    }
-
     this.extend = function() {
 	var id = 0;
 	return function(constr) { 
 	    constr.prototype = this;
 	    var instance = new constr();
 	    instance.id = id++;
-	    instance.log = [];
 	    return instance;
 	};
     }();
@@ -34,7 +20,6 @@ var Gizmo = new function() {
 	var instance = this.extend(function() {
 	    this.classes = {};
 	}); 
-	instance.add_log("Created "+instance.type);
 	return instance;
     }
 
@@ -98,7 +83,6 @@ var Point = Gizmo.extend(function() {
 	this.sprite.attrib({ "cx": this.pos[0], "cy": this.pos[1] }); 
     }
 });
-Point.add_log("I am the Point class");
 
 
 var ConstructedPoint = Point.extend(function() {
@@ -111,7 +95,6 @@ var ConstructedPoint = Point.extend(function() {
     }
 
 });
-ConstructedPoint.add_log("I am the ConstructedPoint class");
 
 var ControlPoint = Point.extend(function() {
     this.valid = true;
@@ -119,7 +102,6 @@ var ControlPoint = Point.extend(function() {
     this.create = function(pos) {
 	var instance = Point.create.call(this);
 	instance.pos = pos;
-	this.add_log("controlpoint at position "+JSON.stringify(pos));
 	return instance;
     }
 
@@ -140,7 +122,6 @@ var ControlPoint = Point.extend(function() {
 
 
 });
-ControlPoint.add_log("I am the ControlPoint class");
 
 
 var Line = Gizmo.extend(function() {
@@ -221,7 +202,6 @@ var Line = Gizmo.extend(function() {
     }
 
 });
-Line.add_log("I am the Line class");
 
 var Circle = Gizmo.extend(function() {
     this.type = "circle";
@@ -245,6 +225,3 @@ var Circle = Gizmo.extend(function() {
 	this.sprite.attrib({"cx": this.center[0], "cy": this.center[1], "r": this.radius()});
     }
 });
-
-
-Circle.add_log("I am the Circle class");

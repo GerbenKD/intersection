@@ -2,8 +2,6 @@
 
 
 var Graphics = new function() {
-    this.XS = window.innerWidth;
-    this.YS = window.innerHeight;
 
     var SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -18,6 +16,43 @@ var Graphics = new function() {
 
     // this.add_class    = function(elt, cls) { elt.classList.add(cls); }
     // this.remove_class = function(elt, cls) { elt.classList.remove(cls); }
+
+    this.toggle_fullscreen = function() {
+	if (is_fullscreen()) leave_fullscreen(); else enter_fullscreen();
+	
+	
+	/*
+	  function add_fs_listener(func) {
+	  document.addEventListener("mozfullscreenchange", func);
+	  document.addEventListener("webkitfullscreenchange", func);
+	  document.addEventListener("msfullscreenchange", func);
+	  document.addEventListener("fullscreenchange", func);
+	  }
+	*/
+
+	function is_fullscreen() {
+	    return document.fullscreenElement
+		|| document.webkitFullscreenElement 
+		|| document.mozFullScreenElement
+		|| document.msFullScreenElement;
+	}
+
+	function leave_fullscreen() {}
+	
+	function enter_fullscreen() {
+	    if      (BODY.mozRequestFullScreen)    BODY.mozRequestFullScreen();
+	    else if (BODY.msRequestFullScreen)     BODY.msRequestFullScreen();
+	    else if (BODY.webkitRequestFullscreen) BODY.webkitRequestFullscreen();
+	    else if (BODY.requestFullscreen)       BODY.requestFullScreen();
+	    else alert("Full screen not supported"); // TODO do something real here
+	}
+    }
+
+
+    this.reposition = function() {
+	this.XS = window.innerWidth;
+	this.YS = window.innerHeight;
+    }
 
     //converts a mouse event to screen coords
     this.e2coord = function(e) {
@@ -36,14 +71,13 @@ var Graphics = new function() {
 	this.attrib = function(attrib) { for (var key in attrib) { this.sprite_elt.setAttribute(key, attrib[key]); } }
     }	
 
-    this.topruler = function(bbox) { set_elt_bbox(TOPRULER, bbox); }
-    this.bottomruler = function(bbox) { set_elt_bbox(BOTTOMRULER, bbox); console.log("set bottom bbox to "+JSON.stringify(bbox));}
+    this.topruler = function(bbox) { Graphics.set_elt_bbox(TOPRULER, bbox); }
+    this.bottomruler = function(bbox) { Graphics.set_elt_bbox(BOTTOMRULER, bbox); }
 
-    this.create_button = function(bbox) {
+    this.create_button = function() {
 	var svg_elt = document.createElementNS(SVG_NS, "svg");
 	svg_elt.onclick = onclick;
 	svg_elt.classList.add("button");
-	set_elt_bbox(svg_elt, bbox);
 	BUTTONS.appendChild(svg_elt);
 	return svg_elt;
     }
@@ -57,7 +91,7 @@ var Graphics = new function() {
     }
 
 
-    function set_elt_bbox(elt, bbox) {
+    this.set_elt_bbox = function(elt, bbox) {
 	var st = elt.style;
 	st.left = bbox[0];
 	st.top = bbox[1];
@@ -78,19 +112,15 @@ var Graphics = new function() {
 
     this.SVG = new function() {
 
-	this.create = function(bbox) {
+	this.create = function() {
 	 
 	    function construct() {
 		var svg_elt = document.createElementNS(SVG_NS, "svg");
 		// to fix a bug with the background not appearing, stick an invisible rectangle in here
 		var rect_elt = document.createElementNS(SVG_NS, "rect");
-		rect_elt.setAttribute("x", 0);
-		rect_elt.setAttribute("y", 0);
-		rect_elt.setAttribute("width", bbox[2]);
-		rect_elt.setAttribute("height", bbox[3]);
+		svg_elt.appendChild(rect_elt);
 		rect_elt.style.fill = "none";
 		rect_elt.style.stroke = "none";
-		svg_elt.appendChild(rect_elt);
 		var group_elts = {};
 		var group_names = ["lines", "points", "highlighted", "controlpoints"];
 		for (var i=0; i<group_names.length; i++) {
@@ -99,8 +129,8 @@ var Graphics = new function() {
 		    svg_elt.appendChild(group_elt);
 		}
 		this.svg_elt = svg_elt;
+		this.rect_elt = rect_elt;
 		this.group_elts = group_elts;
-		this.set_bbox(bbox);
 		DIV.appendChild(svg_elt);
 	    }
 
@@ -110,18 +140,22 @@ var Graphics = new function() {
 
 	this.set_bbox = function(bbox) {
 	    this.bbox = bbox;
-	    set_elt_bbox(this.svg_elt, bbox);
+	    Graphics.set_elt_bbox(this.svg_elt, bbox);
+	    this.rect_elt.setAttribute("x", 0);
+	    this.rect_elt.setAttribute("y", 0);
+	    this.rect_elt.setAttribute("width", bbox[2]);
+	    this.rect_elt.setAttribute("height", bbox[3]);
 	}
 
 	// moves the svg element to maindiv
-	this.focus = function() {
-	    DIV.removeChild(this.svg_elt);
+	this.focus = function(firsttime) {
+	    if (!firsttime) DIV.removeChild(this.svg_elt);
 	    this.remove_class("deselected");
 	    MAINDIV.appendChild(this.svg_elt);
 	}
 
-	this.unfocus = function() {
-	    MAINDIV.removeChild(this.svg_elt);
+	this.unfocus = function(firsttime) {
+	    if (!firsttime) MAINDIV.removeChild(this.svg_elt);
 	    this.add_class("deselected");
 	    DIV.appendChild(this.svg_elt);
 	}
@@ -177,11 +211,12 @@ var Graphics = new function() {
 
 var Animation = new function() {
     
-    this.run = function(anim) {
+    this.run = function(anim, speed) {
+	if (speed==undefined) speed=1;
 	var frame = 0;
 	function animate() {
 	    var busy = anim(frame);
-	    frame++;
+	    frame+=speed;
 	    if (busy) requestAnimationFrame(animate);
 	}
 	requestAnimationFrame(animate);

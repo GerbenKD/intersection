@@ -28,31 +28,37 @@ var CompoundTool = Tool.extend(function() {
 	    perform_frame.call(this, undobuffer.current);
     }
 
-    this.get_cp_positions = function(tool) {
-	var cppos = [];
-	var ii = this.id2tool[0];
-	for (var i=0; i<tool.max_input_socket(); i++) {
-	    var inp = tool.get_input(i); // inp = [ii of parent, ii socket]
-	    if (!inp) continue;
-	    var cpinp = inp[0].get_input(inp[1]);
-	    assert(cpinp && cpinp[0]===this.ControlPoints, "Not a controlpoint in get_cp_positions");
-	    var gizmo = cpinp[0].get_output(cpinp[1]);
-	    cppos.push([inp[1], gizmo.dup()]);
-	}
-	return cppos;
-    }
 
-    this.set_scaled_cp_positions = function(cppos, bbox0, bbox1) {
-	var ii = this.id2tool[0];
-	for (var i=0; i<cppos.length; i++) {
-	    var socket = cppos[i][0];
-	    var pos = cppos[i][1];
-	    var inp = ii.get_input(socket);
-	    assert(inp && inp[0]===this.ControlPoints, "Not a controlpoint in get_cp_positions");
-	    var gizmo = inp[0].get_output(inp[1]);
-	    gizmo.pos = [(pos[0]-bbox0[0])/bbox0[2] * bbox1[2] + bbox1[0],
-			 (pos[1]-bbox0[1])/bbox0[3] * bbox1[3] + bbox1[1]];
-	}
+    // fields: pos: array of controlpoint positions
+    //         tool: the construction
+    this.get_cp_positions = function(tool) {
+	var me = this;
+	return CPPos.extend(function() {
+	    this.owner = me;
+	    var cppos = [];
+	    var ii = me.id2tool[0];
+	    if (tool==undefined) {
+		// get all controlpoints from this compoundtool
+		for (var i=0; i<ii.max_input_socket(); i++) {
+		    var cpinp = ii.get_input(i);
+		    if (!cpinp) continue;
+		    assert(cpinp[0]===me.ControlPoints, "Not a controlpoint in get_cp_positions()");
+		    var gizmo = cpinp[0].get_output(cpinp[1]);
+		    cppos[i] = gizmo.dup();
+		}
+	    } else {
+		// get all controlpoints owned by the given tool
+		for (var i=0; i<tool.max_input_socket(); i++) {
+		    var inp = tool.get_input(i); // inp = [ii of parent, ii socket]
+		    if (!inp) continue;
+		    var cpinp = inp[0].get_input(inp[1]);
+		    assert(cpinp && cpinp[0]===me.ControlPoints, "Not a controlpoint in get_cp_positions(tool)");
+		    var gizmo = cpinp[0].get_output(cpinp[1]);
+		    cppos[inp[1]] = gizmo.dup();
+		}
+	    }
+	    this.pos=cppos;
+	});
     }
     
     this.get_input_interface = function() { return this.id2tool[0]; }
@@ -541,7 +547,7 @@ var CompoundTool = Tool.extend(function() {
 	}
 
 	// scale it to the desired bounding box
-	this.set_scaled_cp_positions(this.get_cp_positions(new_ct), [0,0,Graphics.XS,Graphics.YS],bbox);
+	this.get_cp_positions(new_ct).scale([0,0,Graphics.XS,Graphics.YS],bbox).move();
 
 	return new_ct.id;
     }

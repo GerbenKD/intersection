@@ -134,7 +134,6 @@ var State = new function() {
 	    } else {
 		if (move_from.length != 0) {
 		    var old_from = move_from, old_to = move_to;
-		    anims.push(function() { console.log("Animation: from="+JSON.stringify(old_from)+" to="+JSON.stringify(old_to))});
 		    anims.push(STAMP.animate_no_zoom(move_from, move_to, speed));
 		    move_from = [];
 		    move_to = [];
@@ -173,7 +172,7 @@ var State = new function() {
 
 	// actually undo all the changes
 	var animation = animate_frame(frame.slice().reverse(), 1, speed);
-	Animation.run(Animation.sequential([animation, continuation]));
+	Animation.run(Animation.sequential([animation, continuation]), speed);
     }
 
     this.can_redo = function() {
@@ -427,8 +426,5 @@ var State = new function() {
     }
 
     this.get_cp_positions = function(id) { return CT.get_cp_positions(CT.id2tool[id]); }
-    this.set_scaled_cp_positions = function(cppos, bbox0, bbox1) { CT.set_scaled_cp_positions(cppos, bbox0, bbox1); }
-
-
 
 };

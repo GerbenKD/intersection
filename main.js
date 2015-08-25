@@ -10,17 +10,29 @@ function main() {
     var MOUSE = [0,0];          // [x,y]
     var STATE = "normal";       // one of normal, dragging, selecting_outputs or animating
 
+    Graphics.reposition();
+
+
     var STAMPS = create_stamps(8);
     var CURRENT_STAMP = undefined;
 
-    var BUTTONS;
-
-    BUTTONS = make_buttons();
+    var BUTTONBAR = make_buttonbar();
 
     var stamp = Storage.getstr("current_stamp");
     switch_stamp(stamp ? (stamp|0) : 0);
         
-
+    window.onresize = function() {
+	Graphics.reposition();
+	console.log("Resizing to "+Graphics.XS+", "+Graphics.YS);
+	move_ruler(CURRENT_STAMP);
+	BUTTONBAR.reposition();
+	for (var i=0; i<STAMPS.length; i++) {
+	    STAMPS[i].reposition(STAMPS.length);
+	    STAMPS[i].redraw();
+	}
+	var body = document.getElementById("body");
+	body.style["background-color"] = "white";
+    }
 
     /*
 
@@ -59,10 +71,10 @@ function main() {
     function switch_state(new_state) {
 	if (STATE==new_state) return;
 	if (new_state=="normal") {
-	    for (var b in BUTTONS) { BUTTONS[b].highlight(); }
+	    BUTTONBAR.rehighlight();
 	    HIGHLIGHT_TARGETS = State.get_all_highlight_targets();
 	} else if (new_state == "animating") {
-	    for (var b in BUTTONS) { BUTTONS[b].update_highlight(false); }
+	    BUTTONBAR.rehighlight(false);
 	    HIGHLIGHT_TARGETS = [];
 	} else if (new_state == "dragging") {
 	    HIGHLIGHT_TARGETS = State.pick_up_controlpoint(HIGHLIGHTED[1]);
@@ -91,7 +103,7 @@ function main() {
 	function rewind_rec() {
 	    State.undo(function() { 
 		if (State.can_undo()) rewind_rec(); else switch_state("normal"); 
-	    });
+	    }, 4);
 	}
 	rewind_rec();
     }
@@ -102,7 +114,7 @@ function main() {
 	function fforward_rec() {
 	    State.redo(function() {
 		if (State.can_redo()) fforward_rec(); else switch_state("normal");
-	    });
+	    }, 4);
 	}
 	fforward_rec();
     }
@@ -154,12 +166,13 @@ function main() {
 	    var seq_anim = [];
 	    // Move contents of main view to old stamp and unhide it
 	    var cur_stamp = STAMPS[CURRENT_STAMP];
-	    cur_stamp.update_cp_positions();
+	    cur_stamp.update_large_positions();
+	    cur_stamp.update_small_positions();
 	    State.save();
 	    var step1 = cur_stamp.animate_shrink(gs);
 	    var step2 = function() { 
 		// WHEN: old focus has animated back into the toolbar
-		cur_stamp.svg_object.unfocus(); 
+		cur_stamp.unfocus(); 
 	    }
 	    anims.push(Animation.sequential([step1, step2]));
 	}
@@ -168,7 +181,7 @@ function main() {
 
 	var pre_zoom_in = function() {
 	    // WHEN: new stamp starts to grow from toolbar to main screen
- 	    new_stamp.svg_object.focus();
+ 	    new_stamp.focus();
 	    move_ruler(stamp_id);
 	};
 	var do_zoom_in = new_stamp.animate_enlarge(gs);
@@ -254,7 +267,6 @@ function main() {
 		var tool_id = embed_stamp(stamp_id);
 		EMBEDDING[4] = tool_id;
 		EMBEDDING[5] = State.get_cp_positions(tool_id);
-		console.log("tool id = "+tool_id+", cp positions = "+JSON.stringify(EMBEDDING[5]));
 		EMBEDDING[6] = STAMPS[stamp_id].small_bbox;
 		State.redraw();
 	    }
@@ -277,7 +289,7 @@ function main() {
 	    bbox = [MOUSE[0]-fx*width, MOUSE[1]-fy*height, width, height];
 
 	    // TODO calculate dragging bbox here and everything will be awesome!
-	    State.set_scaled_cp_positions(EMBEDDING[5], EMBEDDING[6], bbox);
+	    EMBEDDING[5].scale(EMBEDDING[6], bbox).move();
 	    State.redraw();
 	}
     }
@@ -308,21 +320,12 @@ function main() {
     }
 
     function drop_stamp() {
-	var opos = EMBEDDING[5];
-	var cpos = State.get_cp_positions(EMBEDDING[4]);
-	var changes = {};
+	var opos = EMBEDDING[5].pos;
+	var cpos = State.get_cp_positions(EMBEDDING[4]).pos;
+
 	for (var i=0; i<opos.length; i++) {
-	    var socket = opos[i][0], pos0=opos[i][1];
-	    if (!changes[socket]) changes[socket] = [undefined, pos0]; else changes[socket][1] = pos0;
-	}
-	for (var i=0; i<cpos.length; i++) {
-	    var socket = cpos[i][0], pos1=cpos[i][1];
-	    if (!changes[socket]) changes[socket] = [pos1, undefined]; else changes[socket][0] = pos1;
-	}
-	for (var socket in changes) {
-	    var pos0 = changes[socket][0], pos1 = changes[socket][1];
-	    assert(pos0!=undefined && pos1!=undefined, "Inconsistent controlpoint change during embedding");
-	    State.register_change(["move_controlpoint", socket, pos0], ["move_controlpoint", socket, pos1]);
+	    if (!opos[i]) continue;
+	    State.register_change(["move_controlpoint", i, cpos[i]], ["move_controlpoint", i, opos[i]]);
 	}
 	State.create_undo_frame(); // make sure these controlpoint move events are not combined with the ones to follow
 	State.redraw();
@@ -368,14 +371,11 @@ function main() {
 
     function create_stamps(nstamps) {
 	var stamps = [];
-	var stamp_height  = Graphics.YS / nstamps;
-	var stamp_width = stamp_height * 3/2;
-
+	
 	for (var i = 0; i < nstamps; i++) {
 	    console.log("\nCreating stamp #"+(i+1));
 	    var clz = i==nstamps-2 ? LineStamp : i==nstamps-1 ? CircleStamp : ConstructionStamp;
-	    var bbox = [0, stamp_height*i, stamp_width, stamp_height];
-	    var stamp = clz.create(i, bbox);
+	    var stamp = clz.create(i); // , bbox);
 
 	    (function (id) {
 		var elt = stamp.get_svg_elt();
@@ -384,6 +384,8 @@ function main() {
 		elt.onmouseup   = function(event) { mouseup(id, event);   }
 	    })(i);
 
+	    stamp.unfocus(true);
+	    stamp.reposition(nstamps);
 	    stamp.redraw();
 	    stamps.push(stamp);
 	}
@@ -399,43 +401,66 @@ function main() {
 	Graphics.bottomruler([0, ytop+stamp_height, stamp_width, Graphics.YS-(ytop+stamp_height)]);
     }
 
-    function make_buttons() {
-	
-	var screenheight = Graphics.YS * 0.03;
-	var margin = screenheight * 0.5, padding = margin*0.2;
-
+    function make_buttonbar() {
 	var cos = Math.cos, sin = Math.sin, pi = Math.PI, sqrt = Math.sqrt;
+	var screenheight, margin, padding;
 
 	var svg_elt = Graphics.create_svg();
 
+	// points are a list of points in the bbox[0,0,this.width,1], y=0 at bottom
+	function draw_polygon(poly, points) {
+	    var res = "";
+	    for (var i=0; i<points.length; i++) {
+		if (i>0) res = res + " ";
+		res = res + (screenheight*points[i][0]+padding).toFixed(1) + ","
+		    + (screenheight*(1-points[i][1])+padding).toFixed(1);
+	    }
+	    poly.setAttribute("points", res);
+	}
+
+
 	var Button = new function() {
-	    this.extend = function(constr) { constr.prototype = this; return new constr(); }
-
-	    this.initialize = function(y0,x1) {
-		var screenwidth = this.width * screenheight;
-		this.svg_elt = Graphics.create_button([x1-screenwidth-padding, y0-padding, 
-						       screenwidth +2*padding, screenheight+2*padding]);
-		this.draw();
-		var me = this;
-		this.svg_elt.onclick = function() { me.action(); }
-		return x1-screenwidth-margin;
-	    }
-
-	    // points are a list of points in the bbox[0,0,this.width,1], y=0 at bottom
-	    this.draw_polygon = function(points) {
-		var poly = Graphics.create_polygon();
-
-		var res = "";
-		for (var i=0; i<points.length; i++) {
-		    if (i>0) res = res + " ";
-		    res = res + (screenheight*points[i][0]+padding).toFixed(1) + ","
-		        + (screenheight*(1-points[i][1])+padding).toFixed(1);
+	    this.create = function(constr) {
+		function hack() {
+		    var me = this;
+		    this.svg_elt = Graphics.create_button();
+		    this.svg_elt.onclick = function() { me.action(); }
+		    constr.call(this);
 		}
-
-		poly.setAttribute("points", res);
-		this.svg_elt.appendChild(poly);
+		hack.prototype = this;
+		return new hack();
 	    }
 
+	    this.make_polygon = function() {
+		var poly = Graphics.create_polygon();
+		this.svg_elt.appendChild(poly);
+		return poly;
+	    }
+
+	    this.reposition = function() {
+		screenheight = Graphics.YS * 0.03;
+		margin = screenheight * 0.5;
+		padding = margin*0.2;
+
+		var y = Graphics.YS - screenheight - margin;
+		var x = Graphics.XS - margin;
+
+		for (var i=this.list.length-1; i>=0; i--) {
+		    var screenwidth = this.list[i].width * screenheight;
+		    var bbox = [x-screenwidth-padding, y-padding, 
+				screenwidth +2*padding, screenheight+2*padding];
+		    Graphics.set_elt_bbox(this.list[i].svg_elt, bbox);
+		    this.list[i].draw();
+		    x -= screenwidth + margin;
+		}
+	    }
+	
+	    this.rehighlight = function(state) {
+		for (var i=0; i<this.list.length; i++) {
+		    var hl = state==undefined ? this.list[i].is_highlighted() : state;
+		    this.list[i].update_highlight(hl);
+		}
+	    }
 
 	    this.update_highlight = function(active) {
 		if (!this.active && active) {
@@ -449,8 +474,12 @@ function main() {
 
 	}
 
-	var Rewind = Button.extend(function() {
+	var Rewind = Button.create(function() {
 	    this.width = 1.6;
+
+	    var p1 = this.make_polygon();
+	    var p2 = this.make_polygon();
+	    var p3 = this.make_polygon();
 
 	    this.draw = function() {
 		var w = this.width;
@@ -458,25 +487,27 @@ function main() {
 		var x2 = 0.2;           // right of left rectangle
 		var x3 = w-0.5*sqrt(3); // left of rightmost triangle
 		var x4 = x1+0.5*sqrt(3) // right of leftmost triangle
-		this.draw_polygon([[x3,0.5],[w,1],[w,0]]);
-		this.draw_polygon([[x1,0.5],[x4,1],[x4,0]]);
-		this.draw_polygon([[0,0],[0,1],[x2,1],[x2,0]]);
+		draw_polygon(p1, [[x3,0.5],[w,1],[w,0]]);
+		draw_polygon(p2, [[x1,0.5],[x4,1],[x4,0]]);
+		draw_polygon(p3, [[0,0],[0,1],[x2,1],[x2,0]]);
 	    }
 
 
 	    this.action = function() { rewind(); }
 
-	    this.highlight = function() { this.update_highlight(State.can_undo()); }
+	    this.is_highlighted = function() { return State.can_undo(); }
 
 
 	});
 
-	var Undo = Button.extend(function() {
+	var Undo = Button.create(function() {
 	    this.width = 0.5*sqrt(3);
 	    
+	    var p1 = this.make_polygon();
+
 	    this.draw = function() {
 		var w = this.width;
-		this.draw_polygon([[0,0.5], [w, 0], [w, 1]]);
+		draw_polygon(p1, [[0,0.5], [w, 0], [w, 1]]);
 	    }
 
 	    this.action = function() {
@@ -484,16 +515,18 @@ function main() {
 		this.update_highlight();
 	    }
 
-	    this.highlight = function() { this.update_highlight(State.can_undo()); }
+	    this.is_highlighted = function() { return State.can_undo(); }
 
 	});
 
-	var Redo = Button.extend(function() {
+	var Redo = Button.create(function() {
 	    this.width = 0.5*sqrt(3);
-	    
+	     
+	    var p1 = this.make_polygon();
+
 	    this.draw = function() {
 		var w = this.width;
-		this.draw_polygon([[0,0], [0, 1], [w, 0.5]]);
+		draw_polygon(p1, [[0,0], [0, 1], [w, 0.5]]);
 	    }
 
 	    this.action = function() {
@@ -501,13 +534,17 @@ function main() {
 		this.highlight();
 	    }
 
-	    this.highlight = function() { this.update_highlight(State.can_redo()); }
+	    this.is_highlighted = function() { return State.can_redo(); }
 
 
 	});
 
-	var FForward = Button.extend(function() {
+	var FForward = Button.create(function() {
 	    this.width = 1.6;
+
+	    var p1 = this.make_polygon();
+	    var p2 = this.make_polygon();
+	    var p3 = this.make_polygon();
 
 	    this.draw = function() {
 		var w = this.width;
@@ -515,59 +552,49 @@ function main() {
 		var x2 = 0.5*sqrt(3);
 		var x3 = w-0.2;
 		var x4 = x1+0.5*sqrt(3);
-		this.draw_polygon([[0,0],[0,1],[x2,0.5]]);
-		this.draw_polygon([[x1,0],[x1,1],[x4,0.5]]);
-		this.draw_polygon([[x3,0],[x3,1],[w,1],[w,0]]);
+		draw_polygon(p1, [[0,0],[0,1],[x2,0.5]]);
+		draw_polygon(p2, [[x1,0],[x1,1],[x4,0.5]]);
+		draw_polygon(p3, [[x3,0],[x3,1],[w,1],[w,0]]);
 	    }
 
 
 	    this.action = function() { fforward(); }
 	    
-	    this.highlight = function() { this.update_highlight(State.can_redo()); }
-
+	    this.is_highlighted = function() { return State.can_redo(); }
 	});
 
-	var FullScreen = Button.extend(function() {
+	var FullScreen = Button.create(function() {
 	    this.width = 1;
+
+	    var p1 = this.make_polygon();
+	    var p2 = this.make_polygon();
 
 	    this.draw = function() {
 		var s = 0.05; // spacing between center and arrow
 		var t = 0.15;  // line thickness
 
 		// top-right
-		this.draw_polygon([[0.5+s,0.5+s], [0.5+s+t,0.5+s], [1-t, 1-2*t], [1-t, 0.5+s], [1,0.5+s],
-				   [1,1], [0.5+s,1], [0.5+s,1-t], [1-2*t,1-t], [0.5+s,0.5+s+t]]);
+		draw_polygon(p1, [[0.5+s,0.5+s], [0.5+s+t,0.5+s], [1-t, 1-2*t], [1-t, 0.5+s], [1,0.5+s],
+				       [1,1], [0.5+s,1], [0.5+s,1-t], [1-2*t,1-t], [0.5+s,0.5+s+t]]);
 
 		// bottom-left
-		this.draw_polygon([[0.5-s,0.5-s], [0.5-s-t, 0.5-s], [t, 2*t], [t,0.5-s], [0,0.5-s],
-				   [0,0], [0.5-s,0], [0.5-s,t], [2*t,t], [0.5-s,0.5-s-t]]);
+		draw_polygon(p2, [[0.5-s,0.5-s], [0.5-s-t, 0.5-s], [t, 2*t], [t,0.5-s], [0,0.5-s],
+				       [0,0], [0.5-s,0], [0.5-s,t], [2*t,t], [0.5-s,0.5-s-t]]);
 
 	    }
 
 
 	    this.action = function() {
-		console.log("Fullscreen clicked");
+		Graphics.toggle_fullscreen();
 	    }
 
-	    this.highlight = function() { this.update_highlight(true); }
+	    this.is_highlighted = function() { return true; }
 	    
 	});
 
-	var y = Graphics.YS - screenheight - margin;
-	var x = Graphics.XS - margin;
+	Button.list = [ Rewind, Undo, Redo, FForward, FullScreen ];
+	Button.reposition();
 
-
-	var buttons = {
-	    fullscreen: FullScreen,
-	    fforward: FForward,
-	    redo: Redo,
-	    undo: Undo,
-	    rewind: Rewind
-	};
-	for (var b in buttons) {
-	    x = buttons[b].initialize(y, x);
-	}
-
-	return buttons;
+	return Button;
     }
 }

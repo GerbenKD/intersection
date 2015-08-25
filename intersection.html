@@ -6,7 +6,9 @@
 </head>
 <link rel="stylesheet" type="text/css" href="intersection.css">
 
-<body id = "body">
+<body>
+
+<div id="body">
 <div id="maindiv">
 </div>
 <div class="ruler" id="topruler">
@@ -16,7 +18,8 @@
 <div id="div">
 </div>
 <div id="buttons">
-</divg>
+</div>
+</div>
 
 <script>
 "use strict";
@@ -65,7 +68,7 @@ var SMALL2 = SMALL*SMALL;
 function assert(succeeded, string) { if (!succeeded) { console.error(string); } }
 
 // TODO loading is currently in-order, while some files can be loaded synchronously, which would be faster
-load(["Storage.js", "Graphics.js", "Gizmo.js", "Tool.js", "Interface.js", "CompoundTool.js", "Construction.js", "Stamp.js", "State.js", "main.js"], function() { main(); });
+load(["CPPos.js", "Storage.js", "Graphics.js", "Gizmo.js", "Tool.js", "Interface.js", "CompoundTool.js", "Construction.js", "Stamp.js", "State.js", "main.js"], function() { main(); });
 
 </script>
 

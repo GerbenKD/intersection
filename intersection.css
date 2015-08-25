@@ -1,9 +1,14 @@
 body {
     border: none;
+    overflow: hidden;
     margin: 0px 0px 0px 0px;
 }
 
-body.select_outputs {
+div {
+    background-color: white;
+}
+
+div.body.select_outputs {
     background-color: #e0e0e0;
 }
 

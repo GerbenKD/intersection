@@ -11,3 +11,4 @@
 
 - maak het onafhankelijk van resolutie, en ondersteun resizen van het window
 
+- trek lijnen iets door voorbij de rand van het scherm

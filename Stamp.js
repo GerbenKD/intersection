@@ -5,18 +5,28 @@ var Stamp = new function() {
 
     this.extend = function(constr) { constr.prototype = this; return new constr(); }
 
-    this.create = function(id, bbox) {
+    this.create = function(id) {
 	return this.extend(function() {
 	    this.id = id;
 	    this.filename = "file_"+(id+1);
-	    this.small_bbox = bbox;
-	    this.large_bbox = [0, 0, Graphics.XS, Graphics.YS];
-	    this.svg_object = Graphics.SVG.create(bbox);
+	    this.svg_object = Graphics.SVG.create();
 	    this.svg_object.add_class("stamp");
-	    this.svg_object.add_class("deselected");
 	    this.renderer = this.svg_object.create_renderer();
-	    this.graphics_state = { bbox: bbox, cp_radius: 3 };
+	    this.graphics_state = { cp_radius: 3 };
 	});
+    }
+
+    // for the time being, only works on deselected stamps
+    // move the stamp to the given position and size, and redisplay contents
+    this.reposition = function(nstamps) {
+	var stamp_height = Graphics.YS / nstamps;
+	var stamp_width  = stamp_height * 3/2;
+	
+	this.small_bbox = [0, stamp_height*this.id, stamp_width, stamp_height];
+	this.large_bbox = [0, 0, Graphics.XS, Graphics.YS];
+	var bbox = this.selected ? this.large_bbox : this.small_bbox;
+	this.graphics_state.bbox = bbox;
+	this.svg_object.set_bbox(bbox);
     }
 
     this.get_svg_elt  = function() { return this.svg_object.svg_elt; }
@@ -25,61 +35,75 @@ var Stamp = new function() {
 	this.renderer(this.get_gizmo_set(), this.graphics_state);
     }
 
+
+    // moves the svg element to maindiv
+    this.focus = function(firsttime) {
+	this.svg_object.focus(firsttime);
+	this.selected = true;
+    }
+
+    this.unfocus = function(firsttime) {
+	this.svg_object.unfocus(firsttime);
+	this.selected = false;
+    }
 }();
 
 
 var LineStamp = Stamp.extend(function() {
 
-    this.get_gizmo_set = function() {
-	if (this.gizmo_set) return this.gizmo_set;
-	var width = this.svg_object.bbox[2];
-	var height = this.svg_object.bbox[3];
-	var pos1 = [0.2*width, height/2];
-	var pos2 = [0.8*width, height/2];
-	var cp1 = ControlPoint.create(pos1);
-	var cp2 = ControlPoint.create(pos2);
-	var line = Line.create();
-	cp1.valid = true;
-	cp2.valid = true;
-	line.valid = true;
-	line.p1 = pos1;
-	line.p2 = pos2;
-	var set = {};
-	set[cp1.id] = cp1;
-	set[cp2.id] = cp2;
-	set[line.id] = line;
-	this.gizmo_set = set;
-	return set;
+    var cp1 = ControlPoint.create();
+    var cp2 = ControlPoint.create();
+    cp1.valid = true;
+    cp2.valid = true;
+    var line = Line.create();
+    line.valid = true;
+    var set = {};
+    set[cp1.id] = cp1;
+    set[cp2.id] = cp2;
+    set[line.id] = line;
+    this.gizmo_set = set;
+
+    this.reposition = function(nstamps) {
+	Stamp.reposition.call(this, nstamps);
+	var width = this.small_bbox[2];
+	var height = this.small_bbox[3];
+	cp1.pos = [0.2*width, height/2];
+	cp2.pos = [0.8*width, height/2];
+	line.p1 = cp1.pos;
+	line.p2 = cp2.pos;
     }
 
+    this.get_gizmo_set = function() { return this.gizmo_set; }
 });
 
 var CircleStamp = Stamp.extend(function() {
+    var cp1 = ControlPoint.create();
+    var cp2 = ControlPoint.create();
+    var circle = Circle.create();
+    cp1.valid = true;
+    cp2.valid = true;
+    circle.valid = true;
+    var set = {};
+    set[cp1.id] = cp1;
+    set[cp2.id] = cp2;
+    set[circle.id] = circle;
+    this.gizmo_set = set;
 
+   this.reposition = function(nstamps) {
+       Stamp.reposition.call(this, nstamps);
+       var width = this.small_bbox[2];
+       var height = this.small_bbox[3];
+       var min = width<height?width:height;
+       var center = [0.5*width, 0.5*height];
+       var border = [0.5*width+0.4*min, 0.5*height];
+       cp1.pos = center;
+       cp2.pos = border;
+       circle.center = center;
+       circle.border = border;
+   }
 
-    this.get_gizmo_set = function() {
-	if (this.gizmo_set) return this.gizmo_set;
-	var width = this.svg_object.bbox[2];
-	var height = this.svg_object.bbox[3];
-	var min = width<height?width:height;
-	var center = [0.5*width, 0.5*height];
-	var border = [0.5*width+0.4*min, 0.5*height];
-	var cp1 = ControlPoint.create(center);
-	var cp2 = ControlPoint.create(border);
-	var circle = Circle.create();
-	cp1.valid = true;
-	cp2.valid = true;
-	circle.valid = true;
-	circle.center = center;
-	circle.border = border;
-	var set = {};
-	set[cp1.id] = cp1;
-	set[cp2.id] = cp2;
-	set[circle.id] = circle;
-	this.gizmo_set = set;
-	return set;
-    }
-    
+    this.get_gizmo_set = function() { return this.gizmo_set; }
+
 });
 
 
@@ -90,18 +114,18 @@ var ConstructionStamp = Stamp.extend(function() {
 	var instance = Stamp.create.call(this, id, bbox);
 	instance.filename = "file_"+(id+1);
 	instance.construction = instance.load_construction();
-	instance.update_cp_positions();
-	instance.construction.set_positions(instance.small_positions);
+	instance.update_large_positions();
 	return instance;
     }
-
+    
+    /*
     this.set_bbox = function(bbox) {
 	var bbox_cur = this.graphics_state.bbox;
 	var new_cp = this.construction.get_scaled_positions([0,0,bbox_cur[2],bbox_cur[3]], [0,0,bbox[2],bbox[3]]);
 	this.construction.set_positions(new_cp);
 	this.graphics_state.bbox = bbox;
-	this.renderer(this.get_gizmo_set(), this.graphics_state);
-    }
+	this.redraw();
+    }*/
 
     this.load_construction = function() {
 	var savestate = Storage.get_file(this.filename);
@@ -112,9 +136,19 @@ var ConstructionStamp = Stamp.extend(function() {
 
     this.get_construction = function() { return this.construction; }
 
+    this.reposition = function(nstamps) {
+	Stamp.reposition.call(this, nstamps);
+	this.update_small_positions();
+	if (!this.selected) this.small_positions.move();
+    }
+
     // called just before shrinking the construction. Recalculates the large_positions and small_positions.
-    this.update_cp_positions = function() {
-	this.large_positions = this.construction.get_positions();
+    this.update_large_positions = function() {
+	this.large_positions = this.construction.get_cp_positions();
+    }
+
+    // used when the screen is resized AND when the stamp is deactivated
+    this.update_small_positions = function() {
 	// calculate new positions of the controlpoints
 	var oldbb = this.large_bbox;
 	var newbb = [0,0,this.small_bbox[2],this.small_bbox[3]];
@@ -129,15 +163,15 @@ var ConstructionStamp = Stamp.extend(function() {
 	    newbb[1] = (newbb[3]-newheight)/2;
 	    newbb[3] = newheight;
 	}
-	this.small_positions = this.construction.get_scaled_positions(oldbb, newbb);
+	this.small_positions = this.large_positions.scale(oldbb, newbb);
     }
 
     this.animate_enlarge = function() {
-	return get_animation(this, this.small_positions, this.large_positions, this.small_bbox, this.large_bbox, 3, 8);
+	return get_animation(this, this.small_positions.pos, this.large_positions.pos, this.small_bbox, this.large_bbox, 3, 8);
     }
 
     this.animate_shrink = function() {
-	return get_animation(this, this.large_positions, this.small_positions, this.large_bbox, this.small_bbox, 8, 3);
+	return get_animation(this, this.large_positions.pos, this.small_positions.pos, this.large_bbox, this.small_bbox, 8, 3);
     }
 
     this.animate_no_zoom = function(from_positions, to_positions, speed) {
@@ -189,7 +223,7 @@ var ConstructionStamp = Stamp.extend(function() {
 	    var br = now.pop();
 	    var tl = now.pop();
 
-	    stamp.construction.set_positions(now);
+	    CPPos.create(stamp.construction, now).move();
 	    stamp.graphics_state.bbox = [tl[0], tl[1], br[0]-tl[0], br[1]-tl[1]];
 
 	    var size_now  = Math.sqrt(stamp.graphics_state.bbox[2] * stamp.graphics_state.bbox[3]);
