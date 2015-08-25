@@ -37,15 +37,23 @@ var Graphics = new function() {
 		|| document.msFullScreenElement;
 	}
 
-	function leave_fullscreen() {}
-	
 	function enter_fullscreen() {
-	    if      (BODY.mozRequestFullScreen)    BODY.mozRequestFullScreen();
-	    else if (BODY.msRequestFullScreen)     BODY.msRequestFullScreen();
-	    else if (BODY.webkitRequestFullscreen) BODY.webkitRequestFullscreen();
-	    else if (BODY.requestFullscreen)       BODY.requestFullScreen();
+	    var elt = BODY;
+	    if      (elt.mozRequestFullScreen)    elt.mozRequestFullScreen();
+	    else if (elt.msRequestFullScreen)     elt.msRequestFullScreen();
+	    else if (elt.webkitRequestFullscreen) elt.webkitRequestFullscreen();
+	    else if (elt.requestFullscreen)       elt.requestFullScreen();
 	    else alert("Full screen not supported"); // TODO do something real here
 	}
+
+	function leave_fullscreen() {
+	    if      (document.exitFullscreen)       document.exitFullscreen();
+	    else if (document.msExitFullscreen)     document.msExitFullscreen();
+	    else if (document.mozCancelFullScreen)  document.mozCancelFullScreen();
+	    else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+	    else alert("Full screen not supported"); // TODO do something real here
+	}
+
     }
 
 

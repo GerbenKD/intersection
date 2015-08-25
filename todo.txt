@@ -1,14 +1,20 @@
 - alle constructions worden gerendered op een bepaalde schaal, die de
   grootte van de points en dikte van de lijnen bepaalt
+1u
 
 - stamps tonen alleen outputs (als die er zijn)
+20min
 
 - de stamp verdwijnt tijdens het draggen en als je m loslaat verschijnt een "nieuwe"
+10min
 
 - rewind en fast forward moeten sneller en mooi
+1u
 
 - testen op andere browsers
-
-- maak het onafhankelijk van resolutie, en ondersteun resizen van het window
+??
 
 - trek lijnen iets door voorbij de rand van het scherm
+5min
+
+- zet het juist mouse pointer icon

@@ -67,8 +67,8 @@ var LineStamp = Stamp.extend(function() {
 	Stamp.reposition.call(this, nstamps);
 	var width = this.small_bbox[2];
 	var height = this.small_bbox[3];
-	cp1.pos = [0.2*width, height/2];
-	cp2.pos = [0.8*width, height/2];
+	cp1.pos = [0.35*width, height/2];
+	cp2.pos = [0.65*width, height/2];
 	line.p1 = cp1.pos;
 	line.p2 = cp2.pos;
     }

@@ -2,10 +2,11 @@ body {
     border: none;
     overflow: hidden;
     margin: 0px 0px 0px 0px;
-}
-
-div {
-    background-color: white;
+    width: 100%;
+    height: 100%;
+    top: 0px;
+    left: 0px;
+    pointer-events: none;
 }
 
 div.body.select_outputs {
@@ -18,6 +19,7 @@ div {
 
 svg {
     position: absolute;
+    pointer-events: all;
 }
 
 svg.button {
@@ -53,7 +55,6 @@ svg.stamp.deselected:hover {
 div.ruler {
     background-color: #40e080;
     opacity: 0.95;
-    pointer-events: none;
 }
 
 .line,.circle {
