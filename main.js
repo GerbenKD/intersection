@@ -25,7 +25,7 @@ function main() {
     
     window.onwheel = function(e) {
 	if (STATE != "normal" && STATE != "zooming") return;
-	var delta = e.deltaY > 0 ? -0.5 : 0.5;
+	var delta = 0.002*e.deltaY;
 	if (!ZOOMING) ZOOMING = [[MOUSE[0],MOUSE[1]], State.get_cp_positions(), 0, 0];
 	ZOOMING[2] = ZOOMING[2] + delta;
 	if (STATE != "zooming") {
@@ -41,7 +41,7 @@ function main() {
 
     function zoom_animation(frame) {
 	var zooming = true;
-	var speed = 0.06;
+	var speed = 0.1;
 	var delta = ZOOMING[2] - ZOOMING[3];
 	if (Math.abs(delta)<speed) {
 	    ZOOMING[3] = ZOOMING[2]; 
@@ -49,7 +49,8 @@ function main() {
 	} else {
 	    ZOOMING[3] += delta < 0 ? -speed : +speed;
 	}
-	ZOOMING[4] = ZOOMING[1].scale_from_point(ZOOMING[0], Math.exp(ZOOMING[3]));
+	var f = 1 + ZOOMING[3] * ZOOMING[3]; if (ZOOMING[3]<0) f = 1/f;
+	ZOOMING[4] = ZOOMING[1].scale_from_point(ZOOMING[0], f);
 	ZOOMING[4].move();
 	State.redraw();
 	return zooming;
@@ -189,7 +190,7 @@ function main() {
 	    // create line or circle
 	    var cx = bbox[0]+0.5*bbox[2], cy = bbox[1]+0.5*bbox[3];
 	    if (stamp_id == STAMPS.length-2) {
-		id = State.create_line([bbox[0]+0.1*bbox[2], cy], [bbox[0]+0.9*bbox[2], cy]);
+		id = State.create_line([bbox[0]+0.35*bbox[2], cy], [bbox[0]+0.65*bbox[2], cy]);
 	    } else {
 		id = State.create_circle([cx, cy], [bbox[0]+0.8*bbox[2], cy]);
 	    }
