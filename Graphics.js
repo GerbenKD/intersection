@@ -83,8 +83,7 @@ var Graphics = new function() {
 	this.attrib = function(attrib) { for (var key in attrib) { this.sprite_elt.setAttribute(key, attrib[key]); } }
     }	
 
-    this.topruler = function(bbox) { Graphics.set_elt_bbox(TOPRULER, bbox); }
-    this.bottomruler = function(bbox) { Graphics.set_elt_bbox(BOTTOMRULER, bbox); }
+    this.get_rulers = function() { return [TOPRULER, BOTTOMRULER]; }
 
     this.create_button = function() {
 	var svg_elt = document.createElementNS(SVG_NS, "svg");

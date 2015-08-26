@@ -17,4 +17,3 @@
 - trek lijnen iets door voorbij de rand van het scherm
 5min
 
-- zet het juist mouse pointer icon

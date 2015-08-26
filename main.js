@@ -7,6 +7,8 @@ function main() {
     var HIGHLIGHT_TARGETS;
     var DRAGGING;               // [tool, output #, dx(mouse-origin), dy(mouse-origin)]. Tool should be ControlPointTool
     var EMBEDDING;              // [stamp, mousex, mousey, stage]
+    var DISPLACING;
+    var ZOOMING;
     var MOUSE = [0,0];          // [x,y]
     var STATE = "normal";       // one of normal, dragging, selecting_outputs or animating
 
@@ -20,10 +22,45 @@ function main() {
 
     var stamp = Storage.getstr("current_stamp");
     switch_stamp(stamp ? (stamp|0) : 0);
-        
+    
+    window.onwheel = function(e) {
+	if (STATE != "normal" && STATE != "zooming") return;
+	// cross-browser wheel delta
+	var e = window.event || e; // old IE support
+	var delta = Math.max(-1, Math.min(1, (e.wheelDelta || -e.detail)));
+	var stepsize = 0.5;
+	if (!ZOOMING) ZOOMING = [[MOUSE[0],MOUSE[1]], State.get_cp_positions(), 0, 0];
+	ZOOMING[2] = ZOOMING[2] + stepsize*delta;
+	if (STATE != "zooming") {
+	    switch_state("zooming");
+	    Animation.run(Animation.sequential([zoom_animation, function() {
+		register_cp_moves(ZOOMING[1], ZOOMING[4]);
+		ZOOMING = undefined;
+		switch_state("normal");
+	    }]));
+	}
+	// register_cp_moves(opos,npos);
+    }
+
+    function zoom_animation(frame) {
+	var zooming = true;
+	var speed = 0.06;
+	var delta = ZOOMING[2] - ZOOMING[3];
+	if (Math.abs(delta)<speed) {
+	    ZOOMING[3] = ZOOMING[2]; 
+	    zooming = false;
+	} else {
+	    ZOOMING[3] += delta < 0 ? -speed : +speed;
+	}
+	ZOOMING[4] = ZOOMING[1].scale_from_point(ZOOMING[0], Math.exp(ZOOMING[3]));
+	ZOOMING[4].move();
+	State.redraw();
+	return zooming;
+    }
+
+
     window.onresize = function() {
 	Graphics.reposition();
-	console.log("Resizing to "+Graphics.XS+", "+Graphics.YS);
 	move_ruler(CURRENT_STAMP);
 	BUTTONBAR.reposition();
 	for (var i=0; i<STAMPS.length; i++) {
@@ -52,14 +89,18 @@ function main() {
 	    console.log("Pressed unknown key with keycode "+key);
 	}
     }
+    
+    function mouseover(id) {
+	if (STATE == "normal" && id!=CURRENT_STAMP) { Graphics.cursor("pointer"); }
+    }
 
     function switch_state(new_state) {
 	if (STATE==new_state) return;
 	if (new_state=="normal") {
-	    Graphics.cursor("default");
+	    // Graphics.cursor("default");
 	    BUTTONBAR.rehighlight();
 	    HIGHLIGHT_TARGETS = State.get_all_highlight_targets();
-	} else if (new_state == "animating") {
+	} else if (new_state == "animating" || new_state == "zooming") {
 	    Graphics.cursor("default");
 	    BUTTONBAR.rehighlight(false);
 	    HIGHLIGHT_TARGETS = [];
@@ -73,6 +114,10 @@ function main() {
 	    Graphics.cursor("grabbing");
 	    Graphics.cursor("-moz-grabbing");
 	    Graphics.cursor("-webkit-grabbing");
+	    HIGHLIGHT_TARGETS = [];
+	} else if (new_state=="displacing") {
+	    Graphics.cursor("move");
+	    HIGHLIGHT_TARGETS = [];
 	}
 	STATE = new_state;
 	highlight();
@@ -259,7 +304,14 @@ function main() {
 	    mousemove_drag(id);
 	} else if (STATE == "normal") {
 	    highlight();
-	}
+	} else if (STATE == "displacing") {
+	    displace();
+	} 
+    }
+
+    function displace() {
+	DISPLACING[2].translate([MOUSE[0]-DISPLACING[0], MOUSE[1]-DISPLACING[1]]).move();
+	State.redraw();
     }
 
     function mousemove_embed(id) {
@@ -314,19 +366,27 @@ function main() {
 	    drag_release();
 	    DRAGGING = undefined;
 	    switch_state("normal");
+	} else if (STATE=="displacing") {
+	    drop_displacement();
+	    DISPLACING = undefined;
+	    switch_state("normal");
 	}
     }
 
-    function drop_stamp() {
-	var opos = EMBEDDING[5].pos;
-	var cpos = State.get_cp_positions(EMBEDDING[4]).pos;
-
-	for (var i=0; i<opos.length; i++) {
-	    if (!opos[i]) continue;
-	    State.register_change(["move_controlpoint", i, cpos[i]], ["move_controlpoint", i, opos[i]]);
+    function register_cp_moves(opos, npos) {
+	for (var i=0; i<opos.pos.length; i++) {
+	    if (!opos.pos[i]) continue;
+	    State.register_change(["move_controlpoint", i, npos.pos[i]], ["move_controlpoint", i, opos.pos[i]]);
 	}
+    }
+
+    function drop_displacement() {
+	register_cp_moves(DISPLACING[2], DISPLACING[2].translate([MOUSE[0]-DISPLACING[0], MOUSE[1]-DISPLACING[1]]));
+    }
+
+    function drop_stamp() {
+	register_cp_moves(EMBEDDING[5], State.get_cp_positions(EMBEDDING[4]));
 	State.create_undo_frame(); // make sure these controlpoint move events are not combined with the ones to follow
-	State.redraw();
     }
 
     function drag_release() {
@@ -353,7 +413,12 @@ function main() {
 	    return;
 	}
 
-	if (!HIGHLIGHTED) return;
+	if (!HIGHLIGHTED) {
+	    // may initiate a displacement
+	    DISPLACING = [MOUSE[0], MOUSE[1], State.get_cp_positions()];
+	    switch_state("displacing");
+	    return;
+	}
 
 	if (HIGHLIGHTED[0]==0) { 
 	    // selected point is a control point, start dragging
@@ -377,6 +442,7 @@ function main() {
 
 	    (function (id) {
 		var elt = stamp.get_svg_elt();
+		elt.onmouseover = function(event) { mouseover(id, event); }
 		elt.onmousedown = function(event) { mousedown(id, event); }
 		elt.onmousemove = function(event) { mousemove(id, event); }
 		elt.onmouseup   = function(event) { mouseup(id, event);   }
@@ -395,8 +461,9 @@ function main() {
 	var stamp_height = Graphics.YS / STAMPS.length;
 	var stamp_width = stamp_height * 3/2;
 	var ytop = stamp_height * stamp_id;
-	Graphics.topruler([0, 0, stamp_width, ytop]);
-	Graphics.bottomruler([0, ytop+stamp_height, stamp_width, Graphics.YS-(ytop+stamp_height)]);
+	var rulers = Graphics.get_rulers();
+	Graphics.set_elt_bbox(rulers[0], [0,0,stamp_width,ytop]);
+	Graphics.set_elt_bbox(rulers[1], [0, ytop+stamp_height, stamp_width, Graphics.YS-(ytop+stamp_height)]);
     }
 
     function make_buttonbar() {

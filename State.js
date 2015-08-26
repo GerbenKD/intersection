@@ -416,6 +416,8 @@ var State = new function() {
 	this.register_change(cf, cb);
     }
 
-    this.get_cp_positions = function(id) { return CT.get_cp_positions(CT.id2tool[id]); }
+    this.get_cp_positions = function(id) { 
+	return id==undefined ? CT.get_cp_positions() : CT.get_cp_positions(CT.id2tool[id]); 
+    }
 
 };

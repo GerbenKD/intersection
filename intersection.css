@@ -58,7 +58,6 @@ svg.stamp {
 svg.stamp.deselected:hover {
     transition: 0.5s;
     background-color: #80ffb0;
-    cursor: pointer;
 }
 
 
@@ -71,7 +70,6 @@ div.ruler {
     fill: none;
     stroke: black;
     stroke-width: 0.3%;
-    pointer-events: none;
     position: absolute;
 }
 
@@ -94,7 +92,6 @@ div.ruler {
 
 
 .controlpoint {
-    pointer-events: none;
     stroke: black;
     stroke-width: 2px;
     fill: #0040ff;
