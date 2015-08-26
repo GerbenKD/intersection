@@ -17,9 +17,22 @@ var Graphics = new function() {
     // this.add_class    = function(elt, cls) { elt.classList.add(cls); }
     // this.remove_class = function(elt, cls) { elt.classList.remove(cls); }
 
-    this.cursor = function(type) {
-	BODY.style.cursor = type;
-    }
+    this.cursor = function() {
+	var current_type;
+	return function(type) {
+	    if (type != current_type) {
+		BODY.style.cursor = type;
+		if (type == "grab") {
+		    BODY.style.cursor = "-moz-grab";
+		    BODY.style.cursor = "-webkit-grab";
+		} else if (type == "grabbing") {
+		    BODY.style.cursor = "-moz-grabbing";
+		    BODY.style.cursor = "-webkit-grabbing";
+		}
+		current_type = type;
+	    }
+	}
+    }();
 
     this.toggle_fullscreen = function() {
 	if (is_fullscreen()) leave_fullscreen(); else enter_fullscreen();

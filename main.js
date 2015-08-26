@@ -25,12 +25,9 @@ function main() {
     
     window.onwheel = function(e) {
 	if (STATE != "normal" && STATE != "zooming") return;
-	// cross-browser wheel delta
-	var e = window.event || e; // old IE support
-	var delta = Math.max(-1, Math.min(1, (e.wheelDelta || -e.detail)));
-	var stepsize = 0.5;
+	var delta = e.deltaY > 0 ? -0.5 : 0.5;
 	if (!ZOOMING) ZOOMING = [[MOUSE[0],MOUSE[1]], State.get_cp_positions(), 0, 0];
-	ZOOMING[2] = ZOOMING[2] + stepsize*delta;
+	ZOOMING[2] = ZOOMING[2] + delta;
 	if (STATE != "zooming") {
 	    switch_state("zooming");
 	    Animation.run(Animation.sequential([zoom_animation, function() {
@@ -94,33 +91,39 @@ function main() {
 	if (STATE == "normal" && id!=CURRENT_STAMP) { Graphics.cursor("pointer"); }
     }
 
+    function set_cursor() {
+	var type = "default";
+	if (STATE=="normal") {
+	    if (HIGHLIGHTED) {
+		type = HIGHLIGHTED[0]==0 ? "grab" : "pointer";
+	    }
+	} else if (STATE=="dragging" || STATE == "embedding") {
+	    type = "grabbing";
+	} else if (STATE == "displacing") {
+	    type = "move";
+	}
+	Graphics.cursor(type);
+    }
+
     function switch_state(new_state) {
 	if (STATE==new_state) return;
 	if (new_state=="normal") {
-	    // Graphics.cursor("default");
 	    BUTTONBAR.rehighlight();
 	    HIGHLIGHT_TARGETS = State.get_all_highlight_targets();
 	} else if (new_state == "animating" || new_state == "zooming") {
-	    Graphics.cursor("default");
 	    BUTTONBAR.rehighlight(false);
 	    HIGHLIGHT_TARGETS = [];
 	} else if (new_state == "dragging") {
-	    Graphics.cursor("grabbing");
-	    Graphics.cursor("-moz-grabbing");
-	    Graphics.cursor("-webkit-grabbing");
 	    HIGHLIGHT_TARGETS = State.pick_up_controlpoint(HIGHLIGHTED[1]);
 	    sparkle();
 	} else if (new_state=="embedding") {
-	    Graphics.cursor("grabbing");
-	    Graphics.cursor("-moz-grabbing");
-	    Graphics.cursor("-webkit-grabbing");
 	    HIGHLIGHT_TARGETS = [];
 	} else if (new_state=="displacing") {
-	    Graphics.cursor("move");
 	    HIGHLIGHT_TARGETS = [];
 	}
 	STATE = new_state;
 	highlight();
+	set_cursor();
     }
 
 
@@ -260,7 +263,7 @@ function main() {
     }
 
     function highlight() {
-	if (!HIGHLIGHT_TARGETS) { Graphics.cursor("default"); return; }
+	if (!HIGHLIGHT_TARGETS) return;
 
 	// determine what highlight target we're pointing at
 	var item = null;
@@ -279,21 +282,17 @@ function main() {
 	if (d_best<=0) item = HIGHLIGHT_TARGETS[i_best];
 
 	var changed = HIGHLIGHTED && item && !(item[0]===HIGHLIGHTED[0] && item[1]==HIGHLIGHTED[1]);
+	var curs = false;
 	if (HIGHLIGHTED && (!item || changed)) {
-	    if (STATE=="normal") Graphics.cursor("default");
 	    HIGHLIGHTED[2].set_class("highlighted", false);
+	    curs = true;
 	}
 	if (item && (!HIGHLIGHTED || changed)) {
-	    if (STATE == "normal") {
-		if (item[0]==0) { 
-		    Graphics.cursor("grab"); Graphics.cursor("-moz-grab"); Graphics.cursor("-webkit-grab"); 
-		} else {
-		    Graphics.cursor("pointer");
-		}
-	    }
 	    item[2].set_class("highlighted", true);
+	    curs = true;
 	}
 	HIGHLIGHTED = item;
+	if (curs) set_cursor();
     }
 
     function mousemove(id, e) {
@@ -356,9 +355,7 @@ function main() {
     function mouseup(id, e) {
 	if (STATE == "embedding") {
 	    var state = EMBEDDING[3];
-	    if (state==1) {	
-		drop_stamp();
-	    }
+	    if (state==1) drop_stamp();
 	    EMBEDDING = undefined;
 	    switch_state("normal");
 	    if (state==0) switch_stamp(id);
