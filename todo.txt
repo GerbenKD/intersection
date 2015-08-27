@@ -11,9 +11,8 @@
 - rewind en fast forward moeten sneller en mooi
 1u
 
-- testen op andere browsers
-??
-
 - trek lijnen iets door voorbij de rand van het scherm
 5min
 
+- muiswieltje moet beter
+15min
