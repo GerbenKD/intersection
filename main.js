@@ -25,7 +25,7 @@ function main() {
     
     window.onwheel = function(e) {
 	if (STATE != "normal" && STATE != "zooming") return;
-	console.log("delta Y = "+e.deltaY);
+	console.log("delta Y = "+e.deltaY+ "deltaMode = "+e.deltaMode);
 	var delta = 0.002*e.deltaY;
 	if (!ZOOMING) ZOOMING = [[MOUSE[0],MOUSE[1]], State.get_cp_positions(), 0, 0];
 	ZOOMING[2] = ZOOMING[2] + delta;
