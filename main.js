@@ -25,36 +25,32 @@ function main() {
     
     window.onwheel = function(e) {
 	if (STATE != "normal" && STATE != "zooming") return;
-	console.log("delta Y = "+e.deltaY+ "deltaMode = "+e.deltaMode);
-	var delta = 0.002*e.deltaY;
-	if (!ZOOMING) ZOOMING = [[MOUSE[0],MOUSE[1]], State.get_cp_positions(), 0, 0];
-	ZOOMING[2] = ZOOMING[2] + delta;
+	if (!ZOOMING) ZOOMING = {
+	    mouse:                 [MOUSE[0], MOUSE[1]],
+	    magnification_target:  0,
+	    magnification_current: 0,
+	    opos:                  State.get_cp_positions()
+	};
+	ZOOMING.frames_left = 10;
+	ZOOMING.magnification_target += e.deltaY < 0 ? 1 : -1;
 	if (STATE != "zooming") {
 	    switch_state("zooming");
 	    Animation.run(Animation.sequential([zoom_animation, function() {
-		register_cp_moves(ZOOMING[1], ZOOMING[4]);
+		register_cp_moves(ZOOMING.opos, ZOOMING.npos);
 		ZOOMING = undefined;
 		switch_state("normal");
 	    }]));
 	}
-	// register_cp_moves(opos,npos);
     }
 
     function zoom_animation(frame) {
-	var zooming = true;
-	var speed = 0.1;
-	var delta = ZOOMING[2] - ZOOMING[3];
-	if (Math.abs(delta)<speed) {
-	    ZOOMING[3] = ZOOMING[2]; 
-	    zooming = false;
-	} else {
-	    ZOOMING[3] += delta < 0 ? -speed : +speed;
-	}
-	var f = 1 + ZOOMING[3] * ZOOMING[3]; if (ZOOMING[3]<0) f = 1/f;
-	ZOOMING[4] = ZOOMING[1].scale_from_point(ZOOMING[0], f);
-	ZOOMING[4].move();
+	ZOOMING.magnification_current += (ZOOMING.magnification_target - ZOOMING.magnification_current)/ZOOMING.frames_left;
+	ZOOMING.frames_left--;
+	var f = Math.exp(0.1*ZOOMING.magnification_current);
+	ZOOMING.npos = ZOOMING.opos.scale_from_point(ZOOMING.mouse, f);
+	ZOOMING.npos.move();
 	State.redraw();
-	return zooming;
+	return ZOOMING.frames_left > 0;
     }
 
 
