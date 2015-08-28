@@ -105,6 +105,14 @@ var CompoundTool = Tool.extend(function() {
 	}
     }
 
+    this.has_outputs = function() { 
+	var oi = this.id2tool[1];
+	for (var i=0; i<oi.max_input_socket(); i++) {
+	    if (oi.get_input(i)) return true;
+	}
+	return false;
+    }
+
     // alternative to build_draw_list for when you wanna see everything
     this.build_draw_set_with_internals = function(set) {
 	for (var i=0; i<this.tools.length; i++) {

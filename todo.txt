@@ -21,3 +21,12 @@
 10min
 
 - snap targets grafisch iets doen bij onmouseover?
+
+- use scale parameter in graphics state to decide how to render outputs / normal gizmos for toolstamps.
+  . usually: outputs look normal, normals are invisible
+  . switching stamp: transitions to look at internals, thick lines for outputs
+  
+- figure out why mouse pointer becomes default on a controlpoint
+
+
+

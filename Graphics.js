@@ -8,11 +8,12 @@ var Graphics = new function() {
     // html elements
     var BODY = document.getElementById("body");
     var DIV  = document.getElementById("div");
-    var MAINDIV = document.getElementById("maindiv");
-
-    var TOPRULER = document.getElementById("topruler");
-    var BOTTOMRULER = document.getElementById("bottomruler");
-    var BUTTONS = document.getElementById("buttons");
+    var DIVS = {
+	bottom:  document.getElementById("bottom"),
+	middle:  document.getElementById("middle"),
+	top:     document.getElementById("top"),
+	buttons: document.getElementById("buttons")
+    };
 
     // this.add_class    = function(elt, cls) { elt.classList.add(cls); }
     // this.remove_class = function(elt, cls) { elt.classList.remove(cls); }
@@ -98,13 +99,11 @@ var Graphics = new function() {
 	this.attrib = function(attrib) { for (var key in attrib) { this.sprite_elt.setAttribute(key, attrib[key]); } }
     }	
 
-    this.get_rulers = function() { return [TOPRULER, BOTTOMRULER]; }
-
     this.create_button = function() {
 	var svg_elt = document.createElementNS(SVG_NS, "svg");
 	svg_elt.onclick = onclick;
 	svg_elt.classList.add("button");
-	BUTTONS.appendChild(svg_elt);
+	DIVS.buttons.appendChild(svg_elt);
 	return svg_elt;
     }
 
@@ -136,11 +135,48 @@ var Graphics = new function() {
 	return new construct();
     }
 
-    this.SVG = new function() {
+    this.change_layer = function(elt, old_layer, new_layer) {
+	console.log("old layer is "+old_layer+", new layer is "+new_layer);
+	if (old_layer) DIVS[old_layer].removeChild(elt);
+	DIVS[new_layer].appendChild(elt);
+    }
+
+    var ManagedElt = new function() {
+	this.extend = function(constr) { constr.prototype=this; return new constr(); }
+
+	this.change_layer = function(layer) {
+	    if (this.layer) {
+		DIVS[this.layer].removeChild(this.elt);
+	    }
+	    DIVS[layer].appendChild(this.elt);
+	    this.layer = layer;
+	}
+
+	this.set_bbox = function(bbox) {
+	    this.bbox = bbox;
+	    Graphics.set_elt_bbox(this.elt, bbox);
+	}
+
+	this.add_class = function(cls) { this.elt.classList.add(cls); }
+	this.remove_class = function(cls) { this.elt.classList.remove(cls); }
+
+    }();
+
+    this.DIV = ManagedElt.extend(function() {
+	
+	this.create = function() {
+	    return this.extend(function() {
+		this.elt = document.createElement("div");
+		this.change_layer("top");
+	    });
+	}
+
+    });
+
+    this.SVG = ManagedElt.extend(function() {
 
 	this.create = function() {
-	 
-	    function construct() {
+	    return this.extend(function() {
 		var svg_elt = document.createElementNS(SVG_NS, "svg");
 		// to fix a bug with the background not appearing, stick an invisible rectangle in here
 		var rect_elt = document.createElementNS(SVG_NS, "rect");
@@ -154,40 +190,21 @@ var Graphics = new function() {
 		    group_elts[group_names[i]] = group_elt;
 		    svg_elt.appendChild(group_elt);
 		}
-		this.svg_elt = svg_elt;
+		this.elt = svg_elt;
 		this.rect_elt = rect_elt;
 		this.group_elts = group_elts;
-		DIV.appendChild(svg_elt);
-	    }
-
-	    construct.prototype = this;
-	    return new construct();
-	};
+		this.change_layer("top");
+	    });
+	}
 
 	this.set_bbox = function(bbox) {
 	    this.bbox = bbox;
-	    Graphics.set_elt_bbox(this.svg_elt, bbox);
+	    Graphics.set_elt_bbox(this.elt, bbox);
 	    this.rect_elt.setAttribute("x", 0);
 	    this.rect_elt.setAttribute("y", 0);
 	    this.rect_elt.setAttribute("width", bbox[2]);
 	    this.rect_elt.setAttribute("height", bbox[3]);
 	}
-
-	// moves the svg element to maindiv
-	this.focus = function(firsttime) {
-	    if (!firsttime) DIV.removeChild(this.svg_elt);
-	    this.remove_class("deselected");
-	    MAINDIV.appendChild(this.svg_elt);
-	}
-
-	this.unfocus = function(firsttime) {
-	    if (!firsttime) MAINDIV.removeChild(this.svg_elt);
-	    this.add_class("deselected");
-	    DIV.appendChild(this.svg_elt);
-	}
-
-	this.add_class = function(cls) { this.svg_elt.classList.add(cls); }
-	this.remove_class = function(cls) { this.svg_elt.classList.remove(cls); }
 
 	this.attach = function(sprite) { this.group_elts[sprite.group_name].appendChild(sprite.sprite_elt); }
 	this.detach = function(sprite) { this.group_elts[sprite.group_name].removeChild(sprite.sprite_elt); }
@@ -198,7 +215,7 @@ var Graphics = new function() {
 	    if (a.length != b.length) return false;
 
 	    // If you don't care about the order of the elements inside
-	    // the array, you should sort both arrays here.
+	    // the array, you should sort both arrays here.s
 
 	    for (var i = 0; i < a.length; ++i) {
 		if (a[i] !== b[i]) return false;
@@ -206,6 +223,7 @@ var Graphics = new function() {
 	    return true;
 	}
 
+	// in current implementation can destroy the set!
 	this.create_renderer = function() {
 	    var prev = {};
 	    var me = this;
@@ -215,9 +233,15 @@ var Graphics = new function() {
 		if (graphics_state.bbox && !arrays_equal(graphics_state.bbox, me.bbox)) {
 		    me.set_bbox(graphics_state.bbox);
 		}
+		var supp = graphics_state.suppress_internals==1;
 		for (var id in set) { 
-		    set[id].draw(graphics_state); 
-		    if (!(id in prev)) me.attach(set[id].sprite);
+		    var gizmo = set[id];
+		    if (supp && !gizmo.controlpoint && !gizmo.has_class("output")) { 
+			delete set[id];
+		    } else {
+			gizmo.draw(graphics_state); 
+			if (!(id in prev)) me.attach(gizmo.sprite);
+		    }
 		}
 		// kill sprites that are no longer used
 		for (var id in prev) {
@@ -226,7 +250,7 @@ var Graphics = new function() {
 		prev = set;
 	    }
 	}
-    }
+    });
     
 
     //	------------------------ for backward compatibility: --------------------------------

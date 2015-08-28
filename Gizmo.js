@@ -92,15 +92,19 @@ var ConstructedPoint = Point.extend(function() {
     }
 
     this.move_sprite = function(graphics_state) { 
-	var r = Graphics.SCALE * graphics_state.scale;
-	this.sprite.attrib({ "cx": this.pos[0], "cy": this.pos[1], "r": 0.003 * r }); 
-	this.sprite.sprite_elt.style["stroke-width"] = 0.001*r;
+	var r = Graphics.SCALE * 0.003 * graphics_state.scale;
+	var f = graphics_state.suppress_internals;
+	if (f==undefined) f=1;
+	if (!this.has_class("output")) r *= 1-f;
+	this.sprite.attrib({ "cx": this.pos[0], "cy": this.pos[1], "r": r }); 
+	this.sprite.sprite_elt.style["stroke-width"] = r/3;
     }
 
 });
 
 var ControlPoint = Point.extend(function() {
     this.valid = true;
+    this.controlpoint = true;
 
     this.create = function(pos) {
 	var instance = Point.create.call(this);
@@ -167,8 +171,13 @@ var Line = Gizmo.extend(function() {
 	return p ? Point.distance_cc(p, pos) : Infinity;
     }
 
+    // output: suppress    0 => 0.003, 1 -> 0.001   
+    // nonoutput: suppress 0 => 0.001, 1 -> 0
     this.move_sprite = function(graphics_state) {
-	var r = Graphics.SCALE * (this.has_class("output") ? 0.003 : 0.001) * graphics_state.scale;
+	var r = Graphics.SCALE * 0.001 * graphics_state.scale;
+	var f = graphics_state.suppress_internals;
+	if (f==undefined) f=1;
+	r *= this.has_class("output") ? (3-2*f) : 1-f;
 	var sprite = this.sprite;
 	var bbox;
 	{ var bb = graphics_state.bbox;
@@ -227,7 +236,10 @@ var Circle = Gizmo.extend(function() {
     }
 
     this.move_sprite = function(graphics_state) {
-	var r = Graphics.SCALE * (this.has_class("output") ? 0.003 : 0.001) * graphics_state.scale;
+	var r = Graphics.SCALE * 0.001 * graphics_state.scale;
+	var f = graphics_state.suppress_internals;
+	if (f==undefined) f=1;
+	r *= this.has_class("output") ? (3-2*f) : 1-f;
 	this.sprite.attrib({"cx": this.center[0], "cy": this.center[1], "r": this.radius()});
 	this.sprite.sprite_elt.style["stroke-width"] = r;
     }

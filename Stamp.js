@@ -11,12 +11,46 @@ var Stamp = new function() {
 	return this.extend(function() {
 	    this.id = id;
 	    this.filename = "file_"+(id+1);
+	    this.div_object = Graphics.DIV.create();
 	    this.svg_object = Graphics.SVG.create();
-	    this.svg_object.add_class("stamp");
 	    this.renderer = this.svg_object.create_renderer();
 	    this.graphics_state = { scale: this.STAMP_SCALE };
 	});
     }
+
+    this.change_layer = function(layer) {
+	this.div_object.change_layer(layer);
+	this.svg_object.change_layer(layer);
+    }
+
+    this.focus   = function() {
+	this.change_layer("bottom"); 
+	this.graphics_state.suppress_internals = 0;
+	change_state.call(this, "activestamp"); 
+    }
+
+    this.unfocus = function() { 
+	this.change_layer("top");
+	if (this.construction.has_outputs()) {
+	    change_state.call(this, "toolstamp");
+	    this.graphics_state.suppress_internals = 1;
+	} else {
+	    change_state.call(this, "workstamp");
+	    this.graphics_state.suppress_internals = 0;
+	}
+    }
+        
+    // state is one of "workstamp", "toolstamp", "activestamp"
+    function change_state(state) {
+	if (this.graphics_state.state) {
+	    this.div_object.remove_class(this.graphics_state.state);
+	    this.svg_object.remove_class(this.graphics_state.state);
+	}
+	this.div_object.add_class(state);
+	this.svg_object.add_class(state);
+	this.graphics_state.state = state;
+    }
+
 
     // for the time being, only works on deselected stamps
     // move the stamp to the given position and size, and redisplay contents
@@ -25,11 +59,13 @@ var Stamp = new function() {
 	var stamp_width  = stamp_height * 3/2;
 	
 	this.small_bbox = [0, stamp_height*this.id, stamp_width, stamp_height];
+	this.div_object.set_bbox(this.small_bbox);
 	this.large_bbox = [0, 0, Graphics.XS, Graphics.YS];
-	var bbox = this.selected ? this.large_bbox : this.small_bbox;
+	var active = this.graphics_state.state=="activestamp";
+	var bbox = active ? this.large_bbox : this.small_bbox;
 	this.graphics_state.bbox = bbox;
 	this.update_small_positions();
-	if (!this.selected) this.small_positions.move();
+	if (!active) this.small_positions.move();
     }
 
     this.move = function(screen_bbox, scale) {
@@ -38,24 +74,9 @@ var Stamp = new function() {
 	this.redraw();
     }
 
-    this.get_svg_elt  = function() { return this.svg_object.svg_elt; }
-
     this.redraw = function() {
 	this.renderer(this.get_gizmo_set(), this.graphics_state);
     }
-
-
-    // moves the svg element to maindiv
-    this.focus = function(firsttime) {
-	this.svg_object.focus(firsttime);
-	this.selected = true;
-    }
-
-    this.unfocus = function(firsttime) {
-	this.svg_object.unfocus(firsttime);
-	this.selected = false;
-    }
-
 
     // called just before shrinking the construction. Recalculates the large_positions and small_positions.
     this.update_large_positions = function() {
@@ -84,7 +105,7 @@ var Stamp = new function() {
 
 
     this.get_gizmo_set = function() {
-	return this.construction.get_gizmo_set(); 
+	return this.construction.get_gizmo_set_with_internals();
     }
 
 
@@ -177,6 +198,7 @@ var LineStamp = Stamp.extend(function() {
 	var cp2 = ii.first_free_output(), pos2 = [0.7*Graphics.XS, 0.5*Graphics.YS];
 	var cf2 = c.change(["create_controlpoint", cp2, pos2]);
 	var cf3 = c.change(["create_line", cp1, cp2]);
+	c.change(["connect_output", cf3, 0, 0]);
 	instance.update_large_positions();
 	return instance;
     }
@@ -195,6 +217,7 @@ var CircleStamp = Stamp.extend(function() {
 	var cp2 = ii.first_free_output(), pos2 = [0.7*Graphics.XS, 0.5*Graphics.YS];
 	var cf2 = c.change(["create_controlpoint", cp2, pos2]);
 	var cf3 = c.change(["create_circle", cp1, cp2]);
+	c.change(["connect_output", cf3, 0, 0]);
 	instance.update_large_positions();
 	return instance;
     }

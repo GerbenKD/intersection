@@ -14,6 +14,14 @@ var Construction = CompoundTool.extend(function() {
 	this.recalculate();
 	var set = {};
 	this.ControlPoints.build_draw_set(set);
+	this.build_draw_set(set);
+	return set;
+    }
+
+    this.get_gizmo_set_with_internals = function() {
+	this.recalculate();
+	var set = {};
+	this.ControlPoints.build_draw_set(set);
 	this.build_draw_set_with_internals(set);
 	return set;
     }

@@ -17,13 +17,18 @@ body {
     pointer-events: none;
 }
 
-div.body.select_outputs {
-    background-color: #e0e0e0;
+circle, line {
+    pointer-events: none;
 }
 
 div {
     position: absolute;
 }
+
+div.body.select_outputs {
+    background-color: #e0e0e0;
+}
+
 
 svg {
     position: absolute;
@@ -56,12 +61,23 @@ svg.stamp {
     /* background-color: white;*/
 }
 
-/*
-svg.stamp.deselected:hover {
-    transition: 0.5s;
-    background-color: #80ffb0;
+div.workstamp {
+    background-color: #79bcbc;
+    opacity: 0.95;
 }
-*/
+
+div.activestamp {
+    background: none;
+}
+
+div.toolstamp {
+    background-color: #bcbc79;
+    opacity: 0.95;
+}
+
+div.activestamp {
+    background: none;
+}
 
 
 div.ruler {

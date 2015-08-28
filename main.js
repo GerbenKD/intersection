@@ -4,7 +4,7 @@
 function main() {
 
     var HIGHLIGHTED;            // [tool, output #]
-    var HIGHLIGHT_TARGETS;
+    var HIGHLIGHT_TARGETS, STAMP_TARGET;
     var DRAGGING;               // [tool, output #, dx(mouse-origin), dy(mouse-origin)]. Tool should be ControlPointTool
     var EMBEDDING;              // [stamp, mousex, mousey, stage]
     var DISPLACING;
@@ -15,7 +15,7 @@ function main() {
     Graphics.reposition();
 
 
-    var STAMPS = create_stamps(8);
+    var STAMPS = create_stamps(9);
     var CURRENT_STAMP = undefined;
 
     var BUTTONBAR = make_buttonbar();
@@ -59,14 +59,12 @@ function main() {
 
     window.onresize = function() {
 	Graphics.reposition();
-	move_ruler(CURRENT_STAMP);
 	BUTTONBAR.reposition();
 	for (var i=0; i<STAMPS.length; i++) {
 	    STAMPS[i].reposition(STAMPS.length);
 	    STAMPS[i].redraw();
 	}
 	var body = document.getElementById("body");
-	body.style["background-color"] = "white";
     }
 
     window.onkeypress = function(e) {
@@ -89,7 +87,10 @@ function main() {
     }
     
     function mouseover(id) {
-	if (STATE == "normal" && id!=CURRENT_STAMP) { Graphics.cursor("pointer"); }
+	if (STATE == "normal") {
+	    Graphics.cursor(id==CURRENT_STAMP ? "default" : STAMPS[id].graphics_state.state=="toolstamp" ? "grab" : "pointer");
+	}
+	STAMP_TARGET = id;
     }
 
     function set_cursor() {
@@ -165,20 +166,6 @@ function main() {
 
     function undo_continuation() { switch_state("normal"); }
 
-    /*
-      stamp: manages construction, and links to the correct file but not savestate
-      state: maps files to savestates, contains stamp and undobuffer
-      main: talks to state and to stamp
-
-      problem: load new construction, embed in the active stamp, animate to correct position.
-
-
-      EMBEDDING:
-      - change "move_controlpoint" event to "move_controlpoints". Event gets:
-          [socket, old pos, newpos], ...
-
-     */
-
 
     function embed_stamp(stamp_id) {
 	State.create_undo_frame();
@@ -215,7 +202,8 @@ function main() {
 	    var step1 = cur_stamp.animate_shrink(gs);
 	    var step2 = function() { 
 		// WHEN: old focus has animated back into the toolbar
-		cur_stamp.unfocus(); 
+		cur_stamp.unfocus();
+		cur_stamp.redraw();
 	    }
 	    anims.push(Animation.sequential([step1, step2]));
 	}
@@ -223,9 +211,7 @@ function main() {
 	var new_stamp = STAMPS[stamp_id];
 
 	var pre_zoom_in = function() {
-	    // WHEN: new stamp starts to grow from toolbar to main screen
- 	    new_stamp.focus();
-	    move_ruler(stamp_id);
+	    new_stamp.focus();
 	};
 	var do_zoom_in = new_stamp.animate_enlarge(gs);
 
@@ -265,7 +251,7 @@ function main() {
     }
 
     function highlight() {
-	if (!HIGHLIGHT_TARGETS) return;
+	if (!HIGHLIGHT_TARGETS || STAMP_TARGET != CURRENT_STAMP) return;
 
 	// determine what highlight target we're pointing at
 	var item = null;
@@ -321,7 +307,10 @@ function main() {
 	EMBEDDING.last_mouse = [MOUSE[0], MOUSE[1]];
 	EMBEDDING.travelled = dist;
 	var stamp = STAMPS[EMBEDDING.stamp_id];
-	if (EMBEDDING.state==0 && dist>=d0) EMBEDDING.state = 1;
+	if (EMBEDDING.state==0 && dist>=d0) { 
+	    EMBEDDING.state = 1;
+	    stamp.change_layer("middle");
+	}
 	if (EMBEDDING.state>=1) {
 	    var f = (dist - d0) / (d1 - d0); f = f<0 ? 0 : f > 1 ? 1 : f;
 	    EMBEDDING.f = f;
@@ -379,6 +368,7 @@ function main() {
 					       EMBEDDING.current_positions, stamp.small_positions, 
 					       EMBEDDING.f,                 stamp.STAMP_SCALE);
 		Animation.run(Animation.sequential([anim, function() {
+		    stamp.change_layer("top");
 		    EMBEDDING = undefined;
 		    switch_state("normal");
 		    return false;
@@ -414,6 +404,7 @@ function main() {
 
     function drop_stamp() {
 	var stamp = STAMPS[EMBEDDING.stamp_id];
+	stamp.change_layer("top");
 	stamp.small_positions.move();
 	stamp.move(stamp.small_bbox, stamp.STAMP_SCALE);
 	var id = embed_stamp(EMBEDDING.stamp_id);
@@ -445,15 +436,21 @@ function main() {
 
 	if (id != CURRENT_STAMP) {
 	    // may initiate an embed, but it will only really start when the mouse has moved a sufficient distance
-	    var bbox = STAMPS[id].small_bbox;
-	    EMBEDDING = {
-		state: 0,
-		stamp_id: id,
-		mouse: [MOUSE[0], MOUSE[1]],
-		last_mouse: [MOUSE[0], MOUSE[1]],
-		travelled: 0
-	    };
-	    switch_state("embedding");
+	    var stamp = STAMPS[id];
+	    if (stamp.graphics_state.state == "workstamp") {
+		// cannot embed, so switch to it
+		switch_stamp(id);
+	    } else {
+		var bbox = STAMPS[id].small_bbox;
+		EMBEDDING = {
+		    state: 0,
+		    stamp_id: id,
+		    mouse: [MOUSE[0], MOUSE[1]],
+		    last_mouse: [MOUSE[0], MOUSE[1]],
+		    travelled: 0
+		};
+		switch_state("embedding");
+	    }
 	    return;
 	}
 
@@ -473,6 +470,7 @@ function main() {
 	    // toggle output status of the highlighted gizmo
 	    State.create_undo_frame();
 	    State.toggle_output(HIGHLIGHTED[0], HIGHLIGHTED[1]);
+	    State.redraw();
 	}
     }
 
@@ -485,29 +483,20 @@ function main() {
 	    var stamp = clz.create(i); // , bbox);
 
 	    (function (id) {
-		var elt = stamp.get_svg_elt();
+		var elt = stamp.svg_object.elt;
 		elt.onmouseover = function(event) { mouseover(id, event); }
 		elt.onmousedown = function(event) { mousedown(id, event); }
 		elt.onmousemove = function(event) { mousemove(id, event); }
 		elt.onmouseup   = function(event) { mouseup(id, event);   }
 	    })(i);
 
-	    stamp.unfocus(true);
+	    stamp.unfocus();
 	    stamp.reposition(nstamps);
 	    stamp.redraw();
 	    stamps.push(stamp);
 	}
 
 	return stamps;
-    }
-
-    function move_ruler(stamp_id) {
-	var stamp_height = Graphics.YS / STAMPS.length;
-	var stamp_width = stamp_height * 3/2;
-	var ytop = stamp_height * stamp_id;
-	var rulers = Graphics.get_rulers();
-	Graphics.set_elt_bbox(rulers[0], [0,0,stamp_width,ytop]);
-	Graphics.set_elt_bbox(rulers[1], [0, ytop+stamp_height, stamp_width, Graphics.YS-(ytop+stamp_height)]);
     }
 
     function make_buttonbar() {
