@@ -77,6 +77,8 @@ var Graphics = new function() {
     this.reposition = function() {
 	this.XS = window.innerWidth;
 	this.YS = window.innerHeight;
+	var wid = window.screen.width, hei=window.screen.height;
+	this.SCALE = Math.sqrt(wid*wid+hei*hei);
     }
 
     //converts a mouse event to screen coords

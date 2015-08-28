@@ -25,12 +25,14 @@ function main() {
     
     window.onwheel = function(e) {
 	if (STATE != "normal" && STATE != "zooming") return;
-	if (!ZOOMING) ZOOMING = {
-	    mouse:                 [MOUSE[0], MOUSE[1]],
-	    magnification_target:  0,
-	    magnification_current: 0,
-	    opos:                  State.get_cp_positions()
-	};
+	if (STATE != "zooming") {
+	    ZOOMING = {
+		mouse:                 [MOUSE[0], MOUSE[1]],
+		magnification_target:  0,
+		magnification_current: 0,
+		opos:                  State.get_cp_positions()
+	    };
+	}
 	ZOOMING.frames_left = 10;
 	ZOOMING.magnification_target += e.deltaY < 0 ? 1 : -1;
 	if (STATE != "zooming") {
@@ -39,6 +41,7 @@ function main() {
 		register_cp_moves(ZOOMING.opos, ZOOMING.npos);
 		ZOOMING = undefined;
 		switch_state("normal");
+		return false;
 	    }]));
 	}
     }
@@ -115,6 +118,7 @@ function main() {
 	    HIGHLIGHT_TARGETS = State.pick_up_controlpoint(HIGHLIGHTED[1]);
 	    sparkle();
 	} else if (new_state=="embedding") {
+	    BUTTONBAR.rehighlight(false);
 	    HIGHLIGHT_TARGETS = [];
 	} else if (new_state=="displacing") {
 	    HIGHLIGHT_TARGETS = [];
@@ -296,9 +300,9 @@ function main() {
     function mousemove(id, e) {
 	MOUSE = Graphics.e2coord(e);
 	if (STATE == "embedding") {
-	    mousemove_embed(id);
+	    mousemove_embed();
 	} else if (STATE == "dragging") {
-	    mousemove_drag(id);
+	    mousemove_drag();
 	} else if (STATE == "normal") {
 	    highlight();
 	} else if (STATE == "displacing") {
@@ -311,36 +315,46 @@ function main() {
 	State.redraw();
     }
 
-    function mousemove_embed(id) {
-	if (EMBEDDING[3]==0) {
-	    var dx = MOUSE[0] - EMBEDDING[1], dy = MOUSE[1] - EMBEDDING[2];
-	    if (dx*dx+dy*dy>10*10) {
-		EMBEDDING[3] = 1;
-		var stamp_id = EMBEDDING[0];
-		var tool_id = embed_stamp(stamp_id);
-		EMBEDDING[4] = tool_id;
-		EMBEDDING[5] = State.get_cp_positions(tool_id);
-		EMBEDDING[6] = STAMPS[stamp_id].small_bbox;
-		State.redraw();
-	    }
-	} else if (EMBEDDING[3]==1) {
-	    var stamp = STAMPS[EMBEDDING[0]];
+    function mousemove_embed() {
+	var d0 = Graphics.SCALE * 0.005, d1 = Graphics.SCALE * 0.1;
+	var dist = EMBEDDING.travelled + Point.distance_cc(MOUSE, EMBEDDING.last_mouse);
+	EMBEDDING.last_mouse = [MOUSE[0], MOUSE[1]];
+	EMBEDDING.travelled = dist;
+	var stamp = STAMPS[EMBEDDING.stamp_id];
+	if (EMBEDDING.state==0 && dist>=d0) EMBEDDING.state = 1;
+	if (EMBEDDING.state>=1) {
+	    var f = (dist - d0) / (d1 - d0); f = f<0 ? 0 : f > 1 ? 1 : f;
+	    EMBEDDING.f = f;
+	    if (EMBEDDING.state==1 && dist >= d1) EMBEDDING.state = 2; // it will be dropped
+	    
+	    // first calculate point_bbox (where the controlpoints should be in screen coords)
+	    var small_bbox = stamp.small_bbox;
+	    var magnx = 0.5*Graphics.XS / small_bbox[2];
+	    var magny = 0.5*Graphics.YS / small_bbox[3];
+	    var magn = f*Math.min(magnx, magny) + 1-f;
+	    var point_bbox = [(small_bbox[0]-EMBEDDING.mouse[0])*magn+MOUSE[0],
+			      (small_bbox[1]-EMBEDDING.mouse[1])*magn+MOUSE[1],
+			      small_bbox[2]*magn,
+			      small_bbox[3]*magn];
 
-	    // calculate the current bbox
-	    var bbox = stamp.small_bbox;
-	    var stampbarwidth = bbox[0]+bbox[2];
-	    var fx = (EMBEDDING[1]-bbox[0])/bbox[2], fy = (EMBEDDING[2]-bbox[1])/bbox[3];
-	    var width = (MOUSE[0]-stampbarwidth) / fx;
-	    EMBEDDING[3]=1;
-	    if      (width < stampbarwidth)   width = bbox[2];
-	    else if (width > 0.5*Graphics.XS) width = 0.5*Graphics.XS;
+	    // now calculate the elt_bbox (the viewport, it grows faster and does not preserve aspect ratio)
+	    var translated = [small_bbox[0]+MOUSE[0]-EMBEDDING.mouse[0],
+			      small_bbox[1]+MOUSE[1]-EMBEDDING.mouse[1],
+			      small_bbox[2], small_bbox[3]];
+	    var screen_bbox = [small_bbox[0]*(1-f), 
+			       small_bbox[1]*(1-f),
+			       (1-f)*small_bbox[2]+f*Graphics.XS,
+			       (1-f)*small_bbox[3]+f*Graphics.YS];
 
-	    var height = width / bbox[2] * bbox[3];
-	    bbox = [MOUSE[0]-fx*width, MOUSE[1]-fy*height, width, height];
+	    var curpos = stamp.small_positions.scale([0, 0, small_bbox[2], small_bbox[3]], 
+						     [point_bbox[0]-screen_bbox[0], 
+						      point_bbox[1]-screen_bbox[1],
+						      point_bbox[2],
+						      point_bbox[3]]);
+	    EMBEDDING.current_positions = curpos;
+	    curpos.move();
 
-	    // TODO calculate dragging bbox here and everything will be awesome!
-	    EMBEDDING[5].scale(EMBEDDING[6], bbox).move();
-	    State.redraw();
+	    stamp.move(screen_bbox, stamp.STAMP_SCALE*(1-f) + f);
 	}
     }
 
@@ -352,11 +366,30 @@ function main() {
 
     function mouseup(id, e) {
 	if (STATE == "embedding") {
-	    var state = EMBEDDING[3];
-	    if (state==1) drop_stamp();
-	    EMBEDDING = undefined;
-	    switch_state("normal");
-	    if (state==0) switch_stamp(id);
+	    switch (EMBEDDING.state) {
+	    case 0: 
+		EMBEDDING = undefined;
+		switch_state("normal");
+		switch_stamp(id);
+		break;
+	    case 1: // move stamp back to its home base
+		switch_state("animating");
+		var stamp = STAMPS[EMBEDDING.stamp_id];
+		var anim = stamp.get_animation(stamp.graphics_state.bbox,   stamp.small_bbox,
+					       EMBEDDING.current_positions, stamp.small_positions, 
+					       EMBEDDING.f,                 stamp.STAMP_SCALE);
+		Animation.run(Animation.sequential([anim, function() {
+		    EMBEDDING = undefined;
+		    switch_state("normal");
+		    return false;
+		}]));
+		break;
+	    case 2: 
+		drop_stamp(); 
+		EMBEDDING = undefined;
+		switch_state("normal");
+		break;
+	    }
 	} else if (STATE == "dragging") {
 	    drag_release();
 	    DRAGGING = undefined;
@@ -380,8 +413,18 @@ function main() {
     }
 
     function drop_stamp() {
-	register_cp_moves(EMBEDDING[5], State.get_cp_positions(EMBEDDING[4]));
-	State.create_undo_frame(); // make sure these controlpoint move events are not combined with the ones to follow
+	var stamp = STAMPS[EMBEDDING.stamp_id];
+	stamp.small_positions.move();
+	stamp.move(stamp.small_bbox, stamp.STAMP_SCALE);
+	var id = embed_stamp(EMBEDDING.stamp_id);
+	var npos = EMBEDDING.current_positions;
+	for (var i=0; i<npos.pos.length; i++) {
+	    if (!npos.pos[i]) continue;
+	    var inp = State.get_input(id, i);
+	    State.move_controlpoint(inp[1], npos.pos[i]);
+	}
+	State.create_undo_frame();
+	State.redraw();
     }
 
     function drag_release() {
@@ -402,8 +445,14 @@ function main() {
 
 	if (id != CURRENT_STAMP) {
 	    // may initiate an embed, but it will only really start when the mouse has moved a sufficient distance
-	    var stamp = STAMPS[id];
-	    EMBEDDING = [id, MOUSE[0], MOUSE[1], 0];
+	    var bbox = STAMPS[id].small_bbox;
+	    EMBEDDING = {
+		state: 0,
+		stamp_id: id,
+		mouse: [MOUSE[0], MOUSE[1]],
+		last_mouse: [MOUSE[0], MOUSE[1]],
+		travelled: 0
+	    };
 	    switch_state("embedding");
 	    return;
 	}

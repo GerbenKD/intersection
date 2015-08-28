@@ -431,7 +431,7 @@ var CompoundTool = Tool.extend(function() {
 	var fn = change[0];
 	var fu = eval("C_"+fn);
 	if (!fu) { console.error("Unknown change: '"+fn+"'"); return; }
-	if (!suppress_log) console.log("Performing change "+JSON.stringify(change));
+	if (false && !suppress_log) console.log("Performing change "+JSON.stringify(change));
 	return fu.apply(this, change.slice(1));
     }
 

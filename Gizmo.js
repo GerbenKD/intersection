@@ -79,9 +79,7 @@ var Point = Gizmo.extend(function() {
 	return Point.distance_cc(this.pos, pos);
     }
 
-    this.move_sprite = function() { 
-	this.sprite.attrib({ "cx": this.pos[0], "cy": this.pos[1] }); 
-    }
+  
 });
 
 
@@ -90,8 +88,13 @@ var ConstructedPoint = Point.extend(function() {
     this.create_sprite = function() { 
 	var sprite = Graphics.create_sprite("circle", "points");
 	sprite.add_class("intersectionpoint");
-	sprite.attrib({"r":"4"});
 	this.sprite = sprite;
+    }
+
+    this.move_sprite = function(graphics_state) { 
+	var r = Graphics.SCALE * graphics_state.scale;
+	this.sprite.attrib({ "cx": this.pos[0], "cy": this.pos[1], "r": 0.003 * r }); 
+	this.sprite.sprite_elt.style["stroke-width"] = 0.001*r;
     }
 
 });
@@ -108,18 +111,14 @@ var ControlPoint = Point.extend(function() {
     this.create_sprite = function(graphics_state) {
 	var sprite = Graphics.create_sprite("circle", "controlpoints");
 	sprite.add_class("controlpoint");
-	var r = graphics_state.cp_radius || 8;
-	sprite.attrib({"r": r});
 	this.sprite = sprite;
     }
 
     this.move_sprite = function(graphics_state) {
-	Point.move_sprite.call(this, graphics_state);
-	if ("cp_radius" in graphics_state) {
-	    this.sprite.attrib({"r":graphics_state.cp_radius});
-	}
+	var r = Graphics.SCALE * graphics_state.scale;
+	this.sprite.attrib({ "cx": this.pos[0], "cy": this.pos[1], "r": 0.006*r }); 
+	this.sprite.sprite_elt.style["stroke-width"] = 0.001*r;
     }
-
 
 });
 
@@ -169,15 +168,21 @@ var Line = Gizmo.extend(function() {
     }
 
     this.move_sprite = function(graphics_state) {
-
+	var r = Graphics.SCALE * (this.has_class("output") ? 0.003 : 0.001) * graphics_state.scale;
 	var sprite = this.sprite;
-	var bbox = graphics_state.bbox;
+	var bbox;
+	{ var bb = graphics_state.bbox;
+	  bbox = [bb[0]-2*r, bb[1]-2*r, bb[2]+4*r, bb[3]+4*r];
+	}
+	
 	var exit1 = extend(this.p1, this.p2);
 	var exit2 = extend(this.p2, this.p1);
 
-	if (exit1!=null && exit2 != null) {
+	if (exit1!=undefined && exit2 != undefined) {
 	    sprite.attrib({ "x1": exit1[0], "y1": exit1[1], "x2": exit2[0], "y2": exit2[1]});
+	    sprite.sprite_elt.style["stroke-width"] = r;
 	}
+	
 
 	// If the exits are undefined we can only hope that the old line runs
 	// more or less in the right direction, or that the defining points are
@@ -197,7 +202,7 @@ var Line = Gizmo.extend(function() {
 		var ix = x+(iy-y)/dy * dx;
 		if (ix>0 && ix<=bbox[2]) return [ix, iy];
 	    }
-	    return null;
+	    return undefined;
 	}
     }
 
@@ -221,7 +226,9 @@ var Circle = Gizmo.extend(function() {
 	return Math.abs(this.radius() - Point.distance_cc(this.center, pos));
     }
 
-    this.move_sprite = function() {
+    this.move_sprite = function(graphics_state) {
+	var r = Graphics.SCALE * (this.has_class("output") ? 0.003 : 0.001) * graphics_state.scale;
 	this.sprite.attrib({"cx": this.center[0], "cy": this.center[1], "r": this.radius()});
+	this.sprite.sprite_elt.style["stroke-width"] = r;
     }
 });

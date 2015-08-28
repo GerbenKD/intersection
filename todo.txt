@@ -16,3 +16,8 @@
 
 - muiswieltje moet beter
 15min
+
+- icoontje van fullsreen omkeren bij fullscreen
+10min
+
+- snap targets grafisch iets doen bij onmouseover?

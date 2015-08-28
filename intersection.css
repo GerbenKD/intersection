@@ -41,6 +41,7 @@ svg.button.active {
     opacity: 1;
 }
 
+
 svg.button.active:hover {
     fill: #80ffb0;
     stroke: #40e080;
@@ -55,10 +56,12 @@ svg.stamp {
     /* background-color: white;*/
 }
 
+/*
 svg.stamp.deselected:hover {
     transition: 0.5s;
     background-color: #80ffb0;
 }
+*/
 
 
 div.ruler {
@@ -69,7 +72,7 @@ div.ruler {
 .line,.circle {
     fill: none;
     stroke: black;
-    stroke-width: 0.3%;
+    /* stroke-width: 0.3%; */
     position: absolute;
 }
 
@@ -81,9 +84,11 @@ div.ruler {
     stroke: #ffff80;
 }
 
+/*
 .line.output, .circle.output {
     stroke-width: 0.6%;
 }
+*/
 
 
 .hidden {
@@ -93,7 +98,7 @@ div.ruler {
 
 .controlpoint {
     stroke: black;
-    stroke-width: 2px;
+    /* stroke-width: 0.3%; */
     fill: #0040ff;
     position: absolute;
 }
@@ -131,7 +136,7 @@ div.ruler {
 .intersectionpoint {
     pointer-events: none;
     stroke: black;
-    stroke-width: 0.2%;
+    /* stroke-width: 0.2%; */
     fill: white;
 }
 

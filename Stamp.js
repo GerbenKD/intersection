@@ -3,6 +3,8 @@
 
 var Stamp = new function() {
 
+    this.STAMP_SCALE = 0.3;
+
     this.extend = function(constr) { constr.prototype = this; return new constr(); }
 
     this.create = function(id) {
@@ -12,7 +14,7 @@ var Stamp = new function() {
 	    this.svg_object = Graphics.SVG.create();
 	    this.svg_object.add_class("stamp");
 	    this.renderer = this.svg_object.create_renderer();
-	    this.graphics_state = { cp_radius: 3 };
+	    this.graphics_state = { scale: this.STAMP_SCALE };
 	});
     }
 
@@ -26,7 +28,14 @@ var Stamp = new function() {
 	this.large_bbox = [0, 0, Graphics.XS, Graphics.YS];
 	var bbox = this.selected ? this.large_bbox : this.small_bbox;
 	this.graphics_state.bbox = bbox;
-	this.svg_object.set_bbox(bbox);
+	this.update_small_positions();
+	if (!this.selected) this.small_positions.move();
+    }
+
+    this.move = function(screen_bbox, scale) {
+	this.graphics_state.bbox = screen_bbox;
+	this.graphics_state.scale = scale;
+	this.redraw();
     }
 
     this.get_svg_elt  = function() { return this.svg_object.svg_elt; }
@@ -46,106 +55,13 @@ var Stamp = new function() {
 	this.svg_object.unfocus(firsttime);
 	this.selected = false;
     }
-}();
 
-
-var LineStamp = Stamp.extend(function() {
-
-    var cp1 = ControlPoint.create();
-    var cp2 = ControlPoint.create();
-    cp1.valid = true;
-    cp2.valid = true;
-    var line = Line.create();
-    line.valid = true;
-    var set = {};
-    set[cp1.id] = cp1;
-    set[cp2.id] = cp2;
-    set[line.id] = line;
-    this.gizmo_set = set;
-
-    this.reposition = function(nstamps) {
-	Stamp.reposition.call(this, nstamps);
-	var width = this.small_bbox[2];
-	var height = this.small_bbox[3];
-	cp1.pos = [0.35*width, height/2];
-	cp2.pos = [0.65*width, height/2];
-	line.p1 = cp1.pos;
-	line.p2 = cp2.pos;
-    }
-
-    this.get_gizmo_set = function() { return this.gizmo_set; }
-});
-
-var CircleStamp = Stamp.extend(function() {
-    var cp1 = ControlPoint.create();
-    var cp2 = ControlPoint.create();
-    var circle = Circle.create();
-    cp1.valid = true;
-    cp2.valid = true;
-    circle.valid = true;
-    var set = {};
-    set[cp1.id] = cp1;
-    set[cp2.id] = cp2;
-    set[circle.id] = circle;
-    this.gizmo_set = set;
-
-   this.reposition = function(nstamps) {
-       Stamp.reposition.call(this, nstamps);
-       var width = this.small_bbox[2];
-       var height = this.small_bbox[3];
-       var min = width<height?width:height;
-       var center = [0.5*width, 0.5*height];
-       var border = [0.5*width+0.4*min, 0.5*height];
-       cp1.pos = center;
-       cp2.pos = border;
-       circle.center = center;
-       circle.border = border;
-   }
-
-    this.get_gizmo_set = function() { return this.gizmo_set; }
-
-});
-
-
-
-var ConstructionStamp = Stamp.extend(function() { 
-
-    this.create = function(id, bbox) {
-	var instance = Stamp.create.call(this, id, bbox);
-	instance.filename = "file_"+(id+1);
-	instance.construction = instance.load_construction();
-	instance.update_large_positions();
-	return instance;
-    }
-    
-    /*
-    this.set_bbox = function(bbox) {
-	var bbox_cur = this.graphics_state.bbox;
-	var new_cp = this.construction.get_scaled_positions([0,0,bbox_cur[2],bbox_cur[3]], [0,0,bbox[2],bbox[3]]);
-	this.construction.set_positions(new_cp);
-	this.graphics_state.bbox = bbox;
-	this.redraw();
-    }*/
-
-    this.load_construction = function() {
-	var savestate = Storage.get_file(this.filename);
-	var construction = Construction.create();
-	if (savestate) construction.initialize(savestate[1]);
-	return construction;
-    }
-
-    this.get_construction = function() { return this.construction; }
-
-    this.reposition = function(nstamps) {
-	Stamp.reposition.call(this, nstamps);
-	this.update_small_positions();
-	if (!this.selected) this.small_positions.move();
-    }
 
     // called just before shrinking the construction. Recalculates the large_positions and small_positions.
     this.update_large_positions = function() {
 	this.large_positions = this.construction.get_cp_positions();
     }
+
 
     // used when the screen is resized AND when the stamp is deactivated
     this.update_small_positions = function() {
@@ -166,24 +82,31 @@ var ConstructionStamp = Stamp.extend(function() {
 	this.small_positions = this.large_positions.scale(oldbb, newbb);
     }
 
-    this.animate_enlarge = function() {
-	return get_animation(this, this.small_positions.pos, this.large_positions.pos, this.small_bbox, this.large_bbox, 3, 8);
-    }
-
-    this.animate_shrink = function() {
-	return get_animation(this, this.large_positions.pos, this.small_positions.pos, this.large_bbox, this.small_bbox, 8, 3);
-    }
-
-    this.animate_no_zoom = function(from_positions, to_positions, speed) {
-	return get_animation(this, from_positions, to_positions, this.large_bbox, this.large_bbox, 8, 8, speed);
-    }
-
 
     this.get_gizmo_set = function() {
 	return this.construction.get_gizmo_set(); 
     }
 
-    function get_animation(stamp, from, to, bbox0, bbox1, cp_r0, cp_r1, speed) {
+
+
+    this.animate_enlarge = function() {
+	return get_animation(this, this.small_positions.pos, this.large_positions.pos, this.small_bbox, this.large_bbox, this.STAMP_SCALE, 1);
+    }
+
+    this.animate_shrink = function() {
+	return get_animation(this, this.large_positions.pos, this.small_positions.pos, this.large_bbox, this.small_bbox, 1, this.STAMP_SCALE);
+    }
+
+    this.animate_no_zoom = function(from_positions, to_positions, speed) {
+	return get_animation(this, from_positions, to_positions, this.large_bbox, this.large_bbox, 1, 1, speed);
+    }
+
+    this.get_animation = function(from_bbox, to_bbox, from_positions, to_positions,
+				  from_scale, to_scale, speed) {
+	return get_animation(this, from_positions.pos, to_positions.pos, from_bbox, to_bbox, from_scale, to_scale, 1);
+    }
+
+    function get_animation(stamp, from, to, bbox0, bbox1, scale0, scale1, speed) {
 	var a = 0.9;
 
 	var my_from = from.slice(0); my_from.push([bbox0[0], bbox0[1]], [bbox0[0]+bbox0[2], bbox0[1]+bbox0[3]]);
@@ -230,12 +153,71 @@ var ConstructionStamp = Stamp.extend(function() {
 	    
 	    if (size_to != size_from) {
 		var f = (size_now - size_from)/(size_to - size_from);
-		stamp.graphics_state.cp_radius = cp_r0*(1-f) + cp_r1*f;
+		stamp.graphics_state.scale = scale0*(1-f) + scale1*f;
 	    }
 
 	    stamp.renderer(stamp.get_gizmo_set(), stamp.graphics_state);
 	    return moving!=0;
 	}
+    }
+
+
+
+}();
+
+
+var LineStamp = Stamp.extend(function() {
+    this.create = function(id) {
+	var instance = Stamp.create.call(this, id);
+	var c = Construction.create();
+	var ii = c.id2tool[0];
+	instance.construction = c;
+	var cp1 = ii.first_free_output(), pos1 = [0.3*Graphics.XS, 0.5*Graphics.YS];
+	var cf1 = c.change(["create_controlpoint", cp1, pos1]);
+	var cp2 = ii.first_free_output(), pos2 = [0.7*Graphics.XS, 0.5*Graphics.YS];
+	var cf2 = c.change(["create_controlpoint", cp2, pos2]);
+	var cf3 = c.change(["create_line", cp1, cp2]);
+	instance.update_large_positions();
+	return instance;
+    }
+
+});
+
+var CircleStamp = Stamp.extend(function() {
+
+    this.create = function(id) {
+	var instance = Stamp.create.call(this, id);
+	var c = Construction.create();
+	var ii = c.id2tool[0];
+	instance.construction = c;
+	var cp1 = ii.first_free_output(), pos1 = [0.5*Graphics.XS, 0.5*Graphics.YS];
+	var cf1 = c.change(["create_controlpoint", cp1, pos1]);
+	var cp2 = ii.first_free_output(), pos2 = [0.7*Graphics.XS, 0.5*Graphics.YS];
+	var cf2 = c.change(["create_controlpoint", cp2, pos2]);
+	var cf3 = c.change(["create_circle", cp1, cp2]);
+	instance.update_large_positions();
+	return instance;
+    }
+
+});
+
+
+
+var ConstructionStamp = Stamp.extend(function() { 
+
+    this.create = function(id) {
+	var instance = Stamp.create.call(this, id);
+	instance.filename = "file_"+(id+1);
+	instance.construction = instance.load_construction();
+	instance.update_large_positions();
+	return instance;
+    }
+    
+    this.load_construction = function() {
+	var savestate = Storage.get_file(this.filename);
+	var construction = Construction.create();
+	if (savestate) construction.initialize(savestate[1]);
+	return construction;
     }
 
 }); 

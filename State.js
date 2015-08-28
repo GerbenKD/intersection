@@ -207,7 +207,7 @@ var State = new function() {
 
     this.initialize = function(stamp) {
 	STAMP = stamp;
-	CT = stamp.get_construction();
+	CT = stamp.construction;
 	CT_II = CT.get_input_interface();
 	if (!Storage.haskey("file2savestate")) Storage.setobj("file2savestate", {});
 	var savestate = Storage.get_file(stamp.filename);
@@ -342,6 +342,19 @@ var State = new function() {
 	DRAG_START = undefined;
     }
 
+    this.move_controlpoint = function(cp_out_socket, npos) {
+	var opos = CT_II.get_output(cp_out_socket).dup();
+	var cf = ["move_controlpoint", cp_out_socket, npos];
+	var cb = ["move_controlpoint", cp_out_socket, opos];
+	CT.change(cf);
+	this.register_change(cf, cb);
+    }
+
+    // from the input socket of a given tool, return the controlpoint socket on the main construction.
+    this.get_input = function(id, id_socket) {
+	var inp = CT.id2tool[id].get_input(id_socket);
+	return inp ? [inp[0].id, inp[1]] : undefined;
+    }
 
     this.snap = function(cp_out_socket, left_tool_id, left_out_socket) {
 
