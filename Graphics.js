@@ -35,26 +35,16 @@ var Graphics = new function() {
 	}
     }();
 
+    this.is_fullscreen = function() {
+	return document.fullscreenElement
+	    || document.webkitFullscreenElement 
+	    || document.mozFullScreenElement
+	    || document.msFullScreenElement;
+    }
+    
     this.toggle_fullscreen = function() {
-	if (is_fullscreen()) leave_fullscreen(); else enter_fullscreen();
+	if (this.is_fullscreen()) leave_fullscreen(); else enter_fullscreen();
 	
-	
-	/*
-	  function add_fs_listener(func) {
-	  document.addEventListener("mozfullscreenchange", func);
-	  document.addEventListener("webkitfullscreenchange", func);
-	  document.addEventListener("msfullscreenchange", func);
-	  document.addEventListener("fullscreenchange", func);
-	  }
-	*/
-
-	function is_fullscreen() {
-	    return document.fullscreenElement
-		|| document.webkitFullscreenElement 
-		|| document.mozFullScreenElement
-		|| document.msFullScreenElement;
-	}
-
 	function enter_fullscreen() {
 	    var elt = BODY;
 	    if      (elt.mozRequestFullScreen)    elt.mozRequestFullScreen();

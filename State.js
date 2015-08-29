@@ -134,7 +134,12 @@ var State = new function() {
 	    } else {
 		if (move_from.length != 0) {
 		    var old_from = move_from, old_to = move_to;
-		    anims.push(STAMP.animate_no_zoom(move_from, move_to, speed));
+		    var trans = {
+			positions: [move_from, move_to],
+			bbox:      [STAMP.large_bbox, STAMP.large_bbox],
+			speed:     speed
+		    };
+		    anims.push(speed ? STAMP.get_animation_fast(trans) : STAMP.get_animation(trans));
 		    move_from = [];
 		    move_to = [];
 		}
@@ -142,7 +147,12 @@ var State = new function() {
 	    }
 	}
 	if (move_from.length != 0) {
-	    anims.push(STAMP.animate_no_zoom(move_from, move_to, speed));
+	    var trans = {
+		positions: [move_from, move_to],
+		bbox:      [STAMP.large_bbox, STAMP.large_bbox],
+		speed:     speed
+	    };
+	    anims.push(speed ? STAMP.get_animation_fast(trans) : STAMP.get_animation(trans));
 	}
 	return Animation.sequential(anims);
     }
@@ -172,7 +182,7 @@ var State = new function() {
 
 	// actually undo all the changes
 	var animation = animate_frame(frame.slice().reverse(), 1, speed);
-	Animation.run(Animation.sequential([animation, continuation]), speed);
+	Animation.run(Animation.sequential([animation, continuation]));
     }
 
     this.can_redo = function() {
@@ -202,7 +212,7 @@ var State = new function() {
 
 	// actually redo all the changes
 	var animation = animate_frame(frame, 0, speed);
-	Animation.run(Animation.sequential([animation, continuation]), speed);
+	Animation.run(Animation.sequential([animation, continuation]));
     }
 
     this.initialize = function(stamp) {

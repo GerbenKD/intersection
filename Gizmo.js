@@ -176,9 +176,9 @@ var Line = Gizmo.extend(function() {
     this.move_sprite = function(graphics_state) {
 	var r = Graphics.SCALE * 0.001 * graphics_state.scale;
 	var f = graphics_state.suppress_internals;
-	if (f==undefined) f=1;
-	r *= this.has_class("output") ? (3-2*f) : 1-f;
 	var sprite = this.sprite;
+	if (f==undefined) f=1;
+	r *= this.has_class("output") ? 3-2*f : 1-f; // TODO: use greyscales rather than line thickness to make it vanish
 	var bbox;
 	{ var bb = graphics_state.bbox;
 	  bbox = [bb[0]-2*r, bb[1]-2*r, bb[2]+4*r, bb[3]+4*r];

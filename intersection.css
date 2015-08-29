@@ -66,6 +66,10 @@ div.workstamp {
     opacity: 0.95;
 }
 
+div.workstamp.highlighted {
+    background-color: #99dcdc;
+}
+
 div.activestamp {
     background: none;
 }
@@ -74,6 +78,11 @@ div.toolstamp {
     background-color: #bcbc79;
     opacity: 0.95;
 }
+
+div.toolstamp.highlighted {
+    background-color: #dcdc99;
+}
+
 
 div.activestamp {
     background: none;

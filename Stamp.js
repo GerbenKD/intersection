@@ -23,6 +23,8 @@ var Stamp = new function() {
 	this.svg_object.change_layer(layer);
     }
 
+    this.has_outputs = function() { return this.construction.has_outputs(); }
+
     this.focus   = function() {
 	this.change_layer("bottom"); 
 	this.graphics_state.suppress_internals = 0;
@@ -111,27 +113,62 @@ var Stamp = new function() {
 
 
     this.animate_enlarge = function() {
-	return get_animation(this, this.small_positions.pos, this.large_positions.pos, this.small_bbox, this.large_bbox, this.STAMP_SCALE, 1);
+	return this.get_animation({ positions: [this.small_positions.pos, this.large_positions.pos],
+				    bbox:      [this.small_bbox, this.large_bbox],
+				    scale:     [this.STAMP_SCALE, 1],
+				    suppress:  [this.has_outputs() ? 1 : 0, 0]});
     }
 
     this.animate_shrink = function() {
-	return get_animation(this, this.large_positions.pos, this.small_positions.pos, this.large_bbox, this.small_bbox, 1, this.STAMP_SCALE);
+	return this.get_animation({ positions: [this.large_positions.pos, this.small_positions.pos],
+				    bbox:      [this.large_bbox, this.small_bbox],
+				    scale:     [1, this.STAMP_SCALE],
+				    suppress:  [0, this.has_outputs() ? 1 : 0]});
     }
 
-    this.animate_no_zoom = function(from_positions, to_positions, speed) {
-	return get_animation(this, from_positions, to_positions, this.large_bbox, this.large_bbox, 1, 1, speed);
+
+    this.get_animation_fast = function(trans) {
+	var stamp = this;
+	var a = 10;
+	var speed = trans.speed;
+	var from = trans.positions[0], to = trans.positions[1], dir = [];
+	for (var i=0; i<from.length; i++) {
+	    if (!from[i]) continue;
+	    var dx = to[i][0]-from[i][0], dy = to[i][1]-from[i][1];
+	    var d = Math.sqrt(dx*dx+dy*dy);
+	    dir[i] = [dx/d, dy/d, d]; // direction, distance
+	}
+
+	return function(t) {
+	    var moving = false;
+	    var now = [];
+
+	    var x = 0.1*(speed+a*t)*t;
+
+	    for (var i=0; i<from.length; i++) {
+		if (!from[i]) continue;
+		if (x < dir[i][2]) {
+		    moving = true;
+		    now[i] = [from[i][0]+x*dir[i][0], from[i][1]+x*dir[i][1]];
+		} else {
+		    now[i] = to[i];
+		}
+	    }
+
+	    CPPos.create(stamp.construction, now).move();
+	    stamp.renderer(stamp.get_gizmo_set(), stamp.graphics_state);
+	    return moving;
+	}
     }
 
-    this.get_animation = function(from_bbox, to_bbox, from_positions, to_positions,
-				  from_scale, to_scale, speed) {
-	return get_animation(this, from_positions.pos, to_positions.pos, from_bbox, to_bbox, from_scale, to_scale, 1);
-    }
-
-    function get_animation(stamp, from, to, bbox0, bbox1, scale0, scale1, speed) {
+    this.get_animation = function(trans) {
+	var stamp = this;
 	var a = 0.9;
-
-	var my_from = from.slice(0); my_from.push([bbox0[0], bbox0[1]], [bbox0[0]+bbox0[2], bbox0[1]+bbox0[3]]);
-	var my_to   = to.slice(0);   my_to.push  ([bbox1[0], bbox1[1]], [bbox1[0]+bbox1[2], bbox1[1]+bbox1[3]]);
+	var bbox = trans.bbox;
+	var my_from = trans.positions[0].slice(0); 
+	var my_to   = trans.positions[1].slice(0);
+	my_from.push([bbox[0][0], bbox[0][1]], [bbox[0][0]+bbox[0][2], bbox[0][1]+bbox[0][3]]);
+	my_to.push  ([bbox[1][0], bbox[1][1]], [bbox[1][0]+bbox[1][2], bbox[1][1]+bbox[1][3]]);
 	var dist = [];
 	var endtimes = [];
 	// var total_time = 0;
@@ -142,8 +179,8 @@ var Stamp = new function() {
 	    endtimes[i] = T; 
 	    // if (T > total_time) total_time = T;
 	}
-	var size_from = Math.sqrt(bbox0[2]*bbox0[3]);
-	var size_to   = Math.sqrt(bbox1[2]*bbox1[3]);
+	var size_from = Math.sqrt(bbox[0][2]*bbox[0][3]);
+	var size_to   = Math.sqrt(bbox[1][2]*bbox[1][3]);
 
 	return function(t) {
 	    var moving = 0;
@@ -172,9 +209,11 @@ var Stamp = new function() {
 
 	    var size_now  = Math.sqrt(stamp.graphics_state.bbox[2] * stamp.graphics_state.bbox[3]);
 	    
+	    
 	    if (size_to != size_from) {
 		var f = (size_now - size_from)/(size_to - size_from);
-		stamp.graphics_state.scale = scale0*(1-f) + scale1*f;
+		if (trans.scale)    stamp.graphics_state.scale = trans.scale[0]*(1-f) + trans.scale[1]*f;
+		if (trans.suppress) stamp.graphics_state.suppress_internals = trans.suppress[0]*(1-f) + trans.suppress[1]*f;
 	    }
 
 	    stamp.renderer(stamp.get_gizmo_set(), stamp.graphics_state);

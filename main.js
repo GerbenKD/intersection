@@ -88,7 +88,13 @@ function main() {
     
     function mouseover(id) {
 	if (STATE == "normal") {
-	    Graphics.cursor(id==CURRENT_STAMP ? "default" : STAMPS[id].graphics_state.state=="toolstamp" ? "grab" : "pointer");
+	    if (STAMP_TARGET) STAMPS[STAMP_TARGET].div_object.remove_class("highlighted");
+	    if (id==CURRENT_STAMP) {
+		Graphics.cursor("default");
+	    } else {
+		Graphics.cursor(STAMPS[id].graphics_state.state=="toolstamp" ? "grab" : "pointer");
+		STAMPS[id].div_object.add_class("highlighted");
+	    }
 	}
 	STAMP_TARGET = id;
     }
@@ -145,12 +151,12 @@ function main() {
     function rewind() {
 	if (STATE!="normal") return;
 	switch_state("animating");
-	function rewind_rec() {
+	function rewind_rec(speed) {
 	    State.undo(function() { 
-		if (State.can_undo()) rewind_rec(); else switch_state("normal"); 
-	    }, 4);
+		if (State.can_undo()) rewind_rec(speed+30); else switch_state("normal"); 
+	    }, speed);
 	}
-	rewind_rec();
+	rewind_rec(30);
     }
 
     function fforward() {
@@ -364,9 +370,10 @@ function main() {
 	    case 1: // move stamp back to its home base
 		switch_state("animating");
 		var stamp = STAMPS[EMBEDDING.stamp_id];
-		var anim = stamp.get_animation(stamp.graphics_state.bbox,   stamp.small_bbox,
-					       EMBEDDING.current_positions, stamp.small_positions, 
-					       EMBEDDING.f,                 stamp.STAMP_SCALE);
+		var anim = stamp.get_animation({ 
+		    positions: [EMBEDDING.current_positions.pos, stamp.small_positions.pos],
+		    bbox:      [stamp.graphics_state.bbox,   stamp.small_bbox],
+		    scale:     [EMBEDDING.f,                 stamp.STAMP_SCALE]});
 		Animation.run(Animation.sequential([anim, function() {
 		    stamp.change_layer("top");
 		    EMBEDDING = undefined;
@@ -671,14 +678,16 @@ function main() {
 		var s = 0.05; // spacing between center and arrow
 		var t = 0.15;  // line thickness
 
+		var o = Graphics.is_fullscreen() ? 0.5+s : 0;
+
 		// top-right
-		draw_polygon(p1, [[0.5+s,0.5+s], [0.5+s+t,0.5+s], [1-t, 1-2*t], [1-t, 0.5+s], [1,0.5+s],
-				       [1,1], [0.5+s,1], [0.5+s,1-t], [1-2*t,1-t], [0.5+s,0.5+s+t]]);
+		draw_polygon(p1, [[0.5+s-o,0.5+s-o], [0.5+s+t-o,0.5+s-o], [1-t-o, 1-2*t-o], [1-t-o, 0.5+s-o], [1-o,0.5+s-o],
+				       [1-o,1-o], [0.5+s-o,1-o], [0.5+s-o,1-t-o], [1-2*t-o,1-t-o], [0.5+s-o,0.5+s+t-o]]);
 
 		// bottom-left
-		draw_polygon(p2, [[0.5-s,0.5-s], [0.5-s-t, 0.5-s], [t, 2*t], [t,0.5-s], [0,0.5-s],
-				       [0,0], [0.5-s,0], [0.5-s,t], [2*t,t], [0.5-s,0.5-s-t]]);
-
+		draw_polygon(p2, [[0.5-s+o,0.5-s+o], [0.5-s-t+o, 0.5-s+o], [t+o, 2*t+o], [t+o,0.5-s+o], [o,0.5-s+o],
+				       [0+o,0+o], [0.5-s+o,0+o], [0.5-s+o,t+o], [2*t+o,t+o], [0.5-s+o,0.5-s-t+o]]);
+		
 	    }
 
 

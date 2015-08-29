@@ -1,32 +1,4 @@
-- alle constructions worden gerendered op een bepaalde schaal, die de
-  grootte van de points en dikte van de lijnen bepaalt
-1u
-
-- stamps tonen alleen outputs (als die er zijn)
-20min
-
-- de stamp verdwijnt tijdens het draggen en als je m loslaat verschijnt een "nieuwe"
-10min
-
-- rewind en fast forward moeten sneller en mooi
-1u
-
-- trek lijnen iets door voorbij de rand van het scherm
-5min
-
-- muiswieltje moet beter
-15min
-
-- icoontje van fullsreen omkeren bij fullscreen
-10min
-
 - snap targets grafisch iets doen bij onmouseover?
-
-- use scale parameter in graphics state to decide how to render outputs / normal gizmos for toolstamps.
-  . usually: outputs look normal, normals are invisible
-  . switching stamp: transitions to look at internals, thick lines for outputs
-  
-- figure out why mouse pointer becomes default on a controlpoint
 
 
 
