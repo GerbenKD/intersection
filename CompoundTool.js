@@ -120,6 +120,7 @@ var CompoundTool = Tool.extend(function() {
 	}
     }
 
+    // WARNING! Does not preserve the invariant that the output interface is at the end
     this.add_tool = function(tool) { 
 	tool.id = this.id2tool.length;
 	this.id2tool.push(tool);
@@ -141,6 +142,8 @@ var CompoundTool = Tool.extend(function() {
 	    return itool;
 	}
 
+	var oo = this.tools.pop(); // extract the output interface
+
 	var n_existing_tools = this.tools.length;
 	this.add_tool(tool);
 
@@ -157,6 +160,8 @@ var CompoundTool = Tool.extend(function() {
 		}
 	    }
 	}
+
+	this.tools.push(oo);
     }
 
     this.max_input_socket = function()  { return this.id2tool[0].max_output_socket(); }
@@ -360,6 +365,7 @@ var CompoundTool = Tool.extend(function() {
 	return this.id2tool[tool_id].get_output(output_socket);
     }
 
+    // separate everything dependent on controlpoint with given socket
     this.separate = function(socket) {
 	var tool = this.id2tool[0];
 	var dependent = {}; // maps dependent tools that have been seen
@@ -412,12 +418,12 @@ var CompoundTool = Tool.extend(function() {
       (2) all remaining inputs should be destroyed recursively up to and including their controlpoints
     */
 
-    this.destroy = function(level) {
+    this.destroy = function() {
 	var ii = this.id2tool[0];
 
 	// first destroy recursively
 	for (var i=this.id2tool.length-1; i>=2; i--) {
-	    this.id2tool[i].destroy((level||0)+1);
+	    this.id2tool[i].destroy();
 	}
 
 	// then destroy any remaining controlpoints
@@ -502,15 +508,21 @@ var CompoundTool = Tool.extend(function() {
 
     // removes the tool with the given id and all later tools (intersections) in the tools array
     function C_remove_tool(id) {
+	var oo = this.tools.pop(); // preserve output interface
 	while (this.tools.length > 0) {
 	    var t = this.tools.pop();
 	    var t2 = this.id2tool.pop();
-	    if (t!==t2) { console.error("remove_tool can only remove tools that have not been shuffled yet"); return; }
+	    if (t!==t2) { 
+		this.tools.push(oo);
+		console.error("remove_tool can only remove tools that have not been shuffled yet"); 
+		return; 
+	    }
 	    var t_id = t.id;
 	    t.destroy();
 	    console.log("Destroyed tool with id="+t_id+", looking for "+id+", #left="+this.tools.length);
-	    if (t_id==id) return;
+	    if (t_id==id) { this.tools.push(oo); return; }
 	}
+	this.tools.push(oo);
 	console.error("Cannot find the tool with the given id "+id+" in C_remove_tool");
     }
 
