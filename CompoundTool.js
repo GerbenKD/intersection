@@ -143,6 +143,8 @@ var CompoundTool = Tool.extend(function() {
 	}
 
 	var oo = this.tools.pop(); // extract the output interface
+	for (var i=0; i<this.tools.length; i++) {console.log("tools["+i+"].id="+this.tools[i].id);}
+	console.log("popped id is "+oo.id);
 
 	var n_existing_tools = this.tools.length;
 	this.add_tool(tool);
@@ -156,6 +158,7 @@ var CompoundTool = Tool.extend(function() {
 		    var test_gizmo = test_tool.get_output(k);
 		    if (!test_gizmo) continue;
 		    if (test_gizmo.type == "point") continue;
+		    console.log("creating intersection between "+test_gizmo.type+" and "+gizmo.type);
 		    this.add_tool(create_intersection(tool, j, gizmo, test_tool, k, test_gizmo));
 		}
 	    }
@@ -374,7 +377,7 @@ var CompoundTool = Tool.extend(function() {
 	var dependent = {}; // maps dependent tools that have been seen
 	var dependent_tools = [], independent_tools = [];
 
-	for (var i=0; i<this.tools.length; i++) {
+	for (var i=0; i<this.tools.length-1; i++) {
 	    var t = this.tools[i];
 	    if (check_dependent(t)) {
 		dependent_tools.push(t.id);
@@ -389,6 +392,7 @@ var CompoundTool = Tool.extend(function() {
 	// tool is dependent on the controlpoint if its inputs or its ties refer to either another dependent tool, or
 	// to the controlpoint tool with the correct socket
 	function check_dependent(t) {
+	    if (t.id==1) return true; // the output interface is always dependent on everything
 	    var connections = t.incoming_connections();
 	    for (var i=0; i<connections.length; i++) {
 		var conn = connections[i];
@@ -547,6 +551,7 @@ var CompoundTool = Tool.extend(function() {
 	if (!savestate) { console.error("Error in embedding: cannot obtain savestate"); return;	}
 	var new_ct = CompoundTool.create(this.ControlPoints);
 	new_ct.initialize(savestate[1]); // TODO remove socket array from savestate
+	console.log("initialisation complete, now embedding in main construction");
 	this.add_tool_with_intersections(new_ct); // new_ct is now given the right id
 
 	// now rewire all new_ct's controlpoints via this compoundtool's input interface

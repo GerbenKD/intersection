@@ -54,20 +54,28 @@ var Stamp = new function() {
     }
 
 
-    // for the time being, only works on deselected stamps
     // move the stamp to the given position and size, and redisplay contents
     this.reposition = function(nstamps) {
 	var stamp_height = Graphics.YS / nstamps;
 	var stamp_width  = stamp_height * 3/2;
-	
+
+	var old_small_bbox = this.small_bbox;
 	this.small_bbox = [0, stamp_height*this.id, stamp_width, stamp_height];
 	this.div_object.set_bbox(this.small_bbox);
 	this.large_bbox = [0, 0, Graphics.XS, Graphics.YS];
 	var active = this.graphics_state.state=="activestamp";
-	var bbox = active ? this.large_bbox : this.small_bbox;
-	this.graphics_state.bbox = bbox;
-	this.update_small_positions();
-	if (!active) this.small_positions.move();
+	if (active) {
+	    this.graphics_state.bbox = this.large_bbox;
+	    this.update_small_positions();
+	} else {
+	    if (this.small_positions) {
+		this.small_positions = this.small_positions.scale(old_small_bbox, this.small_bbox);
+	    } else {
+		this.update_small_positions();
+	    }
+	    this.graphics_state.bbox = this.small_bbox;
+	    this.small_positions.move();
+	}
     }
 
     this.move = function(screen_bbox, scale) {
