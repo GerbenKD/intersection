@@ -104,8 +104,6 @@ var State = new function() {
 	if (old_savestatename) remove_reference(old_savestatename);
     }
 
-    /* --------------------------------------- Constructor ------------------------------------- */ 
-
     this.create_undo_frame = function() {
 	this.save();
 	if (UNDO.current.length>0) {
@@ -171,7 +169,6 @@ var State = new function() {
 	    UNDO.current_stored = UNDO.current;
 	    frame = UNDO.current;
 	    UNDO.current = [];
-	    console.log("Undoing current frame");
 	} else {
 	    if (UNDO.index>0) {
 		console.log("Undoing frame "+(UNDO.index-1));
@@ -312,7 +309,7 @@ var State = new function() {
     }
 
     this.pick_up_controlpoint = function(cp_out_socket) {
-	DRAG_START = [cp_out_socket, CT_II.get_output(cp_out_socket).dup()];
+	DRAG_START = [cp_out_socket, CT_II.get_output(cp_out_socket).screen_pos()];
 	var separated = CT.separate(cp_out_socket);
 	console.log("separation: ["+separated[0].join(",")+"] / ["+separated[1].join(",")+"]");
 
@@ -335,17 +332,16 @@ var State = new function() {
 	});
     }
 
+    // takes real coordinates, not complex
     this.drag_controlpoint = function(pos) {
 	var gizmo = CT_II.get_output(DRAG_START[0]);
-	gizmo.pos = pos; // delay creating the event until drag end
+	gizmo.pos = [Cplx.create(pos[0],0), Cplx.create(pos[1],0)]; // delay creating the event until drag end
     }
 
     // returns outputs eligible for exporting from the compoundtool
     this.release_controlpoint = function() {
 	var cp_out_socket = DRAG_START[0];
-	var gizmo = CT_II.get_output(cp_out_socket);
-	var new_pos = gizmo.dup();
-	var cf = ["move_controlpoint", cp_out_socket, new_pos];
+	var cf = ["move_controlpoint", cp_out_socket, CT_II.get_output(cp_out_socket).screen_pos()];
 	var cb = ["move_controlpoint", cp_out_socket, DRAG_START[1]];
 	CT.change(cf); // perhaps not strictly necessary
 	this.register_change(cf, cb); 
@@ -353,7 +349,7 @@ var State = new function() {
     }
 
     this.move_controlpoint = function(cp_out_socket, npos) {
-	var opos = CT_II.get_output(cp_out_socket).dup();
+	var opos = CT_II.get_output(cp_out_socket).screen_pos();
 	var cf = ["move_controlpoint", cp_out_socket, npos];
 	var cb = ["move_controlpoint", cp_out_socket, opos];
 	CT.change(cf);
@@ -380,10 +376,10 @@ var State = new function() {
 
 	// Step 2: create a change that moves the controlpoint onto the target
 	var old_pos = DRAG_START[1];
-	var new_pos = CT.get_output_for_id(left_tool_id, left_out_socket).dup();
+	var new_pos = CT.get_output_for_id(left_tool_id, left_out_socket).screen_pos();
 	// I could call CT.change here, but it is not necessary as the controlpoint is removed in step 4 anyway
 	this.register_change(["move_controlpoint", cp_out_socket, new_pos],
-			["move_controlpoint", cp_out_socket, old_pos]);
+			     ["move_controlpoint", cp_out_socket, old_pos]);
 
 
 	// Step 3: redirect all edges
@@ -397,7 +393,7 @@ var State = new function() {
 
 	// Step 4: remove the old controlpoint
 	cf = ["remove_controlpoint", cp_out_socket];
-	cb = ["create_controlpoint", cp_out_socket, CT.get_output_for_id(left_tool_id, left_out_socket).dup()];
+	cb = ["create_controlpoint", cp_out_socket, CT.get_output_for_id(left_tool_id, left_out_socket).screen_pos()];
 	CT.change(cf);
 	this.register_change(cf, cb);
 

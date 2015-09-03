@@ -174,7 +174,8 @@ var Stamp = new function() {
 	// var total_time = 0;
 	for (var i=0; i<my_from.length; i++) {
 	    if (!my_from[i]) continue;
-	    dist[i] = Point.distance_cc(my_from[i], my_to[i]);
+	    var dx = my_from[i][0]-my_to[i][0], dy = my_from[i][1]-my_to[i][1];
+	    dist[i] = Math.sqrt(dx*dx+dy*dy);
 	    var T = 2*Math.sqrt(0.5*dist[i]/a);
 	    endtimes[i] = T; 
 	    // if (T > total_time) total_time = T;

@@ -65,7 +65,7 @@ var Tool = new function() {
 	var matches = [];
 	for (var i=0; i<this.max_output_socket(); i++) {
 	    var out_gizmo = this.get_output(i);
-	    if (out_gizmo && ((!out_gizmo.valid && !gizmo.valid) || out_gizmo.equals(gizmo))) {
+	    if (out_gizmo && out_gizmo.equals(gizmo)) {
 		matches.push(i);
 	    } 
 	}
@@ -220,21 +220,14 @@ var BasicTool = Tool.extend(function() {
 	var tie = this.get_tie(socket);
 	return tie ? tie[0].get_output(tie[1]) : this.gizmos[socket];
     }
-
 });
 
 var LineTool = BasicTool.extend(function() {
 
-    this.typename = "LineTool"; // intended for debugging
 
     this.recalculate = function() {
-	var point1 = this.listen(0), point2 = this.listen(1);
-	var line = this.gizmos[0];
-	line.valid = point1.valid && point2.valid;
-	if (line.valid) {
-	    line.p1 = point1.dup();
-	    line.p2 = point2.dup();
-	}
+	this.gizmos[0].p1 = this.listen(0).pos;
+	this.gizmos[0].p2 = this.listen(1).pos;
     }
 
     this.create = function() {
@@ -250,16 +243,9 @@ var LineTool = BasicTool.extend(function() {
 
 var CircleTool = BasicTool.extend(function() {
 
-    this.typename = "CircleTool"; // intended for debugging
-
     this.recalculate = function() {
-	var center = this.listen(0), border = this.listen(1);
-	var circle = this.gizmos[0];
-	circle.valid = center.valid && border.valid;
-	if (circle.valid) {
-	    circle.center = center.dup();
-	    circle.border = border.dup();
-	}
+	this.gizmos[0].center = this.listen(0).pos;
+	this.gizmos[0].border = this.listen(1).pos;
     }
 
     this.create = function() {
@@ -275,8 +261,6 @@ var CircleTool = BasicTool.extend(function() {
 
 var CCI_Tool = BasicTool.extend(function() {
 
-    this.typename = "CCI_Tool"; // intended for debugging
-
     this.create = function() {
 	var instance = BasicTool.create.call(this);
 	instance.create_output(0);
@@ -286,86 +270,75 @@ var CCI_Tool = BasicTool.extend(function() {
 
     this.create_output_gizmo = function(socket) { return ConstructedPoint.create(); }
 
-    this.mark_valid = function(v) {
-	for (var i=0; i!=2; i++) {
-	    if (!this.ties[i]) this.gizmos[i].valid = v;
-	}
-    }
-
     this.solutions = function(p1, p2) {
-	var which_ties = (this.ties[0] ? 1 : 0) | (this.ties[1] ? 2 : 0);
-	switch (which_ties) {
-	case 0:
+	if (this.ties[0]) {
+	    var tied_output_pos = this.get_output(0).pos;
+	    this.gizmos[1].pos = Point.distance_cc(p1, tied_output_pos).abs() < SMALL ? p2 : p1;
+	} else if (this.ties[1]) {
+	    if (this.ties[1][0]===this) {
+		this.gizmos[0].pos = p1;
+		// p2 should be equal to p1 in this case, that's why the tie is there
+	    } else {
+		var tied_output_pos = this.get_output(1).pos;
+		this.gizmos[0].pos = Point.distance_cc(p1, tied_output_pos).abs() < SMALL ? p2 : p1;
+	    }
+	} else {
 	    this.gizmos[0].pos = p1;
 	    this.gizmos[1].pos = p2;
-	    break;
-	case 1:
-	    var tie = this.ties[0];
-	    if (tie[0]===this) {
-		this.gizmos[1].pos = p1;
-	    } else {
-		var tied_output = tie[0].get_output(tie[1]);
-		this.gizmos[1].pos = Point.distance_cc(p1, tied_output.pos) < SMALL ? p2 : p1;
-	    }
-	    break;
-	case 2: 
-	    var tie = this.ties[1];
-	    if (tie[0]===this) {
-		this.gizmos[0].pos = p1;
-	    } else {
-		var tied_output = tie[0].get_output(tie[1]);
-		this.gizmos[0].pos = Point.distance_cc(p1, tied_output.pos) < SMALL ? p2 : p1;
-	    }
-	    break;
-	case 3:
-	    // no gizmos, do nothing!
 	}
     }
 
+
+    /*
+
+      CCI: als de cirkels dezelfde straal hebben, worden de pos velden van de output gizmos undefined.
+      CLI: de output gizmos hebben een pos die nooit undefined is, maar soms wel complex
+      LLI: de output gizmo heeft een pos die undefined is als de lijnen parallel lopen.
+
+      valid flag wordt opgedoekt, maar alle code moet kunnen omgaan met undefined positions
+
+      Controlpoints hebben een complexe position (zoals alle point gizmos)
+      Maar undo buffer events ("move_controlpoint") hebben re\"eele posities.
+
+      Undo gooit de redo history pas weg als er een undo_frame optreedt.
+      Redo doet eerst undo van CURRENT (die daarna verdwijnt) en dan REDO van het huidige frame.
+
+     */
 
     this.recalculate = function() {
 	if (this.ties[0] && this.ties[1]) return; // our hands are tied!
 	var circle1 = this.listen(0), circle2 = this.listen(1); // nieuw
-	if (!circle1.valid || !circle2.valid) { this.mark_valid(false); return; }
-	this.mark_valid(true);
-	var centre1 = circle1.center; // UK vs US!
-	var centre2 = circle2.center;
-
-	var x1 = centre1[0], y1 = centre1[1];
-	var x2 = centre2[0], y2 = centre2[1];
-	var dx = x2-x1, dy = y2-y1;
-	var d2 = dx*dx+dy*dy;
-
-	if (d2<SMALL2) { this.mark_valid(false); return; } // circles with same centre have no intersections
-
-	var r1 = circle1.radius(), r2 = circle2.radius();
-	var D = ((r1+r2)*(r1+r2)/d2-1) * (1-(r1-r2)*(r1-r2)/d2);
-
-	// case 1: no intersections
-	if (D < -SMALL) { this.mark_valid(false); return; }
-
-	var dr2 = 0.5*(r1*r1-r2*r2)/d2;
-	var xs = 0.5*(x1+x2)+dx*dr2
-	var ys = 0.5*(y1+y2)+dy*dr2
-
-	if (D<SMALL) {
-	    // case 2: one intersection. Pretend that D is zero
-	    this.solutions([xs,ys], [xs,ys]);
-	} else {
-	    // case 3: two intersections
-	    var K = 0.5*Math.sqrt(D);
-	    var xt =  dy*K;
-	    var yt = -dx*K;
-
-
-	    // get a consistent ordering of the two intersection points
-	    // var b1 = circle1.border;
-	    // if (xt*(b1[0]-x1) + yt*(b1[1]-y1) > SMALL) {
-	    //   xt = -xt; yt = -yt;
-	    // }
-
-	    this.solutions([xs+xt, ys+yt], [xs-xt, ys-yt]);
+	if (!circle1.is_defined() || !circle2.is_defined()) {
+	    if (!this.ties[0]) { this.gizmos[0].pos = undefined; }
+	    if (!this.ties[1]) { this.gizmos[1].pos = undefined; }
+	    return;
 	}
+	
+	var x1  = circle1.center[0], y1  = circle1.center[1], r1 = circle1.radius(),
+	    x2  = circle2.center[0], y2  = circle2.center[1], r2 = circle2.radius();
+
+	var dx = x2.sub(x1), dy = y2.sub(y1);
+	var d2 = dx.square().add(dy.square());
+
+	if (d2.abs()<SMALL2) {
+	    // the circle centres are too close together
+	    if (!this.ties[0]) { this.gizmos[0].pos = undefined; }
+	    if (!this.ties[1]) { this.gizmos[1].pos = undefined; }
+	    return;
+	}
+	    
+	var D = r1.add(r2).square().div(d2).sub(Cplx.one).mul(Cplx.one.sub(r1.sub(r2).square().div(d2)));
+
+	var half = Cplx.create(0.5, 0);
+	var dr2 = r1.square().sub(r2.square()).div(d2).mul(half);
+	var xs = x1.add(x2).mul(half).add(dx.mul(dr2));
+	var ys = y1.add(y2).mul(half).add(dy.mul(dr2));
+
+	var K = D.sqrt().mul(half);
+	var xt = dy.mul(K);
+	var yt = dx.mul(K).neg();
+
+	this.solutions([xs.add(xt), ys.add(yt)], [xs.sub(xt), ys.sub(yt)]);
     }
 });
 
@@ -382,75 +355,59 @@ var LCI_Tool = BasicTool.extend(function() {
     }
 
     this.create_output_gizmo = function(socket) { return ConstructedPoint.create(); }
-
-    this.mark_valid = function(v) {
-	for (var i=0; i!=2; i++) {
-	    if (!this.ties[i]) this.gizmos[i].valid = v;
-	}
-    }
-
+    
     this.solutions = function(p1, p2) {
-	var which_ties = (this.ties[0] ? 1 : 0) | (this.ties[1] ? 2 : 0);
-	switch (which_ties) {
-	case 0:
+	if (this.ties[0]) {
+	    var tied_output_pos = this.get_output(0).pos;
+	    this.gizmos[1].pos = Point.distance_cc(p1, tied_output_pos).abs() < SMALL ? p2 : p1;
+	} else if (this.ties[1]) {
+	    if (this.ties[1][0]===this) {
+		this.gizmos[0].pos = p1;
+		// p2 should be equal to p1 in this case, that's why the tie is there
+	    } else {
+		var tied_output_pos = this.get_output(1).pos;
+		this.gizmos[0].pos = Point.distance_cc(p1, tied_output_pos).abs() < SMALL ? p2 : p1;
+	    }
+	} else {
 	    this.gizmos[0].pos = p1;
 	    this.gizmos[1].pos = p2;
-	    break;
-	case 1:
-	    var tie = this.ties[0];
-	    if (tie[0]===this) {
-		this.gizmos[1].pos = p1;
-	    } else {
-		var tied_output = tie[0].get_output(tie[1]);
-		this.gizmos[1].pos = Point.distance_cc(p1, tied_output.pos) < SMALL ? p2 : p1;
-	    }
-	    break;
-	case 2: 
-	    var tie = this.ties[1];
-	    if (tie[0]===this) {
-		this.gizmos[0].pos = p1;
-	    } else {
-		var tied_output = tie[0].get_output(tie[1]);
-		this.gizmos[0].pos = Point.distance_cc(p1, tied_output.pos) < SMALL ? p2 : p1;
-	    }
-	    break;
-	case 3:
-	    // no gizmos, do nothing!
 	}
     }
 
     this.recalculate = function() {
 	if (this.ties[0] && this.ties[1]) return; // our hands are tied!
+	
 	var line = this.listen(0), circle = this.listen(1);
-	if (!line.valid || !circle.valid) { this.mark_valid(false); return; }
-	this.mark_valid(true);
-	var cx = circle.center[0], cy = circle.center[1];
-	var r2 = (cx-circle.border[0])*(cx-circle.border[0]) + (cy-circle.border[1])*(cy-circle.border[1]);
-	var x1 = line.p1[0] - cx, y1 = line.p1[1] - cy;
-	var x2 = line.p2[0] - cx, y2 = line.p2[1] - cy;
-	var dx = x2-x1, dy = y2-y1;
-	var dr2 = dx*dx+dy*dy;
-	var D = x1*y2-x2*y1;
-	var R = r2*dr2 - D*D;
-
-	// case 1: no intersections
-	if (R<=-SMALL2 || dr2<=SMALL2) { this.mark_valid(false); return; }
-	D = D/dr2;
-
-	var xs = cx+D*dy;
-	var ys = cy-D*dx;
-
-	if (R<SMALL2) {
-	    // case 2: one intersection. Pretend that R is zero
-	    this.solutions([xs,ys], [xs,ys]);
-	} else {
-	    // case 3: two intersections
-	    var sqrtR = Math.sqrt(R)/dr2;
-	    var xt = dx*sqrtR, yt = dy*sqrtR;
-	    this.solutions([xs+xt,ys+yt], [xs-xt,ys-yt]);
+	if (!line.is_defined() || !circle.is_defined()) {
+	    if (!this.ties[0]) { this.gizmos[0].pos = undefined; }
+	    if (!this.ties[1]) { this.gizmos[1].pos = undefined; }
+	    return;
 	}
-    }
+	
 
+	// convert inputs to complex numbers
+	var cx  = circle.center[0],  cy = circle.center[1];
+	var cbx = circle.border[0], cby = circle.border[1];
+	var l1x = line.p1[0], l1y = line.p1[1];
+	var l2x = line.p2[0], l2y = line.p2[1];
+	// done
+
+	var r2 = cx.sub(cbx).square().add(cy.sub(cby).square());
+	var x1 = l1x.sub(cx), y1 = l1y.sub(cy);
+	var x2 = l2x.sub(cx), y2 = l2y.sub(cy);
+	var dx = x2.sub(x1), dy = y2.sub(y1);
+	var dr2 = dx.square().add(dy.square());
+	var D = x1.mul(y2).sub(x2.mul(y1));
+	var R = r2.mul(dr2).sub(D.square());
+	var sqrtR = R.sqrt().div(dr2);
+	var xt = dx.mul(sqrtR), yt = dy.mul(sqrtR);
+	
+	D = D.div(dr2);
+	var xs = cx.add(D.mul(dy));
+	var ys = cy.sub(D.mul(dx));
+
+	this.solutions([xs.add(xt), ys.add(yt)], [xs.sub(xt), ys.sub(yt)]);
+    }
 });
 
 var LLI_Tool = BasicTool.extend(function() {
@@ -465,21 +422,24 @@ var LLI_Tool = BasicTool.extend(function() {
 
     this.create_output_gizmo = function(socket) { return ConstructedPoint.create(); }
 
-    this.mark_valid = function(v) {
-	if (!this.ties[0]) this.gizmos[0].valid = v;
-    }
-
-
     this.recalculate = function() {
 	if (this.ties[0]) return; // our single sad hand is tied
 	var line1 = this.listen(0), line2 = this.listen(1);
-	var v = line1.valid && line2.valid;
-	var xy;
-	if (v) {
-	    xy = Line.compute_intersection(line1, line2);
-	    v = xy && isFinite(xy[0]) && isFinite(xy[1]);
+	if (!line1.is_defined() || !line2.is_defined()) {
+	    this.gizmos[0].pos = undefined; return;
 	}
-	this.mark_valid(v);
-	if (v) this.gizmos[0].pos = xy;
+	var x1 = line1.p1[0], y1 = line1.p1[1],
+	    x2 = line1.p2[0], y2 = line1.p2[1],
+	    x3 = line2.p1[0], y3 = line2.p1[1],
+	    x4 = line2.p2[0], y4 = line2.p2[1];
+	var x12 = x1.sub(x2), x34=x3.sub(x4), y12=y1.sub(y2), y34=y3.sub(y4);
+	var cos_t = x12.mul(x34).add(y12.mul(y34)).div(x12.square().add(y12.square()).mul(x34.square().add(y34.square())).sqrt());
+	if (Math.abs(cos_t.abs()-1)<SMALL) { this.gizmos[0].pos = undefined; return; }
+	var N = x12.mul(y34).sub(y12.mul(x34));
+	var f1 = x1.mul(y2).sub(y1.mul(x2)), f2 = x3.mul(y4).sub(y3.mul(x4));
+	var xi = f1.mul(x34).sub(x12.mul(f2)).div(N);
+	var yi = f1.mul(y34).sub(y12.mul(f2)).div(N);
+
+	this.gizmos[0].pos = [xi, yi]; 
     }
 });

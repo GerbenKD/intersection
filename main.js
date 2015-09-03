@@ -264,9 +264,10 @@ function main() {
 	var i_best, d_best = Infinity;
 	for (var i=0; i<HIGHLIGHT_TARGETS.length; i++) {
 	    var gizmo = HIGHLIGHT_TARGETS[i][2];
-	    if (gizmo.valid) {
+	    if (gizmo.is_visible()) {
 		var affinity = gizmo.type != "point" ? 8 : HIGHLIGHT_TARGETS[i][0]==0 ? 25 : 20;
-		var d = gizmo.distance_to_c(MOUSE) - affinity;
+		var d2c = gizmo.distance_to_c([Cplx.create(MOUSE[0],0), Cplx.create(MOUSE[1],0)]);
+		var d = d2c ? d2c.abs()-affinity : Infinity;
 		if (d < d_best) {
 		    d_best = d;
 		    i_best = i;
@@ -309,7 +310,8 @@ function main() {
 
     function mousemove_embed() {
 	var d0 = Graphics.SCALE * 0.005, d1 = Graphics.SCALE * 0.1;
-	var dist = EMBEDDING.travelled + Point.distance_cc(MOUSE, EMBEDDING.last_mouse);
+	var dx = MOUSE[0]-EMBEDDING.last_mouse[0], dy = MOUSE[1]-EMBEDDING.last_mouse[1];
+	var dist = EMBEDDING.travelled + Math.sqrt(dx*dx+dy*dy);
 	EMBEDDING.last_mouse = [MOUSE[0], MOUSE[1]];
 	EMBEDDING.travelled = dist;
 	var stamp = STAMPS[EMBEDDING.stamp_id];
@@ -471,7 +473,7 @@ function main() {
 	if (HIGHLIGHTED[0]==0) { 
 	    // selected point is a control point, start dragging
 	    var cp = HIGHLIGHTED[2];
-	    DRAGGING = [HIGHLIGHTED[0], HIGHLIGHTED[1], cp.pos[0] - MOUSE[0], cp.pos[1] - MOUSE[1]];
+	    DRAGGING = [HIGHLIGHTED[0], HIGHLIGHTED[1], cp.pos[0].re - MOUSE[0], cp.pos[1].re - MOUSE[1]];
 	    switch_state("dragging");
 	} else {
 	    // toggle output status of the highlighted gizmo

@@ -59,7 +59,7 @@ var CPPos = new function() {
 	    var p = this.pos[i];
 	    if (!p) continue;
 	    var gizmo = this.owner.listen(i);
-	    gizmo.pos = [p[0], p[1]];
+	    gizmo.pos = [Cplx.create(p[0],0), Cplx.create(p[1],0)];
 	}
     }
 }();

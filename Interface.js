@@ -9,7 +9,7 @@ var ControlPointTool = BasicTool.extend(function() {
 	    console.error("Attempt to add a controlpoint at a used socket"); return;
 	}
 	this.create_output(socket);
-	this.gizmos[socket].pos = pos;
+	this.gizmos[socket].pos = [Cplx.create(pos[0],0),Cplx.create(pos[1],0)];
     }
 
     this.recalculate = function() { }
@@ -44,7 +44,7 @@ var ControlPointTool = BasicTool.extend(function() {
     this.randomize = function() {
 	for (var i=0; i<this.gizmos.length; i++) {
 	    var gizmo = this.gizmos[i];
-	    if (gizmo) gizmo.pos = [100*Math.random(), 100*Math.random() ];
+	    if (gizmo) gizmo.pos = [Cplx.random(), Cplx.random()];
 	}
     }
 

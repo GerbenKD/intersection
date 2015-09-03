@@ -44,7 +44,7 @@ var CompoundTool = Tool.extend(function() {
 		    if (!cpinp) continue;
 		    assert(cpinp[0]===me.ControlPoints, "Not a controlpoint in get_cp_positions()");
 		    var gizmo = cpinp[0].get_output(cpinp[1]);
-		    cppos[i] = gizmo.dup();
+		    cppos[i] = [gizmo.pos[0].re, gizmo.pos[1].re];
 		}
 	    } else {
 		// get all controlpoints owned by the given tool
@@ -54,7 +54,7 @@ var CompoundTool = Tool.extend(function() {
 		    var cpinp = inp[0].get_input(inp[1]);
 		    assert(cpinp && cpinp[0]===me.ControlPoints, "Not a controlpoint in get_cp_positions(tool)");
 		    var gizmo = cpinp[0].get_output(cpinp[1]);
-		    cppos[inp[1]] = gizmo.dup();
+		    cppos[inp[1]] = [gizmo.pos[0].re, gizmo.pos[1].re];
 		}
 	    }
 	    this.pos=cppos;
@@ -216,11 +216,12 @@ var CompoundTool = Tool.extend(function() {
 		for (var output_socket = 0; output_socket < tool.max_output_socket(); output_socket++) {
 		    if (tool.get_tie(output_socket)) continue;
 		    var gizmo = tool.get_output(output_socket);
-		    if (!gizmo || !gizmo.valid || gizmo.type != "point") continue;
-		    list.push([tool, index, gizmo.pos, output_socket]);
+		    if (gizmo && gizmo.is_defined() && gizmo.type=="point") {
+			list.push([tool, index, gizmo.pos, output_socket]);
+		    }
 		}
 	    }
-	    list.sort(function(a,b) { return a[2][0] - b[2][0]; });
+	    list.sort(function(a,b) { return a[2][0].re - b[2][0].re; });
 
 	    // Find all candidates: tools that are sufficiently close together. Tool with higher index
 	    // is a candidate for snapping to the tool with lower index
@@ -229,13 +230,13 @@ var CompoundTool = Tool.extend(function() {
 	    var j=0;
 	    for (var i=1; i<list.length; i++) {
 		var list_i = list[i];
-		var x = list_i[2][0];
-		while (j<list.length && x - list[j][2][0] > SMALL) { j++; }
+		var x = list_i[2][0].re;
+		while (j<list.length && x - list[j][2][0].re > SMALL) { j++; }
 		for (var k=j; k<list.length; k++) {
 		    if (i==k) continue; // don't snap a socket to itself
 		    var list_k = list[k];
-		    if (list_k[2][0] - x >= SMALL) break;
-		    if (Point.distance_cc(list_k[2], list_i[2])>=SMALL) continue;
+		    if (list_k[2][0].re - x >= SMALL) break;
+		    if (Point.distance_cc(list_k[2], list_i[2]).abs()>=SMALL) continue;
 
 		    // figure out who's source and who's destination
 		    var info = (list_k[1] > list_i[1]) || (list_k[1]==list_i[1] && list_k[3]>list_i[3])
@@ -314,7 +315,9 @@ var CompoundTool = Tool.extend(function() {
     // Constructs a list of ties for all duplicate tools. The list consists of the suggested connections.
     this.foreach_tie = function(func) {
 	this.recalculate();
+
 	var map = find_duplicates.call(this);
+	console.log("find duplicates done");
 	// map[left_tool_id + ":" + left_out_socket][right_tool_id] = info
 	// info = [left_tool, right_tool, left_out_socket, left_index, right_index]
 
@@ -467,7 +470,7 @@ var CompoundTool = Tool.extend(function() {
     }
 
     function C_move_controlpoint(cp_socket, pos) {
-	this.id2tool[0].get_output(cp_socket).pos = [pos[0], pos[1]];
+	this.id2tool[0].get_output(cp_socket).pos = [Cplx.create(pos[0],0), Cplx.create(pos[1],0)];
     }
 
     // socket always refers to the input interface, not to the socket number in this.ControlPoints
