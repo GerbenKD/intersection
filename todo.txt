@@ -2,14 +2,14 @@
 
 - bij het erin slepen al snap targets laten gloeien
 
-- de lijn en de cirkel moeten wel recht in het midden van hun
-  postzegeltje blijven zitten vind ik
-
 - panning/zooming/move controlpoint wist redo buffer
 
-- het vinden van duplicates: robuuster maken door
-   (a) random controlpoints beter kiezen
-   (b) complexe snijpunten berekenen
-   (c) som van errors bepalen in plaats van een enkele threshold is genoeg
-
 - toetsen voor het opslaan van de undobuffer in de clipboard   
+
+- output verschijnt soms niet
+
+- intersectionpoints die ouputs zijn blijven groen in de stamp en
+  tijdens het embedden
+
+- save -> resize -> reload maakt lelijke small_positions in de stamps
+

@@ -229,7 +229,7 @@ var Circle = Gizmo.extend(function() {
     }
 
     // Distance between a point and the circle, used for highlighting
-    // (derived by intersecting the line between the circle center and pos, and the circle).
+    // (derived by intersecting the line between the circle center and pos, and the circle)
     this.distance_to_c = function(pos) {
 	var d = Cplx.v2_sub(this.center, pos);
 	var f = Cplx.v2_norm(Cplx.v2_sub(this.center, this.border)).div(Cplx.v2_norm(d));
