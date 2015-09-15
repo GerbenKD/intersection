@@ -434,7 +434,7 @@ var LLI_Tool = BasicTool.extend(function() {
 	    x4 = line2.p2[0], y4 = line2.p2[1];
 	var x12 = x1.sub(x2), x34=x3.sub(x4), y12=y1.sub(y2), y34=y3.sub(y4);
 	var cos_t = x12.mul(x34).add(y12.mul(y34)).div(x12.square().add(y12.square()).mul(x34.square().add(y34.square())).sqrt());
-	if (Math.abs(cos_t.abs()-1)<SMALL) { this.gizmos[0].pos = undefined; return; }
+	if (Math.abs(cos_t.abs()-1)<0.000001) { this.gizmos[0].pos = undefined; return; }
 	var N = x12.mul(y34).sub(y12.mul(x34));
 	var f1 = x1.mul(y2).sub(y1.mul(x2)), f2 = x3.mul(y4).sub(y3.mul(x4));
 	var xi = f1.mul(x34).sub(x12.mul(f2)).div(N);
