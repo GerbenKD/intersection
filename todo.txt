@@ -6,10 +6,9 @@
 
 - toetsen voor het opslaan van de undobuffer in de clipboard   
 
-- output verschijnt soms niet
-
 - intersectionpoints die ouputs zijn blijven groen in de stamp en
   tijdens het embedden
 
 - save -> resize -> reload maakt lelijke small_positions in de stamps
 
+- sneller switchen naar lege stamps

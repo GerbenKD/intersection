@@ -133,6 +133,10 @@ div.ruler {
     fill: red;
 }
 
+.controlpoint.snappy {
+    fill: #00d040;
+}
+
 .controlpoint.sparkly {
     
     -webkit-animation: cp_sparkle 1.3s linear infinite;

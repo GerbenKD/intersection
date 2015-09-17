@@ -292,6 +292,30 @@ var Animation = new function() {
 	    }
 	    return animations.length!=0;
 	}
-
     }
+
+    // run the first animation, then run the continuation to get the second animation
+    this.continuation = function(animation, continuation) {
+	var frame0, cont;
+	return function(frame) {
+	    if (!cont) {
+		if (animation(frame)) return true;
+		frame0 = frame;
+		cont = continuation();
+		return true;
+	    }
+	    return cont(frame-frame0);
+	}
+    }
+
+    this.add_callbacks = function(anim, pre, post) {
+	return function(frame) {
+	    if (frame==0 && pre) pre();
+	    var busy = anim(frame);
+	    if (!busy && post) post();
+	    return busy;
+	}
+    }
+
+
 }();

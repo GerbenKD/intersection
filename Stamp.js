@@ -3,6 +3,8 @@
 
 var Stamp = new function() {
 
+    this.type = "stamp";
+
     this.STAMP_SCALE = 0.3;
 
     this.extend = function(constr) { constr.prototype = this; return new constr(); }
@@ -236,6 +238,10 @@ var Stamp = new function() {
 
 
 var LineStamp = Stamp.extend(function() {
+
+    this.readonly = true;
+    this.is_line = true;
+
     this.create = function(id) {
 	var instance = Stamp.create.call(this, id);
 	var c = Construction.create();
@@ -254,6 +260,9 @@ var LineStamp = Stamp.extend(function() {
 });
 
 var CircleStamp = Stamp.extend(function() {
+
+    this.readonly = true;
+    this.is_circle = true;
 
     this.create = function(id) {
 	var instance = Stamp.create.call(this, id);
